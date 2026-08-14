@@ -1,0 +1,21 @@
+from datetime import datetime
+from uuid import UUID, uuid4
+
+from sqlalchemy import String, func
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from src.database import Base
+
+
+class App(Base):
+    __tablename__ = "apps"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    prompt: Mapped[str | None] = mapped_column(nullable=True)
+    document: Mapped[dict[str, object]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
