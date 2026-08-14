@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   APP_STAGE_HEIGHT,
   APP_STAGE_WIDTH,
@@ -17,7 +17,7 @@ import { useWindowEvent } from "@/shared/lib";
 const SNAP = 8;
 const HANDLE = 7;
 const DRAG_THRESHOLD = 4;
-const SELECT_COLOR = "#5C6CF5";
+const SELECT_COLOR = "var(--color-accent)";
 
 interface PendingDrag {
   ids: string[];
@@ -250,43 +250,20 @@ function NodeBody({
 }
 
 function SelectionChrome({
-  frame,
-  field,
   radius,
   onResizeCorner,
 }: {
-  frame: "shell" | "field";
-  field: number;
   radius: number;
   onResizeCorner: (corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent) => void;
 }) {
-  const inset = frame === "field" ? Math.max(0, field) : 0;
-  const ringRadius = Math.max(0, radius - inset);
-
   return (
     <>
-      {frame === "field" && field > 0 && (
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: radius,
-            boxShadow: `inset 0 0 0 ${field}px rgba(92,108,245,0.12)`,
-            pointerEvents: "none",
-            zIndex: 14,
-          }}
-        />
-      )}
       <div
         aria-hidden
         style={{
           position: "absolute",
-          top: inset,
-          right: inset,
-          bottom: inset,
-          left: inset,
-          borderRadius: ringRadius,
+          inset: 0,
+          borderRadius: radius,
           boxShadow: `0 0 0 1.5px ${SELECT_COLOR}`,
           pointerEvents: "none",
           zIndex: 15,
@@ -301,16 +278,16 @@ function SelectionChrome({
             position: "absolute",
             width: HANDLE,
             height: HANDLE,
-            background: "#FFFFFF",
+            background: "var(--color-panel)",
             border: `1.5px solid ${SELECT_COLOR}`,
             borderRadius: "50%",
             zIndex: 20,
             cursor: `${corner}-resize`,
             boxSizing: "border-box",
-            left: corner.includes("w") ? inset - HANDLE / 2 : undefined,
-            right: corner.includes("e") ? inset - HANDLE / 2 : undefined,
-            top: corner.includes("n") ? inset - HANDLE / 2 : undefined,
-            bottom: corner.includes("s") ? inset - HANDLE / 2 : undefined,
+            left: corner.includes("w") ? -HANDLE / 2 : undefined,
+            right: corner.includes("e") ? -HANDLE / 2 : undefined,
+            top: corner.includes("n") ? -HANDLE / 2 : undefined,
+            bottom: corner.includes("s") ? -HANDLE / 2 : undefined,
           }}
         />
       ))}
@@ -331,7 +308,6 @@ export function Canvas({
 }) {
   const selectedNodeIds = useAppDocumentStore((s) => s.selectedNodeIds);
   const selectedNodeId = useAppDocumentStore((s) => s.selectedNodeId);
-  const selectionFrame = useAppDocumentStore((s) => s.selectionFrame);
   const selectNode = useAppDocumentStore((s) => s.selectNode);
   const clearSelection = useAppDocumentStore((s) => s.clearSelection);
   const resizeNode = useAppDocumentStore((s) => s.resizeNode);
@@ -365,6 +341,7 @@ export function Canvas({
   useWindowEvent("pointermove", (e) => {
     const pending = pendingRef.current;
     const resizing = resizeRef.current;
+    if (!pending && !resizing) return;
     const { x, y } = toStage(e.clientX, e.clientY);
 
     if (pending) {
@@ -445,6 +422,12 @@ export function Canvas({
   useWindowEvent("pointerup", commitDrag);
   useWindowEvent("pointercancel", commitDrag);
 
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 2000);
+    return () => window.clearTimeout(id);
+  }, [toast]);
+
   function beginMove(e: React.PointerEvent, node: AppNode) {
     if (!editMode || node.locked || !node.layout) return;
     if ((e.target as HTMLElement).dataset?.handle) return;
@@ -492,10 +475,7 @@ export function Canvas({
       runActions(actions, {
         navigate: (route) => onNavigateRoute?.(route),
         setVar: setAppVar,
-        toast: (msg) => {
-          setToast(msg);
-          setTimeout(() => setToast(null), 2000);
-        },
+        toast: setToast,
       });
       return;
     }
@@ -509,7 +489,6 @@ export function Canvas({
     const isContainer = node.type === "View" || node.type === "ScrollView";
     const dragging = draggingIds.includes(node.id);
     const radius = node.style?.borderRadius ?? 0;
-    const field = Math.max(0, node.field ?? 0);
 
     return (
       <div
@@ -550,7 +529,7 @@ export function Canvas({
                 height: "100%",
                 resize: "none",
                 border: "none",
-                background: "rgba(92,108,245,0.10)",
+                background: "var(--color-accent-soft)",
                 color: "inherit",
                 font: "inherit",
                 fontWeight: "inherit",
@@ -567,8 +546,6 @@ export function Canvas({
 
         {editMode && selected && !node.locked && (
           <SelectionChrome
-            frame={selectionFrame}
-            field={field}
             radius={radius}
             onResizeCorner={(corner, e) => beginResize(e, { ...node, layout }, corner)}
           />
@@ -606,7 +583,7 @@ export function Canvas({
             top: 0,
             bottom: 0,
             width: 1,
-            background: "#F472B6",
+            background: "var(--color-snap-guide)",
             zIndex: 40,
             pointerEvents: "none",
           }}
@@ -621,7 +598,7 @@ export function Canvas({
             left: 0,
             right: 0,
             height: 1,
-            background: "#F472B6",
+            background: "var(--color-snap-guide)",
             zIndex: 40,
             pointerEvents: "none",
           }}

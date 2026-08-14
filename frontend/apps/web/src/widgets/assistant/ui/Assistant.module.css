@@ -207,17 +207,17 @@
 
 .diffAdd {
   background: var(--color-ok-soft);
-  color: #15803d;
+  color: var(--color-ok-strong);
 }
 
 .diffMod {
   background: var(--color-warn-soft);
-  color: #b45309;
+  color: var(--color-warn-strong);
 }
 
 .diffDel {
   background: var(--color-danger-soft);
-  color: #b91c1c;
+  color: var(--color-danger-strong);
 }
 
 .proposalFoot {
@@ -241,7 +241,7 @@
   border-radius: 8px;
   padding: 7px 13px;
   background: linear-gradient(180deg, #6b7bff, var(--color-accent-strong));
-  color: #ffffff;
+  color: var(--color-ink-fg);
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
@@ -325,7 +325,7 @@
   padding: 6px 12px;
   border-radius: 8px;
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-ink-fg);
   font-size: 10px;
   font-weight: 600;
 }
@@ -542,7 +542,7 @@
   border: 0;
   border-radius: 11px;
   background: linear-gradient(180deg, #6b7bff, var(--color-accent-strong));
-  color: #fff;
+  color: var(--color-ink-fg);
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(92, 108, 245, 0.28);
   transition:
@@ -661,7 +661,7 @@
   height: 15px;
   border-radius: 999px;
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-ink-fg);
   font-size: 9px;
   font-weight: 700;
   display: grid;

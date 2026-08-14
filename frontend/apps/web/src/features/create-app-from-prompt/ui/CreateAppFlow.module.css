@@ -195,7 +195,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--color-panel);
   box-shadow: 0 1px 2px rgba(16, 16, 20, 0.2);
   transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -218,7 +218,7 @@
   border: 0;
   border-radius: 10px;
   background: linear-gradient(180deg, #6b7bff 0%, var(--color-accent) 55%, var(--color-accent-strong) 100%);
-  color: #ffffff;
+  color: var(--color-ink-fg);
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;

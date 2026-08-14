@@ -110,7 +110,7 @@
 
 .badgeSaved {
   background: var(--color-ok-soft);
-  color: #15803d;
+  color: var(--color-ok-strong);
 }
 
 .badgeSaved .badgeDot {
@@ -128,7 +128,7 @@
 
 .badgeDirty {
   background: var(--color-warn-soft);
-  color: #b45309;
+  color: var(--color-warn-strong);
 }
 
 .badgeDirty .badgeDot {
@@ -137,7 +137,7 @@
 
 .badgeError {
   background: var(--color-danger-soft);
-  color: #b91c1c;
+  color: var(--color-danger-strong);
 }
 
 .badgeError .badgeDot {

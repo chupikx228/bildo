@@ -40,9 +40,9 @@
 }
 
 .primary {
-  background: linear-gradient(180deg, #6b7bff 0%, #5c6cf5 55%, #4a55c9 100%);
-  border-color: #4a55c9;
-  color: #ffffff;
+  background: linear-gradient(180deg, #6b7bff 0%, var(--color-accent) 55%, var(--color-accent-strong) 100%);
+  border-color: var(--color-accent-strong);
+  color: var(--color-ink-fg);
   font-weight: 600;
   box-shadow:
     0 1px 2px rgba(46, 55, 150, 0.22),
@@ -51,22 +51,22 @@
 
 .primary:hover:not(:disabled) {
   background: linear-gradient(180deg, #7c8aff 0%, #5a69f2 55%, #4450c4 100%);
-  border-color: #4a55c9;
-  color: #ffffff;
+  border-color: var(--color-accent-strong);
+  color: var(--color-ink-fg);
   box-shadow: 0 8px 22px rgba(92, 108, 245, 0.3);
 }
 
 .danger {
   background: var(--color-danger-soft);
   border-color: rgba(220, 38, 38, 0.3);
-  color: #b91c1c;
+  color: var(--color-danger-strong);
   font-weight: 600;
 }
 
 .danger:hover:not(:disabled) {
   background: rgba(220, 38, 38, 0.16);
   border-color: rgba(220, 38, 38, 0.3);
-  color: #991b1b;
+  color: var(--color-danger-strong-hover);
 }
 
 .quiet {

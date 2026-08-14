@@ -42,7 +42,6 @@ interface AppStore {
   selectedScreenId: string | null;
   selectedNodeId: string | null;
   selectedNodeIds: string[];
-  selectionFrame: "shell" | "field";
   clipboard: AppNode | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
@@ -55,16 +54,12 @@ interface AppStore {
   setSaveStatus(status: AppSaveStatus, error?: string | null): void;
   selectScreen(id: string | null): void;
   selectNode(id: string | null, opts?: { additive?: boolean }): void;
-  selectNodes(ids: string[]): void;
   clearSelection(): void;
-  setSelectionFrame(frame: "shell" | "field"): void;
 
   updateTheme(patch: Partial<AppThemeTokens>): void;
   renameApp(name: string): void;
   updateNode(screenId: string, nodeId: string, patch: Partial<AppNode>): void;
   setNodeText(screenId: string, nodeId: string, text: string): void;
-  setNodeHidden(screenId: string, nodeId: string, hidden: boolean): void;
-  setNodeLocked(screenId: string, nodeId: string, locked: boolean): void;
   setNodeLayout(screenId: string, nodeId: string, layout: Partial<AppNodeLayout>, coalesce?: boolean): void;
   moveNodes(screenId: string, nodeIds: string[], dx: number, dy: number, coalesce?: boolean): void;
   resizeNode(screenId: string, nodeId: string, layout: AppNodeLayout, coalesce?: boolean): void;
@@ -74,16 +69,12 @@ interface AppStore {
   duplicateSelected(): void;
   copySelected(): void;
   pasteClipboard(): void;
-  reorderNodes(screenId: string, parentId: string, from: number, to: number): void;
-  alignSelected(mode: "left" | "right" | "top" | "bottom" | "centerX" | "centerY"): void;
-  groupSelected(): void;
   setNodeActions(screenId: string, nodeId: string, event: "onPress" | "onChange", actions: AppAction[]): void;
   setAppVar(name: string, value: string | number | boolean): void;
   addScreen(name?: string): string | null;
   removeScreen(screenId: string): void;
   renameScreen(screenId: string, name: string): void;
 
-  replaceDocument(doc: AppDocument, label?: string): void;
   undo(): void;
   redo(): void;
   createCheckpoint(label?: string): void;
@@ -184,11 +175,10 @@ function parentBounds(root: AppNode, nodeId: string): { w: number; h: number } {
 
 function makeNode(type: AppComponentType, theme: AppThemeTokens, index: number): AppNode {
   const def: AppComponentDef = APP_COMPONENT_REGISTRY[type];
-  const style = def.defaultStyle ? { ...(def.defaultStyle as AppNode["style"]) } : undefined;
-  if (style) {
-    if (style.color === "#FAFAFA") style.color = theme.colorText;
-    if (style.backgroundColor === "#5C6CF5") style.backgroundColor = theme.colorPrimary;
-    if (style.backgroundColor === "#18181B") style.backgroundColor = theme.colorSurface;
+  const style: AppNode["style"] = def.defaultStyle || def.themeStyle ? { ...def.defaultStyle } : undefined;
+  if (style && def.themeStyle) {
+    if (def.themeStyle.color) style.color = theme[def.themeStyle.color];
+    if (def.themeStyle.backgroundColor) style.backgroundColor = theme[def.themeStyle.backgroundColor];
   }
   return {
     id: nanoid(8),
@@ -207,7 +197,6 @@ export const useAppDocumentStore = create<AppStore>()(
     selectedScreenId: null,
     selectedNodeId: null,
     selectedNodeIds: [],
-    selectionFrame: "shell",
     clipboard: null,
     past: [],
     future: [],
@@ -268,21 +257,10 @@ export const useAppDocumentStore = create<AppStore>()(
         }
       }),
 
-    selectNodes: (ids) =>
-      set((state) => {
-        state.selectedNodeIds = ids;
-        state.selectedNodeId = ids[0] ?? null;
-      }),
-
     clearSelection: () =>
       set((state) => {
         state.selectedNodeId = null;
         state.selectedNodeIds = [];
-      }),
-
-    setSelectionFrame: (frame) =>
-      set((state) => {
-        state.selectionFrame = frame;
       }),
 
     updateTheme: (patch) =>
@@ -356,44 +334,6 @@ export const useAppDocumentStore = create<AppStore>()(
         if (target.type === "Text" || target.type === "Button") {
           target.name = text.trim() || undefined;
         }
-        state.lastErrors = [];
-        touch(state.document);
-      }),
-
-    setNodeHidden: (screenId, nodeId, hidden) =>
-      set((state) => {
-        if (!state.document) return;
-        const screen = getScreen(state.document, screenId);
-        if (!screen) return;
-        if (screen.root.id === nodeId && hidden) {
-          state.lastErrors = ["Нельзя скрыть корень экрана"];
-          return;
-        }
-        const target = findAppNode(screen.root, nodeId);
-        if (!target) return;
-        if (target.locked) {
-          state.lastErrors = ["Слой закреплён"];
-          return;
-        }
-        pushPast(state, hidden ? "Скрыть" : "Показать");
-        target.hidden = hidden;
-        if (hidden && state.selectedNodeId && containsNode(target, state.selectedNodeId)) {
-          state.selectedNodeId = null;
-          state.selectedNodeIds = state.selectedNodeIds.filter((id) => !containsNode(target, id));
-        }
-        state.lastErrors = [];
-        touch(state.document);
-      }),
-
-    setNodeLocked: (screenId, nodeId, locked) =>
-      set((state) => {
-        if (!state.document) return;
-        const screen = getScreen(state.document, screenId);
-        if (!screen) return;
-        const target = findAppNode(screen.root, nodeId);
-        if (!target) return;
-        pushPast(state, locked ? "Закрепить" : "Открепить");
-        target.locked = locked;
         state.lastErrors = [];
         touch(state.document);
       }),
@@ -613,69 +553,6 @@ export const useAppDocumentStore = create<AppStore>()(
         touch(state.document);
       }),
 
-    reorderNodes: (screenId, parentId, from, to) =>
-      set((state) => {
-        if (!state.document) return;
-        const screen = getScreen(state.document, screenId);
-        if (!screen) return;
-        const parent = findAppNode(screen.root, parentId);
-        if (!parent?.children || parent.locked) return;
-        if (from < 0 || to < 0 || from >= parent.children.length || to >= parent.children.length || from === to) return;
-        pushPast(state, "Порядок слоёв");
-        const [item] = parent.children.splice(from, 1);
-        if (item) parent.children.splice(to, 0, item);
-        state.lastErrors = [];
-        touch(state.document);
-      }),
-
-    alignSelected: (mode) =>
-      set((state) => {
-        if (!state.document || !state.selectedScreenId) return;
-        const screen = getScreen(state.document, state.selectedScreenId);
-        if (!screen) return;
-        const ids = state.selectedNodeIds.filter((id) => {
-          const n = findAppNode(screen.root, id);
-          return n?.layout && !isLockedInTree(screen.root, id);
-        });
-        if (ids.length < 2) return;
-        const layouts = ids.map((id) => findAppNode(screen.root, id)!.layout!);
-        const minX = Math.min(...layouts.map((l) => l.x));
-        const maxR = Math.max(...layouts.map((l) => l.x + l.width));
-        const minY = Math.min(...layouts.map((l) => l.y));
-        const maxB = Math.max(...layouts.map((l) => l.y + l.height));
-        const midX = (minX + maxR) / 2;
-        const midY = (minY + maxB) / 2;
-        pushPast(state, "Выравнивание");
-        for (const id of ids) {
-          const node = findAppNode(screen.root, id)!;
-          const l = { ...node.layout! };
-          if (mode === "left") l.x = minX;
-          if (mode === "right") l.x = maxR - l.width;
-          if (mode === "top") l.y = minY;
-          if (mode === "bottom") l.y = maxB - l.height;
-          if (mode === "centerX") l.x = midX - l.width / 2;
-          if (mode === "centerY") l.y = midY - l.height / 2;
-          const bounds = parentBounds(screen.root, id);
-          screen.root = updateNodeById(screen.root, id, { layout: clampLayout(l, bounds.w, bounds.h) });
-        }
-        touch(state.document);
-      }),
-
-    groupSelected: () =>
-      set((state) => {
-        if (!state.document || !state.selectedScreenId) return;
-        const gid = nanoid(6);
-        const screen = getScreen(state.document, state.selectedScreenId);
-        if (!screen) return;
-        const ids = state.selectedNodeIds;
-        if (ids.length < 2) return;
-        pushPast(state, "Группа");
-        for (const id of ids) {
-          screen.root = updateNodeById(screen.root, id, { groupId: gid });
-        }
-        touch(state.document);
-      }),
-
     setNodeActions: (screenId, nodeId, event, actions) =>
       set((state) => {
         if (!state.document) return;
@@ -760,23 +637,6 @@ export const useAppDocumentStore = create<AppStore>()(
         pushPast(state, "Имя экрана", `rename-screen:${screenId}`);
         sc.name = name.trim() || sc.name;
         touch(state.document);
-      }),
-
-    replaceDocument: (doc, label = "AI") =>
-      set((state) => {
-        pushPast(state, label);
-        const normalized = normalizeAppDocument(doc);
-        state.document = normalized;
-        const selection = pruneSelection(
-          normalized,
-          state.selectedScreenId,
-          state.selectedNodeId,
-          state.selectedNodeIds,
-        );
-        state.selectedScreenId = selection.screenId;
-        state.selectedNodeId = selection.nodeId;
-        state.selectedNodeIds = selection.nodeIds;
-        touch(normalized);
       }),
 
     undo: () =>
