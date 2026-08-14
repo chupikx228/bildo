@@ -1,0 +1,94 @@
+.app-anim {
+  will-change: transform, opacity;
+}
+
+.app-anim--float {
+  animation: app-float 6s ease-in-out infinite;
+}
+.app-anim--pulse {
+  animation: app-pulse 2.6s ease-in-out infinite;
+}
+.app-anim--breathe {
+  animation: app-breathe 3.6s ease-in-out infinite;
+}
+.app-anim--drift {
+  animation: app-drift 14s ease-in-out infinite;
+}
+.app-anim--rise {
+  animation: app-rise 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.app-anim--shimmer {
+  background-size: 220% 100%;
+  animation: app-shimmer 3.2s linear infinite;
+}
+
+@keyframes app-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+@keyframes app-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.82;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes app-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes app-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(10px, -12px, 0) scale(1.06);
+  }
+  66% {
+    transform: translate3d(-8px, 8px, 0) scale(0.97);
+  }
+}
+
+@keyframes app-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes app-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-anim {
+    animation: none !important;
+  }
+}

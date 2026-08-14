@@ -1,0 +1,102 @@
+[project]
+name = "bildo-backend"
+version = "0.1.0"
+description = "Bildo API — FastAPI, PostgreSQL, Arq"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = ["ruff==0.16.3", "mypy==2.3.0", "import-linter==2.13"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle — ошибки
+    "W",     # pycodestyle — предупреждения
+    "F",     # pyflakes — неиспользуемое, опечатки в именах
+    "I",     # isort — порядок импортов
+    "N",     # pep8-naming
+    "UP",    # pyupgrade — современный синтаксис под target-version
+    "B",     # flake8-bugbear — реальные ловушки, а не стиль
+    "C4",    # flake8-comprehensions
+    "SIM",   # flake8-simplify
+    "TID",   # flake8-tidy-imports
+    "RUF",   # правила самого ruff
+    "ASYNC", # flake8-async — блокирующие вызовы внутри async def
+    "S",     # bandit — безопасность
+    "T20",   # flake8-print — print() не место в проде
+]
+ignore = [
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+"alembic/**" = ["N999", "E402", "I001"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Security",
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+pretty = true
+show_error_codes = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "alembic.*"
+ignore_errors = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.importlinter]
+root_packages = ["src"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Слои: router → service → repository. Зависимости идут только вниз"
+type = "layers"
+layers = ["(router)", "(service)", "(repository)", "(models)"]
+containers = ["src.apps", "src.codegen"]
+
+[[tool.importlinter.contracts]]
+name = "Dependency Inversion: сервис не знает про SQLAlchemy и FastAPI"
+type = "forbidden"
+source_modules = ["src.apps.service", "src.codegen.service"]
+forbidden_modules = ["sqlalchemy", "fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "Домены общаются только через публичный слой (service/schemas)"
+type = "forbidden"
+source_modules = ["src.codegen"]
+forbidden_modules = ["src.apps.repository", "src.apps.models"]
+allow_indirect_imports = true

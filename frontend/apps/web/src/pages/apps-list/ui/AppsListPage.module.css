@@ -1,0 +1,52 @@
+.page {
+  min-height: 100dvh;
+  color: var(--color-text);
+  background:
+    radial-gradient(
+      150% 130% at -12% -30%,
+      rgba(92, 108, 245, 0.075) 0%,
+      rgba(92, 108, 245, 0.03) 42%,
+      rgba(92, 108, 245, 0) 100%
+    ),
+    radial-gradient(110% 100% at 108% 115%, rgba(255, 141, 92, 0.07) 0%, rgba(255, 141, 92, 0) 100%), #fafafc;
+}
+
+.content {
+  padding: 8px 28px 28px;
+}
+
+.title {
+  margin: 0 0 20px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.new {
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: linear-gradient(180deg, #6b7bff, var(--color-accent-strong));
+  color: #fff;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 16px rgba(92, 108, 245, 0.28);
+}
+
+.new:hover {
+  filter: brightness(1.05);
+}
+
+.status {
+  color: var(--color-subtle);
+  font-size: 13px;
+}
+
+.statusError {
+  color: var(--color-danger);
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+  max-width: 640px;
+}

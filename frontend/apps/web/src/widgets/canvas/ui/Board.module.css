@@ -1,0 +1,24 @@
+.addScreen {
+  position: absolute;
+  border-radius: 50px;
+  border: 2px dashed var(--color-line);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--color-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease,
+    background 0.16s ease;
+}
+
+.addScreen:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
+  background: rgba(92, 108, 245, 0.05);
+}

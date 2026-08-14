@@ -1,0 +1,12 @@
+.wrapper {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: var(--color-board);
+  padding: 24px;
+}
+
+.status {
+  color: var(--color-subtle);
+  font-size: 13px;
+}

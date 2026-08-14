@@ -1,0 +1,182 @@
+.panel {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  background: #fbfbfd;
+  animation: code-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes code-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.head {
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--color-line);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--color-subtle);
+  white-space: nowrap;
+}
+
+.crumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--color-subtle);
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.crumbSep {
+  color: var(--color-faint);
+}
+
+.crumbText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crumbLast {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.code {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 14px 0 40px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 20px;
+  tab-size: 2;
+}
+
+.codeWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.line {
+  display: flex;
+  min-height: 20px;
+  padding-right: 20px;
+}
+
+.lineNo {
+  flex-shrink: 0;
+  width: 52px;
+  padding-right: 14px;
+  text-align: right;
+  color: #c3c3cd;
+  user-select: none;
+}
+
+.lineText {
+  white-space: pre;
+  color: var(--color-text);
+}
+
+.footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-panel);
+  overflow-x: auto;
+}
+
+.jump {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-subtle);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.jumpActive {
+  border-color: var(--color-accent-line);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  font-weight: 600;
+}
+
+.jumpDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.readonly {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-faint);
+}
+
+.tokenComment {
+  color: #9a9aa5;
+  font-style: italic;
+}
+
+.tokenString {
+  color: #0f766e;
+}
+
+.tokenKeyword {
+  color: #8b3dc7;
+  font-weight: 550;
+}
+
+.tokenNumber {
+  color: #b45309;
+}
+
+.tokenType {
+  color: #2563eb;
+}
+
+.tokenJsonKey {
+  color: var(--color-accent-strong);
+}

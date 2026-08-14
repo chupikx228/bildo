@@ -1,0 +1,41 @@
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 26px;
+  padding: 0 7px 0 9px;
+  border-radius: 999px;
+  border: 1px solid #e4e4ea;
+  background: #f7f7f9;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.chipName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.chip button:hover {
+  opacity: 1;
+}

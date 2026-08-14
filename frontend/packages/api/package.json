@@ -1,0 +1,24 @@
+{
+  "name": "@bildo/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
+    "immer": "^11.1.16",
+    "nanoid": "^6.0.1",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "react": "^19.2.8"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "@types/react": "^19.2.18"
+  }
+}

@@ -1,0 +1,39 @@
+name: backend
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/pyproject.toml
+
+      - run: uv python install 3.12
+
+      - run: uv sync --group dev
+
+      - name: Формат
+        run: uv run ruff format --check .
+
+      - name: Линт
+        run: uv run ruff check .
+
+      - name: Типы
+        run: uv run mypy src
+
+      - name: Архитектурные контракты
+        run: uv run lint-imports
