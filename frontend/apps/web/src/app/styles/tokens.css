@@ -26,10 +26,16 @@
 
   --color-ok: #16a34a;
   --color-ok-soft: rgba(22, 163, 74, 0.1);
+  --color-ok-strong: #15803d;
   --color-warn: #d97706;
   --color-warn-soft: rgba(217, 119, 6, 0.12);
+  --color-warn-strong: #b45309;
   --color-danger: #dc2626;
   --color-danger-soft: rgba(220, 38, 38, 0.1);
+  --color-danger-strong: #b91c1c;
+  --color-danger-strong-hover: #991b1b;
+
+  --color-snap-guide: #f472b6;
 
   --radius-control: 9px;
   --radius-card: 12px;

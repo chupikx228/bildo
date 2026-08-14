@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import styles from "./AiInterview.module.css";
 
 export interface InterviewAnswers {
@@ -118,7 +118,7 @@ export function AiInterview({
 
   const done = step >= STEPS.length;
   const current = STEPS[step];
-  const prompt = useMemo(() => buildPromptFromAnswers(answers), [answers]);
+  const prompt = buildPromptFromAnswers(answers);
 
   const answered = (s: Step): boolean => {
     if (s.id === "screens") return answers.screens.length > 0;

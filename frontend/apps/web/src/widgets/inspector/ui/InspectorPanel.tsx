@@ -11,6 +11,7 @@ import {
   type AppThemeTokens,
 } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
+import { clamp } from "@/shared/lib";
 import {
   AlignPad,
   ColorPicker,
@@ -54,7 +55,7 @@ export function InspectorPanel({ screen, node }: { screen: AppScreen; node: AppN
           screens={document.screens}
           onText={(text) => setNodeText(screen.id, node.id, text)}
           onPatch={(patch) => updateNode(screen.id, node.id, patch)}
-          onLayout={(layout) => setNodeLayout(screen.id, node.id, layout)}
+          onLayout={(layout) => setNodeLayout(screen.id, node.id, layout, true)}
           onActions={(actions) => setNodeActions(screen.id, node.id, "onPress", actions)}
         />
       )}
@@ -291,12 +292,12 @@ function NodeInspector({
                     onChange={(e) => {
                       const raw = e.target.value;
                       if (raw === "" || raw === "-") return;
-                      const n = Math.min(100, Math.max(0, Number(raw)));
+                      const n = clamp(Number(raw), 0, 100);
                       if (Number.isFinite(n)) patchStyle({ opacity: n / 100 });
                     }}
                     onBlur={(e) => {
                       const n = Number(e.target.value);
-                      const clamped = Math.min(100, Math.max(0, Number.isFinite(n) ? n : opacityPercent));
+                      const clamped = clamp(Number.isFinite(n) ? n : opacityPercent, 0, 100);
                       patchStyle({ opacity: clamped / 100 });
                     }}
                     aria-label="Прозрачность в процентах"

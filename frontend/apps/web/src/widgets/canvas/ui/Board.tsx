@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { AppDocument } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
-import { useWindowEvent } from "@/shared/lib";
+import { clamp, useWindowEvent } from "@/shared/lib";
 import { phoneFrameSize } from "../lib/phoneFrame";
 import { PhonePreview } from "./PhonePreview";
 import styles from "./Board.module.css";
@@ -19,7 +19,7 @@ interface View {
   zoom: number;
 }
 
-const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+const clampZoom = (z: number) => clamp(z, MIN_ZOOM, MAX_ZOOM);
 
 function useRefit(
   hostRef: RefObject<HTMLDivElement | null>,

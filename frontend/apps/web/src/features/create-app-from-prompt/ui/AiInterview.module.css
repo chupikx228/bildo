@@ -135,7 +135,7 @@
   padding: 9px 13px;
   border-radius: 999px;
   border: 1px solid #e4e4ea;
-  background: #ffffff;
+  background: var(--color-panel);
   color: var(--color-text-soft);
   font-family: inherit;
   font-size: 13px;
@@ -167,7 +167,7 @@
   border-radius: 11px;
   border: 1px solid #e4e4ea;
   outline: 0;
-  background: #ffffff;
+  background: var(--color-panel);
   color: var(--color-text);
   font-family: inherit;
   font-size: 14px;
@@ -206,7 +206,7 @@
   padding: 10px 18px;
   border: 1px solid var(--color-line-strong);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--color-panel);
   color: var(--color-text-soft);
   font-family: inherit;
   font-size: 13px;
@@ -228,7 +228,7 @@
 .nextGo {
   border-color: var(--color-accent-strong);
   background: linear-gradient(180deg, #6b7bff 0%, var(--color-accent) 55%, var(--color-accent-strong) 100%);
-  color: #ffffff;
+  color: var(--color-ink-fg);
   box-shadow:
     0 1px 2px rgba(46, 55, 150, 0.22),
     0 6px 16px rgba(92, 108, 245, 0.22);
@@ -236,5 +236,5 @@
 
 .nextGo:hover:not(:disabled) {
   filter: brightness(1.05);
-  color: #ffffff;
+  color: var(--color-ink-fg);
 }

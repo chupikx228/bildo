@@ -6,6 +6,7 @@ export function useWindowEvent<K extends keyof WindowEventMap>(
   options?: boolean | AddEventListenerOptions,
 ) {
   const handlerRef = useRef(handler);
+  const optionsKey = typeof options === "object" ? JSON.stringify(options) : String(options);
 
   useEffect(() => {
     handlerRef.current = handler;
@@ -20,5 +21,5 @@ export function useWindowEvent<K extends keyof WindowEventMap>(
       window.removeEventListener(type, listener, options);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+  }, [type, optionsKey]);
 }

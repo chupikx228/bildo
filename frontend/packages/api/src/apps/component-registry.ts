@@ -1,11 +1,12 @@
-import type { AppComponentType } from "./model";
+import type { AppComponentType, AppNodeStyle, AppThemeTokens } from "./model";
 
 export interface AppComponentDef {
   type: AppComponentType;
   displayName: string;
   canHaveChildren: boolean;
   defaultProps?: { text?: string; placeholder?: string; data?: string[]; source?: string };
-  defaultStyle?: Record<string, unknown>;
+  defaultStyle?: AppNodeStyle;
+  themeStyle?: Partial<Record<"color" | "backgroundColor", keyof AppThemeTokens>>;
 }
 
 export const APP_COMPONENT_REGISTRY: Record<AppComponentType, AppComponentDef> = {
@@ -20,7 +21,8 @@ export const APP_COMPONENT_REGISTRY: Record<AppComponentType, AppComponentDef> =
     displayName: "Текст",
     canHaveChildren: false,
     defaultProps: { text: "Текст" },
-    defaultStyle: { fontSize: 16, color: "#FAFAFA" },
+    defaultStyle: { fontSize: 16 },
+    themeStyle: { color: "colorText" },
   },
   Button: {
     type: "Button",
@@ -28,12 +30,12 @@ export const APP_COMPONENT_REGISTRY: Record<AppComponentType, AppComponentDef> =
     canHaveChildren: false,
     defaultProps: { text: "Продолжить" },
     defaultStyle: {
-      backgroundColor: "#5C6CF5",
       paddingVertical: 12,
       paddingHorizontal: 16,
       borderRadius: 10,
       alignItems: "center",
     },
+    themeStyle: { backgroundColor: "colorPrimary" },
   },
   Image: {
     type: "Image",
@@ -48,12 +50,11 @@ export const APP_COMPONENT_REGISTRY: Record<AppComponentType, AppComponentDef> =
     canHaveChildren: false,
     defaultProps: { placeholder: "Введите…" },
     defaultStyle: {
-      backgroundColor: "#18181B",
       borderRadius: 10,
       padding: 12,
-      color: "#FAFAFA",
       fontSize: 15,
     },
+    themeStyle: { backgroundColor: "colorSurface", color: "colorText" },
   },
   ScrollView: {
     type: "ScrollView",

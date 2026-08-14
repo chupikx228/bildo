@@ -1,6 +1,7 @@
 import { APP_STAGE_HEIGHT, APP_STAGE_WIDTH, type AppDocument, type AppScreen } from "@bildo/api";
 import { BEZEL, HOME_H, RADIUS_INNER, RADIUS_OUTER, TAB_H, TOP_H, hasTabs, phoneFrameSize } from "../lib/phoneFrame";
 import { Canvas } from "./Canvas";
+import styles from "./PhonePreview.module.css";
 
 const TAB_ICONS: Record<string, string> = {
   home: "⌂",
@@ -42,21 +43,12 @@ export function PhonePreview({
 
   return (
     <div
+      className={styles.frame}
       style={{
         width: outerW,
         height: outerH,
         borderRadius: RADIUS_OUTER,
         padding: BEZEL,
-        background: "linear-gradient(155deg, #F0F0F3 0%, #D8D8DE 32%, #B9B9C2 62%, #E6E6EB 100%)",
-        boxShadow: `
-          inset 0 0 0 1px rgba(255,255,255,0.7),
-          0 0 0 1px rgba(16,16,20,0.10),
-          0 24px 56px rgba(16,16,20,0.16),
-          0 6px 16px rgba(16,16,20,0.08)
-        `,
-        position: "relative",
-        boxSizing: "border-box",
-        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif',
       }}
     >
       {[
@@ -68,57 +60,27 @@ export function PhonePreview({
         <div
           key={i}
           aria-hidden
+          className={styles.sideButton}
           style={{
-            position: "absolute",
             ...(b.side === "left" ? { left: -2 } : { right: -2 }),
             top: b.top,
-            width: 3,
             height: b.h,
-            borderRadius: 2,
-            background: "linear-gradient(90deg, #C7C7D0, #A9A9B4)",
           }}
         />
       ))}
 
       <div
+        className={styles.screen}
         style={{
           width: APP_STAGE_WIDTH,
           height: TOP_H + APP_STAGE_HEIGHT + tabH + HOME_H,
           borderRadius: RADIUS_INNER,
-          overflow: "hidden",
           background: screenBg,
-          position: "relative",
-          boxShadow: "inset 0 0 0 1px rgba(16,16,20,0.10)",
         }}
       >
         <div style={{ height: TOP_H, position: "relative", background: screenBg, flexShrink: 0 }}>
-          <div
-            aria-hidden
-            style={{
-              position: "absolute",
-              top: 10,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: 118,
-              height: 34,
-              borderRadius: 18,
-              background: "#0A0A0C",
-              zIndex: 3,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              paddingRight: 13,
-            }}
-          >
-            <span
-              style={{
-                width: 9,
-                height: 9,
-                borderRadius: "50%",
-                background: "radial-gradient(circle at 35% 35%, #1c3d4d 0%, #0a1520 60%, #000 100%)",
-                boxShadow: "inset 0 0 0 1px rgba(80,140,180,0.28)",
-              }}
-            />
+          <div aria-hidden className={styles.island}>
+            <span aria-hidden className={styles.camera} />
           </div>
         </div>
 

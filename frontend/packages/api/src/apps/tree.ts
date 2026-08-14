@@ -1,6 +1,6 @@
 import { current, isDraft, type Draft } from "immer";
 import { nanoid } from "nanoid";
-import type { AppNode, AppScreen } from "./model";
+import type { AppNode } from "./model";
 
 function plainClone<T>(value: T): T {
   const plain = isDraft(value) ? current(value as Draft<T>) : value;
@@ -52,14 +52,6 @@ export function updateNodeById(root: AppNode, id: string, patch: Partial<AppNode
   };
 }
 
-export function removeNodeById(root: AppNode, id: string): AppNode {
-  if (!root.children?.length) return root;
-  return {
-    ...root,
-    children: root.children.filter((c) => c.id !== id).map((c) => removeNodeById(c, id)),
-  };
-}
-
 export function insertChild(root: AppNode, parentId: string, child: AppNode, index?: number): AppNode {
   if (root.id === parentId) {
     const kids = [...(root.children ?? [])];
@@ -71,24 +63,6 @@ export function insertChild(root: AppNode, parentId: string, child: AppNode, ind
   return {
     ...root,
     children: root.children.map((c) => insertChild(c, parentId, child, index)),
-  };
-}
-
-export function reorderChild(root: AppNode, parentId: string, fromIndex: number, toIndex: number): AppNode {
-  if (root.id === parentId) {
-    const kids = [...(root.children ?? [])];
-    if (fromIndex < 0 || toIndex < 0 || fromIndex >= kids.length || toIndex >= kids.length || fromIndex === toIndex) {
-      return root;
-    }
-    const [item] = kids.splice(fromIndex, 1);
-    if (!item) return root;
-    kids.splice(toIndex, 0, item);
-    return { ...root, children: kids };
-  }
-  if (!root.children?.length) return root;
-  return {
-    ...root,
-    children: root.children.map((c) => reorderChild(c, parentId, fromIndex, toIndex)),
   };
 }
 
@@ -107,8 +81,4 @@ export function cloneNodeDeep(node: AppNode, offset = 16): AppNode {
       : base.layout,
     children: base.children?.map((c) => cloneNodeDeep(c, 0)),
   };
-}
-
-export function patchScreenRoot(screen: AppScreen, root: AppNode): AppScreen {
-  return { ...screen, root };
 }

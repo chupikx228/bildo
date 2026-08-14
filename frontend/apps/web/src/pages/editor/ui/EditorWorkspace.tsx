@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useDeferredValue, useEffect, useState, type CSSProperties } from "react";
 import { findAppNode, getExportUrl, type AppDocument } from "@bildo/api";
 import { codegenExpoProject, useAppDocumentStore } from "@/entities/app-document";
 import { useAutosave } from "@/features/autosave-app-document";
@@ -47,7 +47,14 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
   const screen = document.screens.find((s) => s.id === selectedScreenId) ?? document.screens[0] ?? null;
   const selectedNode = screen && selectedNodeId ? findAppNode(screen.root, selectedNodeId) : null;
 
-  const files = filesOpen || codeOpen ? codegenExpoProject(document) : NO_FILES;
+  const deferredDocument = useDeferredValue(document);
+  const files = filesOpen || codeOpen ? codegenExpoProject(deferredDocument) : NO_FILES;
+
+  useEffect(() => {
+    if (!shareUrl) return;
+    const id = window.setTimeout(() => setShareUrl(null), 3200);
+    return () => window.clearTimeout(id);
+  }, [shareUrl]);
 
   async function exportProject() {
     const ok = await flush();
@@ -58,7 +65,6 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
     const url = `${window.location.origin}${ROUTES.publicPreview(appId)}`;
     setShareUrl(url);
     void navigator.clipboard?.writeText(url);
-    window.setTimeout(() => setShareUrl(null), 3200);
   }
 
   function toggleRun() {

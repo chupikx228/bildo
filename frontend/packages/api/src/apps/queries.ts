@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { useApiClient } from "../context";
 import { appDocumentSchema, appSummarySchema, type AppDocument, type AppSummary } from "./model";
+
+const createAppResponseSchema = z.object({ id: z.string() });
 
 export const appsKeys = {
   all: ["apps"] as const,
@@ -35,7 +38,10 @@ export function useCreateApp() {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { prompt: string; name?: string }) => client.post<{ id: string }>("/apps", input),
+    mutationFn: async (input: { prompt: string; name?: string }) => {
+      const data = await client.post<unknown>("/apps", input);
+      return createAppResponseSchema.parse(data);
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: appsKeys.list() });
     },
