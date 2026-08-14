@@ -26,14 +26,17 @@ jobs:
 
       - run: uv sync --group dev
 
-      - name: Формат
+      - name: Format
         run: uv run ruff format --check .
 
-      - name: Линт
+      - name: Lint
         run: uv run ruff check .
 
-      - name: Типы
+      - name: Types
         run: uv run mypy src
 
-      - name: Архитектурные контракты
+      - name: Architecture contracts
         run: uv run lint-imports
+
+      - name: Tests
+        run: uv run pytest

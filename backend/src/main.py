@@ -3,9 +3,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic_core import ErrorDetails
 
+from src.apps.router import router as apps_router
 from src.exceptions import DomainError
 
-routers: list[APIRouter] = []
+routers: list[APIRouter] = [apps_router]
 
 
 def create_app() -> FastAPI:
