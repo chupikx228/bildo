@@ -1,4 +1,4 @@
-.PHONY: install lint lint-fix format format-check typecheck arch check fix
+.PHONY: install lint lint-fix format format-check typecheck arch test check fix
 
 install:
 	uv sync --group dev
@@ -21,6 +21,9 @@ typecheck:
 arch:
 	lint-imports
 
-check: format-check lint typecheck arch
+test:
+	pytest
+
+check: format-check lint typecheck arch test
 
 fix: format lint-fix

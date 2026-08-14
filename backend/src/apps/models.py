@@ -12,7 +12,7 @@ class App(Base):
     __tablename__ = "apps"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    owner_id: Mapped[UUID] = mapped_column(index=True)
+    owner_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
     prompt: Mapped[str | None] = mapped_column(nullable=True)

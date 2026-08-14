@@ -179,3 +179,10 @@ class CreateAppResponse(CamelModel):
 
 class AppListResponse(CamelModel):
     apps: list[AppSummary]
+
+
+class AppDetailResponse(CamelModel):
+    id: str
+    name: str
+    slug: str | None = None
+    document: AppDocument
