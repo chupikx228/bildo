@@ -1,3 +1,4 @@
+import { writeSync } from "node:fs";
 import type { AppDocument } from "@bildo/api";
 import { codegenExpoProject } from "../src/entities/app-document/lib/codegen.ts";
 
@@ -8,7 +9,7 @@ async function readStdin(): Promise<string> {
 }
 
 function fail(message: string): never {
-  process.stderr.write(`${message}\n`);
+  writeSync(2, `${message}\n`);
   process.exit(1);
 }
 
