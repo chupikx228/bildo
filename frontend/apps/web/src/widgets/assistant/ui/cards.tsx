@@ -1,4 +1,4 @@
-import type { Commit, Diff, Proposal } from "./planner";
+import type { Commit, Diff, Proposal } from "../lib/planner";
 import styles from "./Assistant.module.css";
 
 const DIFF_CLASS: Record<Diff["tone"], string> = {
