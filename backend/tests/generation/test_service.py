@@ -1,6 +1,6 @@
 import pytest
 
-from src.apps.schemas import AppDocument, AppNode
+from src.apps.schemas import AppDocument, AppNode, NavigateAction
 from src.generation.service import BUILDERS, TemplateKey, generate_document, select_template
 
 TEMPLATE_PROMPTS: dict[TemplateKey, str] = {
@@ -17,6 +17,17 @@ def collect_nodes(node: AppNode) -> list[AppNode]:
     for child in node.children:
         nodes.extend(collect_nodes(child))
     return nodes
+
+
+def collect_navigate_actions(root: AppNode) -> list[NavigateAction]:
+    actions = []
+    for node in collect_nodes(root):
+        if node.props is None:
+            continue
+        for action in (node.props.on_press or []) + (node.props.on_change or []):
+            if isinstance(action, NavigateAction):
+                actions.append(action)
+    return actions
 
 
 @pytest.mark.parametrize(
@@ -89,10 +100,28 @@ def test_generate_document_keeps_prompt_and_timestamps(prompt: str) -> None:
 def test_generate_document_has_screens_reachable_from_navigation(prompt: str) -> None:
     document = generate_document(prompt, None)
 
-    routes = {screen.route for screen in document.screens}
+    screen_ids = {screen.id for screen in document.screens}
 
     assert document.screens != []
-    assert set(document.navigation.roots) <= routes
+    assert set(document.navigation.roots) <= screen_ids
+
+
+@pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))
+def test_generate_document_routes_are_bare_identifiers(prompt: str) -> None:
+    document = generate_document(prompt, None)
+
+    assert all(not screen.route.startswith("/") for screen in document.screens)
+
+
+@pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))
+def test_generate_document_navigate_actions_point_at_existing_screens(prompt: str) -> None:
+    document = generate_document(prompt, None)
+
+    routes = {screen.route for screen in document.screens}
+    targets = [action.route for screen in document.screens for action in collect_navigate_actions(screen.root)]
+
+    assert set(targets) <= routes
+    assert targets != [] or len(document.screens) == 1
 
 
 @pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))

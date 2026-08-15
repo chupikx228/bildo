@@ -201,9 +201,9 @@ def _input(node_id: str, placeholder: str, layout: AppNodeLayout, theme: AppThem
 def _build_blank() -> TemplateContent:
     theme = _theme("#FFFFFF", "#F4F4F5", "#E6E6EA", "#101014", "#6B6B76", "#5C6CF5", "#FFFFFF")
     home = AppScreen(
-        id="screen-home",
+        id="index",
         name="Главная",
-        route="/",
+        route="index",
         icon=None,
         root=_root(
             "blank-root",
@@ -230,7 +230,7 @@ def _build_blank() -> TemplateContent:
     return TemplateContent(
         name="Новое приложение",
         theme=theme,
-        navigation=AppNavigation(type="stack", roots=["/"]),
+        navigation=AppNavigation(type="stack", roots=["index"]),
         screens=[home],
     )
 
@@ -238,9 +238,9 @@ def _build_blank() -> TemplateContent:
 def _build_habits() -> TemplateContent:
     theme = _theme("#FBFBFC", "#FFFFFF", "#E8E8EE", "#101014", "#5B5B66", "#16A34A", "#FFFFFF")
     today = AppScreen(
-        id="screen-today",
+        id="index",
         name="Сегодня",
-        route="/",
+        route="index",
         icon=None,
         root=_root(
             "habits-root",
@@ -309,15 +309,15 @@ def _build_habits() -> TemplateContent:
                     "Прогресс",
                     _layout(24, 404, 322, 48),
                     theme,
-                    [NavigateAction(type="navigate", route="/progress")],
+                    [NavigateAction(type="navigate", route="progress")],
                 ),
             ],
         ),
     )
     progress = AppScreen(
-        id="screen-progress",
+        id="progress",
         name="Прогресс",
-        route="/progress",
+        route="progress",
         icon=None,
         root=_root(
             "habits-progress-root",
@@ -351,7 +351,7 @@ def _build_habits() -> TemplateContent:
                     "Привычки",
                     _layout(24, 284, 322, 48),
                     theme,
-                    [NavigateAction(type="navigate", route="/")],
+                    [NavigateAction(type="navigate", route="index")],
                 ),
             ],
         ),
@@ -359,7 +359,7 @@ def _build_habits() -> TemplateContent:
     return TemplateContent(
         name="Трекер привычек",
         theme=theme,
-        navigation=AppNavigation(type="tabs", roots=["/", "/progress"]),
+        navigation=AppNavigation(type="tabs", roots=["index", "progress"]),
         screens=[today, progress],
         state={"completedToday": 0},
     )
@@ -368,9 +368,9 @@ def _build_habits() -> TemplateContent:
 def _build_social() -> TemplateContent:
     theme = _theme("#0F0F14", "#1A1A22", "#2A2A34", "#F5F5F7", "#9A9AA6", "#5C6CF5", "#FFFFFF")
     feed = AppScreen(
-        id="screen-feed",
+        id="index",
         name="Лента",
-        route="/",
+        route="index",
         icon=None,
         root=_root(
             "social-root",
@@ -428,15 +428,15 @@ def _build_social() -> TemplateContent:
                     "Профиль",
                     _layout(24, 440, 322, 48),
                     theme,
-                    [NavigateAction(type="navigate", route="/profile")],
+                    [NavigateAction(type="navigate", route="profile")],
                 ),
             ],
         ),
     )
     profile = AppScreen(
-        id="screen-profile",
+        id="profile",
         name="Профиль",
-        route="/profile",
+        route="profile",
         icon=None,
         root=_root(
             "social-profile-root",
@@ -455,7 +455,7 @@ def _build_social() -> TemplateContent:
                     "Лента",
                     _layout(24, 176, 322, 48),
                     theme,
-                    [NavigateAction(type="navigate", route="/")],
+                    [NavigateAction(type="navigate", route="index")],
                 ),
             ],
         ),
@@ -463,7 +463,7 @@ def _build_social() -> TemplateContent:
     return TemplateContent(
         name="Лента",
         theme=theme,
-        navigation=AppNavigation(type="tabs", roots=["/", "/profile"]),
+        navigation=AppNavigation(type="tabs", roots=["index", "profile"]),
         screens=[feed, profile],
     )
 
@@ -471,9 +471,9 @@ def _build_social() -> TemplateContent:
 def _build_shop() -> TemplateContent:
     theme = _theme("#FFFFFF", "#F6F6F8", "#E4E4EA", "#101014", "#5B5B66", "#101014", "#FFFFFF")
     catalog = AppScreen(
-        id="screen-catalog",
+        id="index",
         name="Каталог",
-        route="/",
+        route="index",
         icon=None,
         root=_root(
             "shop-root",
@@ -539,15 +539,15 @@ def _build_shop() -> TemplateContent:
                     "Корзина",
                     _layout(24, 392, 322, 48),
                     theme,
-                    [NavigateAction(type="navigate", route="/cart")],
+                    [NavigateAction(type="navigate", route="cart")],
                 ),
             ],
         ),
     )
     cart = AppScreen(
-        id="screen-cart",
+        id="cart",
         name="Корзина",
-        route="/cart",
+        route="cart",
         icon=None,
         root=_root(
             "shop-cart-root",
@@ -574,7 +574,7 @@ def _build_shop() -> TemplateContent:
                     "Каталог",
                     _layout(24, 236, 322, 48),
                     theme,
-                    [NavigateAction(type="navigate", route="/")],
+                    [NavigateAction(type="navigate", route="index")],
                 ),
             ],
         ),
@@ -582,7 +582,7 @@ def _build_shop() -> TemplateContent:
     return TemplateContent(
         name="Магазин",
         theme=theme,
-        navigation=AppNavigation(type="tabs", roots=["/", "/cart"]),
+        navigation=AppNavigation(type="tabs", roots=["index", "cart"]),
         screens=[catalog, cart],
         state={"cartCount": 0},
     )
@@ -591,9 +591,9 @@ def _build_shop() -> TemplateContent:
 def _build_forms() -> TemplateContent:
     theme = _theme("#FBFBFC", "#FFFFFF", "#E4E4EA", "#101014", "#5B5B66", "#4A55C9", "#FFFFFF")
     form = AppScreen(
-        id="screen-form",
+        id="index",
         name="Заявка",
-        route="/",
+        route="index",
         icon=None,
         root=_root(
             "forms-root",
@@ -617,16 +617,16 @@ def _build_forms() -> TemplateContent:
                     theme,
                     [
                         SetVarAction(type="setVar", name="formSent", value=True),
-                        NavigateAction(type="navigate", route="/done"),
+                        NavigateAction(type="navigate", route="done"),
                     ],
                 ),
             ],
         ),
     )
     done = AppScreen(
-        id="screen-done",
+        id="done",
         name="Готово",
-        route="/done",
+        route="done",
         icon=None,
         root=_root(
             "forms-done-root",
@@ -645,7 +645,7 @@ def _build_forms() -> TemplateContent:
                     "Новая заявка",
                     _layout(24, 300, 322, 48),
                     theme,
-                    [NavigateAction(type="navigate", route="/")],
+                    [NavigateAction(type="navigate", route="index")],
                 ),
             ],
         ),
@@ -653,7 +653,7 @@ def _build_forms() -> TemplateContent:
     return TemplateContent(
         name="Анкета",
         theme=theme,
-        navigation=AppNavigation(type="stack", roots=["/", "/done"]),
+        navigation=AppNavigation(type="stack", roots=["index", "done"]),
         screens=[form, done],
         state={"formName": "", "formEmail": "", "formMessage": "", "formSent": False},
     )
