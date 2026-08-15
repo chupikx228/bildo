@@ -106,18 +106,29 @@ include_external_packages = true
 name = "Layers: router → service → repository. Dependencies only point down"
 type = "layers"
 layers = ["(router)", "(service)", "(repository)", "(models)"]
-containers = ["src.apps", "src.codegen"]
+containers = ["src.apps", "src.codegen", "src.generation", "src.tasks"]
 
 [[tool.importlinter.contracts]]
 name = "Dependency Inversion: service doesn't know about SQLAlchemy or FastAPI"
 type = "forbidden"
-source_modules = ["src.apps.service", "src.codegen.service"]
+source_modules = [
+    "src.apps.service",
+    "src.codegen.service",
+    "src.generation.service",
+    "src.tasks.service",
+]
 forbidden_modules = ["sqlalchemy", "fastapi"]
 allow_indirect_imports = "true"
 
 [[tool.importlinter.contracts]]
+name = "Task queue abstraction doesn't know about its Arq implementation"
+type = "forbidden"
+source_modules = ["src.queue.base"]
+forbidden_modules = ["arq", "sqlalchemy", "fastapi", "src.queue.arq_queue"]
+
+[[tool.importlinter.contracts]]
 name = "Domains communicate only through the public layer (service/schemas)"
 type = "forbidden"
-source_modules = ["src.codegen"]
-forbidden_modules = ["src.apps.repository", "src.apps.models"]
+source_modules = ["src.codegen", "src.generation"]
+forbidden_modules = ["src.apps.repository", "src.apps.models", "src.apps.service"]
 allow_indirect_imports = true

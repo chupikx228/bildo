@@ -33,6 +33,8 @@ async def get_app(app_id: UUID, service: AppServiceDep) -> AppDetailResponse:
         name=app.name,
         slug=app.slug,
         document=AppDocument.model_validate(app.document),
+        generation_status=app.generation_status,
+        generation_error=app.generation_error,
     )
 
 

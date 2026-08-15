@@ -1,6 +1,7 @@
+import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -9,7 +10,9 @@ from src.apps.dependencies import get_app_service
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
 from src.main import app
+from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
 from tests.apps.in_memory_repository import InMemoryAppRepository
+from tests.in_memory_task_queue import InMemoryTaskQueue
 
 
 def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, object]:
@@ -45,8 +48,16 @@ def repository() -> InMemoryAppRepository:
 
 
 @pytest.fixture
-async def client(repository: InMemoryAppRepository) -> AsyncIterator[httpx.AsyncClient]:
-    app.dependency_overrides[get_app_service] = lambda: AppService(repository)
+def task_queue() -> InMemoryTaskQueue:
+    return InMemoryTaskQueue()
+
+
+@pytest.fixture
+async def client(
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+) -> AsyncIterator[httpx.AsyncClient]:
+    app.dependency_overrides[get_app_service] = lambda: AppService(repository, task_queue)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
         yield async_client
@@ -63,7 +74,40 @@ async def test_create_app(client: httpx.AsyncClient) -> None:
     response = await client.post("/api/apps", json={"prompt": "a habit tracker"})
 
     assert response.status_code == 201
-    assert "id" in response.json()
+    body = response.json()
+    assert list(body) == ["id"]
+    assert UUID(body["id"])
+
+
+async def test_create_app_enqueues_generation_job(client: httpx.AsyncClient, task_queue: InMemoryTaskQueue) -> None:
+    app_id = await create_app(client, prompt="a habit tracker")
+
+    assert len(task_queue.jobs) == 1
+    job = task_queue.jobs[0]
+    assert job.job_name == GENERATE_APP_DOCUMENT_JOB
+    assert job.job_id == app_id
+    assert job.kwargs == {"app_id": app_id, "prompt": "a habit tracker", "name": None}
+
+
+async def test_created_app_is_pending_until_worker_runs(client: httpx.AsyncClient) -> None:
+    app_id = await create_app(client)
+
+    response = await client.get(f"/api/apps/{app_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generationStatus"] == "pending"
+    assert body["generationError"] is None
+    assert body["document"]["screens"] == []
+    assert body["document"]["theme"]["colorPrimary"] == "#5C6CF5"
+
+
+async def test_create_app_rejects_short_prompt(client: httpx.AsyncClient, task_queue: InMemoryTaskQueue) -> None:
+    response = await client.post("/api/apps", json={"prompt": "ab"})
+
+    assert response.status_code == 422
+    assert "error" in response.json()
+    assert task_queue.jobs == []
 
 
 async def test_list_apps(client: httpx.AsyncClient) -> None:
@@ -114,6 +158,24 @@ async def test_save_app_invalid_body_returns_422(client: httpx.AsyncClient) -> N
 
     assert response.status_code == 422
     assert "error" in response.json()
+
+
+async def test_validation_error_message_is_russian(client: httpx.AsyncClient) -> None:
+    app_id = await create_app(client)
+
+    short_prompt = await client.post("/api/apps", json={"prompt": "ab"})
+    incomplete_document = await client.put(f"/api/apps/{app_id}", json={"name": "not a full document"})
+    wrong_type = await client.post("/api/apps", json={"prompt": 5})
+
+    for response in (short_prompt, incomplete_document, wrong_type):
+        error = response.json()["error"]
+        details = error.removeprefix("Ошибка валидации данных: ")
+        for detail in details.split("; "):
+            assert not re.search(r"[A-Za-z]", detail.rsplit(": ", 1)[-1]), error
+
+    assert short_prompt.json()["error"] == "Ошибка валидации данных: prompt: слишком короткое значение"
+    assert wrong_type.json()["error"] == "Ошибка валидации данных: prompt: должно быть строкой"
+    assert "theme: обязательное поле" in incomplete_document.json()["error"]
 
 
 async def test_save_app_not_found_returns_404(client: httpx.AsyncClient) -> None:

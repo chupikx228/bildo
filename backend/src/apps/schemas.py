@@ -12,6 +12,8 @@ class CamelModel(BaseModel):
 
 AppNavType = Literal["tabs", "stack", "drawer"]
 
+GenerationStatus = Literal["pending", "ready", "failed"]
+
 AppComponentType = Literal[
     "View",
     "Text",
@@ -186,3 +188,5 @@ class AppDetailResponse(CamelModel):
     name: str
     slug: str | None = None
     document: AppDocument
+    generation_status: GenerationStatus
+    generation_error: str | None = None
