@@ -11,7 +11,7 @@
 | GET | `/api/apps/[id]` | — | `{ id, name, slug?, document: AppDocument, generationStatus, generationError? }` |
 | PUT | `/api/apps/[id]` | `AppDocument` целиком | `{ ok: true, document: AppDocument }` |
 | DELETE | `/api/apps/[id]` | — | `{ ok: true }` или 404 |
-| GET | `/api/apps/[id]/export` | — | `application/zip`, не JSON |
+| GET | `/api/apps/[id]/export` | — | `application/zip` прямо в ответе, не JSON; заголовок `Content-Disposition: attachment; filename="<slug>.zip"` |
 | GET | `/api/tasks/[id]` | — | `{ id, status, result?, error? }` — статус фоновой задачи |
 
 Все ответы об ошибках — JSON с полем `error`, человекочитаемый текст на русском.
@@ -34,7 +34,7 @@
 
 ## Статус фоновой задачи — `GET /api/tasks/[id]`
 
-Генерический эндпоинт поверх статуса джобы в Arq/Redis, не привязан к приложениям (тем же способом будет опрашиваться будущий zip-экспорт). Отвечает всегда 200, в том числе для неизвестного `id`:
+Генерический эндпоинт поверх статуса джобы в Arq/Redis, не привязан к приложениям (zip-экспорт через него не опрашивается — см. ниже, он синхронный). Отвечает всегда 200, в том числе для неизвестного `id`:
 
 ```json
 { "id": "8c90a14f-…", "status": "complete", "result": null, "error": null }
@@ -52,7 +52,17 @@
 
 Модель `AppDocument` (и всё, что вокруг неё — `AppNode`, `AppThemeTokens`, дерево, нормализация) типизирована и валидируется zod-схемами в `frontend/packages/api/src/apps/model.ts` — это перенесённые из рабочего прототипа реальные поля (`colorBg`, `colorPrimary`, `navigation.roots` и т.д.), не придуманные заново. При изменении формы документа на бэке правь оба места синхронно: этот файл и `model.ts`.
 
+Незаданные опциональные поля документа (`style.padding`, `props.text`, `layout.zIndex`, `screen.icon`, `slug`, `prompt`, …) и `slug` в `AppSummary` бэк **не сериализует вовсе** — ключа в JSON просто нет, `null` вместо него не приходит. Это не косметика: в `model.ts` все такие поля объявлены `.optional()` и ни одно не `.nullable()`, поэтому `null` роняет `parse` на реальных документах. Исключение — `generationError` в `GET /api/apps/[id]`: он присутствует всегда и при `pending`/`ready` равен `null` (см. выше). На бэке за это отвечает базовая модель `OmitNoneModel` в `backend/src/apps/schemas.py` — новые модели дерева документа наследуй от неё, а не от `CamelModel`.
+
 В прототипе `PUT` валидировался бэком минимально (`Array.isArray(document.screens) && document.theme`) и никакой авторизации не было (заголовок `x-user-id`, по умолчанию `'anonymous'`) — это не образец для копирования, а фиксация того, что было. В FastAPI-версии обе вещи стоит сделать по-настоящему (Pydantic-модели на входе, реальная авторизация), не повторяя прототип буквально.
+
+## Экспорт Expo-проекта — `GET /api/apps/[id]/export`
+
+Для клиента эндпоинт **синхронный**: в ответе сразу тело архива (`application/zip`), фронт просто открывает ссылку (`getExportUrl` + `window.location.href`), никакого поллинга и никакого `taskId`. Ошибки — как везде, JSON с полем `error`: 404 «Приложение не найдено», 504 если сборка не уложилась в таймаут (30 с).
+
+Асинхронность спрятана внутри: обработчик ставит задачу сборки в очередь Arq и ждёт её результат, а не собирает zip сам — CPU-работа идёт в процессе воркера и не занимает event loop API. Идентификатор задачи здесь — свежий `uuid4()` (у одного приложения может быть много независимых экспортов), поэтому опрашивать его через `/api/tasks/{id}` бессмысленно, клиент его и не видит.
+
+Содержимое архива строит **порт TS-генератора на Python** (`backend/src/codegen/service.py` ← `frontend/apps/web/src/entities/app-document/lib/codegen.ts`): те же файлы, те же пути, то же содержимое — `package.json`, `app.json`, `tsconfig.json`, `babel.config.js`, `.gitignore`, `theme.ts`, `app/state.tsx`, `app/_layout.tsx`, `app/<route>.tsx` на каждый экран (`index` → `app/index.tsx`), `README.md`. Совпадение с панелью кода в редакторе держится тестом на равенство вывода обоих генераторов (Node нужен только этому тесту в CI, в прод-рантайм бэкенда он не попадает). **Меняешь один генератор — меняй второй в том же PR.**
 
 ## Не специфицировано ни в ТЗ, ни в прототипе
 

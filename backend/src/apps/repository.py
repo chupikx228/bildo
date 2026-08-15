@@ -56,7 +56,7 @@ class SqlAlchemyAppRepository:
             id=UUID(document.id),
             name=name,
             prompt=prompt,
-            document=document.model_dump(mode="json", by_alias=True),
+            document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
             generation_status=generation_status,
         )
         self._session.add(app)
@@ -67,7 +67,7 @@ class SqlAlchemyAppRepository:
         app = await self._session.get(App, app_id)
         if app is None:
             return None
-        app.document = document.model_dump(mode="json", by_alias=True)
+        app.document = document.model_dump(mode="json", by_alias=True, exclude_none=True)
         app.name = document.name
         app.slug = document.slug
         await self._session.flush()

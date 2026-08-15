@@ -4,7 +4,9 @@ from uuid import UUID
 from arq.connections import ArqRedis
 
 from src.apps.repository import SqlAlchemyAppRepository
+from src.apps.schemas import AppDocument
 from src.apps.service import AppService
+from src.codegen.service import build_zip, generate_files
 from src.database import async_session_factory
 from src.generation.service import generate_document
 from src.queue.arq_queue import ArqTaskQueue
@@ -24,3 +26,12 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
             await failure_service.mark_generation_failed(UUID(app_id), f"Ошибка генерации приложения: {error}")
             await failure_session.commit()
         raise
+
+
+async def build_export_zip(ctx: dict[Any, Any], app_id: str) -> bytes:
+    redis: ArqRedis = ctx["redis"]
+    async with async_session_factory() as session:
+        service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis))
+        app = await service.get_app(UUID(app_id))
+        document = AppDocument.model_validate(app.document)
+    return build_zip(generate_files(document))

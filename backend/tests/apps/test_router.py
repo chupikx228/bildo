@@ -1,3 +1,4 @@
+import json
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -204,3 +205,73 @@ async def test_delete_app_not_found_returns_404(client: httpx.AsyncClient) -> No
 
     assert response.status_code == 404
     assert "error" in response.json()
+
+
+def build_sparse_screen() -> dict[str, object]:
+    return {
+        "id": "screen-1",
+        "name": "Home",
+        "route": "index",
+        "root": {
+            "id": "node-root",
+            "type": "View",
+            "style": {"padding": 12, "backgroundColor": "#FFFFFF"},
+            "layout": {"x": 0, "y": 0, "width": 370, "height": 640},
+            "children": [
+                {
+                    "id": "node-text",
+                    "type": "Text",
+                    "props": {"text": "Привет"},
+                    "layout": {"x": 16, "y": 24, "width": 280, "height": 36},
+                    "children": [],
+                }
+            ],
+        },
+    }
+
+
+def find_null_paths(value: object, path: str = "$") -> list[str]:
+    if value is None:
+        return [path]
+    if isinstance(value, dict):
+        return [null_path for key, item in value.items() for null_path in find_null_paths(item, f"{path}.{key}")]
+    if isinstance(value, list):
+        return [
+            null_path for index, item in enumerate(value) for null_path in find_null_paths(item, f"{path}[{index}]")
+        ]
+    return []
+
+
+async def test_document_omits_unset_optional_fields(client: httpx.AsyncClient) -> None:
+    app_id = await create_app(client)
+    payload = build_document_payload(app_id)
+    payload["screens"] = [build_sparse_screen()]
+
+    put_response = await client.put(f"/api/apps/{app_id}", json=payload)
+    assert put_response.status_code == 200
+    put_document = json.loads(put_response.text)["document"]
+    assert find_null_paths(put_document) == []
+
+    get_response = await client.get(f"/api/apps/{app_id}")
+    assert get_response.status_code == 200
+    get_document = json.loads(get_response.text)["document"]
+    assert find_null_paths(get_document) == []
+
+    screen = get_document["screens"][0]
+    assert "icon" not in screen
+    root = screen["root"]
+    assert root["style"] == {"padding": 12, "backgroundColor": "#FFFFFF"}
+    assert "props" not in root
+    assert "zIndex" not in root["layout"]
+    assert root["children"][0]["props"] == {"text": "Привет"}
+
+
+async def test_app_summary_omits_unset_slug(client: httpx.AsyncClient) -> None:
+    await create_app(client)
+
+    response = await client.get("/api/apps")
+
+    assert response.status_code == 200
+    summary = json.loads(response.text)["apps"][0]
+    assert find_null_paths(summary) == []
+    assert "slug" not in summary

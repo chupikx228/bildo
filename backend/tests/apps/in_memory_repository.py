@@ -27,7 +27,7 @@ class InMemoryAppRepository:
             id=UUID(document.id),
             name=name,
             prompt=prompt,
-            document=document.model_dump(mode="json", by_alias=True),
+            document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
             generation_status=generation_status,
             created_at=now,
             updated_at=now,
@@ -39,7 +39,7 @@ class InMemoryAppRepository:
         app = self._apps.get(app_id)
         if app is None:
             return None
-        app.document = document.model_dump(mode="json", by_alias=True)
+        app.document = document.model_dump(mode="json", by_alias=True, exclude_none=True)
         app.name = document.name
         app.slug = document.slug
         app.updated_at = datetime.now(UTC)
