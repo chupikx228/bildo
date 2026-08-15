@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.models import App
-from src.apps.schemas import AppDocument
+from src.apps.schemas import AppDocument, GenerationStatus
 
 
 class AppRepository(Protocol):
@@ -13,9 +13,22 @@ class AppRepository(Protocol):
 
     async def get(self, app_id: UUID) -> App | None: ...
 
-    async def create(self, name: str, prompt: str | None, document: AppDocument) -> App: ...
+    async def create(
+        self,
+        name: str,
+        prompt: str | None,
+        document: AppDocument,
+        generation_status: GenerationStatus,
+    ) -> App: ...
 
     async def update_document(self, app_id: UUID, document: AppDocument) -> App | None: ...
+
+    async def set_generation_status(
+        self,
+        app_id: UUID,
+        status: GenerationStatus,
+        error: str | None,
+    ) -> App | None: ...
 
     async def delete(self, app_id: UUID) -> bool: ...
 
@@ -32,12 +45,19 @@ class SqlAlchemyAppRepository:
     async def get(self, app_id: UUID) -> App | None:
         return await self._session.get(App, app_id)
 
-    async def create(self, name: str, prompt: str | None, document: AppDocument) -> App:
+    async def create(
+        self,
+        name: str,
+        prompt: str | None,
+        document: AppDocument,
+        generation_status: GenerationStatus,
+    ) -> App:
         app = App(
             id=UUID(document.id),
             name=name,
             prompt=prompt,
             document=document.model_dump(mode="json", by_alias=True),
+            generation_status=generation_status,
         )
         self._session.add(app)
         await self._session.flush()
@@ -50,6 +70,20 @@ class SqlAlchemyAppRepository:
         app.document = document.model_dump(mode="json", by_alias=True)
         app.name = document.name
         app.slug = document.slug
+        await self._session.flush()
+        return app
+
+    async def set_generation_status(
+        self,
+        app_id: UUID,
+        status: GenerationStatus,
+        error: str | None,
+    ) -> App | None:
+        app = await self._session.get(App, app_id)
+        if app is None:
+            return None
+        app.generation_status = status
+        app.generation_error = error
         await self._session.flush()
         return app
 

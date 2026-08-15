@@ -5,6 +5,8 @@ from src.apps.exceptions import AppNotFound
 from src.apps.models import App
 from src.apps.repository import AppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppSummary, AppThemeTokens
+from src.queue.base import TaskQueue
+from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
 
 DEFAULT_THEME = AppThemeTokens(
     color_bg="#FBFBFC",
@@ -23,8 +25,9 @@ DEFAULT_APP_NAME = "New app"
 
 
 class AppService:
-    def __init__(self, repository: AppRepository) -> None:
+    def __init__(self, repository: AppRepository, task_queue: TaskQueue) -> None:
         self._repository = repository
+        self._task_queue = task_queue
 
     async def list_apps(self) -> list[AppSummary]:
         apps = await self._repository.list_all()
@@ -54,8 +57,37 @@ class AppService:
             created_at=now,
             updated_at=now,
         )
-        app = await self._repository.create(document_name, prompt, document)
+        app = await self._repository.create(document_name, prompt, document, "pending")
+        await self._task_queue.enqueue(
+            GENERATE_APP_DOCUMENT_JOB,
+            str(app.id),
+            app_id=str(app.id),
+            prompt=prompt,
+            name=name,
+        )
         return app.id
+
+    async def mark_generated(self, app_id: UUID, document: AppDocument) -> None:
+        app = await self._repository.get(app_id)
+        if app is None:
+            raise AppNotFound(app_id)
+        existing = AppDocument.model_validate(app.document)
+        generated = document.model_copy(
+            update={
+                "id": str(app_id),
+                "slug": existing.slug,
+                "prompt": existing.prompt,
+                "created_at": existing.created_at,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        await self._repository.update_document(app_id, generated)
+        await self._repository.set_generation_status(app_id, "ready", None)
+
+    async def mark_generation_failed(self, app_id: UUID, error: str) -> None:
+        app = await self._repository.set_generation_status(app_id, "failed", error)
+        if app is None:
+            raise AppNotFound(app_id)
 
     async def save_document(self, app_id: UUID, document: AppDocument) -> AppDocument:
         app = await self._repository.update_document(app_id, document)
