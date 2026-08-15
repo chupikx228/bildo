@@ -3,9 +3,17 @@ name: backend
 on:
   push:
     branches: [main]
-    paths: ["backend/**", ".github/workflows/backend.yml"]
+    paths:
+      - "backend/**"
+      - "frontend/apps/web/src/entities/app-document/lib/codegen.ts"
+      - "frontend/apps/web/scripts/codegen-cli.ts"
+      - ".github/workflows/backend.yml"
   pull_request:
-    paths: ["backend/**", ".github/workflows/backend.yml"]
+    paths:
+      - "backend/**"
+      - "frontend/apps/web/src/entities/app-document/lib/codegen.ts"
+      - "frontend/apps/web/scripts/codegen-cli.ts"
+      - ".github/workflows/backend.yml"
 
 defaults:
   run:
@@ -37,6 +45,11 @@ jobs:
 
       - name: Architecture contracts
         run: uv run lint-imports
+
+      - name: Node.js for the cross-generator parity test
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
 
       - name: Tests
         run: uv run pytest

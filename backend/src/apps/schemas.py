@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 from pydantic.alias_generators import to_camel
 
 
 class CamelModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)
+
+
+class OmitNoneModel(CamelModel):
+    @model_serializer(mode="wrap")
+    def _omit_none(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        return {key: value for key, value in handler(self).items() if value is not None}
 
 
 AppNavType = Literal["tabs", "stack", "drawer"]
@@ -43,7 +49,7 @@ class AppThemeTokens(CamelModel):
     font_heading: str
 
 
-class AppNodeLayout(CamelModel):
+class AppNodeLayout(OmitNoneModel):
     x: float
     y: float
     width: float
@@ -51,7 +57,7 @@ class AppNodeLayout(CamelModel):
     z_index: int | None = None
 
 
-class AppNodeStyle(CamelModel):
+class AppNodeStyle(OmitNoneModel):
     flex: float | None = None
     flex_direction: Literal["row", "column"] | None = None
     align_items: Literal["flex-start", "center", "flex-end", "stretch"] | None = None
@@ -108,7 +114,7 @@ AppAction = Annotated[
 ]
 
 
-class AppNodeProps(CamelModel):
+class AppNodeProps(OmitNoneModel):
     text: str | None = None
     placeholder: str | None = None
     source: str | None = None
@@ -120,7 +126,7 @@ class AppNodeProps(CamelModel):
     on_change: list[AppAction] | None = None
 
 
-class AppNode(CamelModel):
+class AppNode(OmitNoneModel):
     id: str
     type: AppComponentType
     name: str | None = None
@@ -137,7 +143,7 @@ class AppNode(CamelModel):
 AppNode.model_rebuild()
 
 
-class AppScreen(CamelModel):
+class AppScreen(OmitNoneModel):
     id: str
     name: str
     route: str
@@ -150,7 +156,7 @@ class AppNavigation(CamelModel):
     roots: list[str]
 
 
-class AppDocument(CamelModel):
+class AppDocument(OmitNoneModel):
     id: str
     name: str
     slug: str | None = None
@@ -163,7 +169,7 @@ class AppDocument(CamelModel):
     updated_at: str
 
 
-class AppSummary(CamelModel):
+class AppSummary(OmitNoneModel):
     id: str
     name: str
     slug: str | None = None

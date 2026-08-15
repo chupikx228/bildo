@@ -7,11 +7,12 @@ from fastapi.responses import JSONResponse
 from pydantic_core import ErrorDetails
 
 from src.apps.router import router as apps_router
+from src.codegen.router import router as codegen_router
 from src.exceptions import DomainError
 from src.queue.arq_queue import create_arq_pool
 from src.tasks.router import router as tasks_router
 
-routers: list[APIRouter] = [apps_router, tasks_router]
+routers: list[APIRouter] = [apps_router, codegen_router, tasks_router]
 
 VALIDATION_MESSAGES: dict[str, str] = {
     "missing": "обязательное поле",

@@ -4,25 +4,25 @@ install:
 	uv sync --group dev
 
 lint:
-	ruff check .
+	uv run ruff check .
 
 lint-fix:
-	ruff check . --fix
+	uv run ruff check . --fix
 
 format:
-	ruff format .
+	uv run ruff format .
 
 format-check:
-	ruff format --check .
+	uv run ruff format --check .
 
 typecheck:
-	mypy src
+	uv run mypy src
 
 arch:
-	lint-imports
+	uv run lint-imports
 
 test:
-	pytest
+	uv run pytest
 
 check: format-check lint typecheck arch test
 
