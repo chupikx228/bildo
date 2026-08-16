@@ -3,9 +3,10 @@ from uuid import uuid4
 
 import pytest
 
-from src.apps.exceptions import AppNotFound
+from src.apps.exceptions import AppGenerationInProgress, AppNotFound
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
+from src.generation.service import generate_document
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.in_memory_task_queue import InMemoryTaskQueue
 
@@ -77,6 +78,56 @@ async def test_save_document_raises_not_found_for_unknown_id(service: AppService
 
     with pytest.raises(AppNotFound):
         await service.save_document(unknown_id, build_document(str(unknown_id)))
+
+
+async def test_mark_generated_replaces_placeholder_document(
+    service: AppService,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await service.create_from_prompt("трекер привычек", None)
+    generated = generate_document("трекер привычек", None)
+
+    await service.mark_generated(app_id, generated)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    stored = AppDocument.model_validate(app.document)
+    assert app.generation_status == "ready"
+    assert app.name == generated.name
+    assert stored.name == generated.name
+    assert [screen.id for screen in stored.screens] == [screen.id for screen in generated.screens]
+    assert stored.screens != []
+    assert stored.id == str(app_id)
+    assert stored.prompt == "трекер привычек"
+
+
+async def test_save_document_is_rejected_while_generation_is_pending(
+    service: AppService,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await service.create_from_prompt("трекер привычек", None)
+
+    with pytest.raises(AppGenerationInProgress):
+        await service.save_document(app_id, build_document(str(app_id)))
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert AppDocument.model_validate(app.document).name == "New app"
+
+
+async def test_save_document_is_allowed_once_generation_finished(
+    service: AppService,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await service.create_from_prompt("трекер привычек", None)
+    await service.mark_generated(app_id, generate_document("трекер привычек", None))
+
+    saved = await service.save_document(app_id, build_document(str(app_id)))
+
+    assert saved.name == "Renamed app"
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.name == "Renamed app"
 
 
 async def test_delete_raises_not_found_for_unknown_id(service: AppService) -> None:

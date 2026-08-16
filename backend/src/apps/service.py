@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from src.apps.exceptions import AppNotFound
+from src.apps.exceptions import AppGenerationInProgress, AppNotFound
 from src.apps.models import App
 from src.apps.repository import AppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppSummary, AppThemeTokens
@@ -90,6 +90,11 @@ class AppService:
             raise AppNotFound(app_id)
 
     async def save_document(self, app_id: UUID, document: AppDocument) -> AppDocument:
+        current = await self._repository.get(app_id)
+        if current is None:
+            raise AppNotFound(app_id)
+        if current.generation_status == "pending":
+            raise AppGenerationInProgress(app_id)
         app = await self._repository.update_document(app_id, document)
         if app is None:
             raise AppNotFound(app_id)
