@@ -7,7 +7,23 @@ import { GroupLabel } from "./GroupLabel";
 import { TreeRow } from "./TreeRow";
 import { UploadsSection } from "./UploadsSection";
 import { ClearIcon, CloseIcon, DropOverlayIcon, SearchIcon, UploadIcon } from "./icons";
-import styles from "./FilesPanel.module.css";
+import {
+  BODY,
+  EMPTY,
+  HEAD,
+  HEAD_BTN,
+  HEAD_COUNT,
+  HEAD_TITLE,
+  OVERLAY,
+  OVERLAY_HINT,
+  OVERLAY_TITLE,
+  PANEL,
+  SEARCH,
+  SEARCH_CLEAR,
+  SEARCH_ICON,
+  SEARCH_INPUT,
+  SEARCH_WRAP,
+} from "./classes";
 
 export function FilesPanel({
   files,
@@ -51,27 +67,21 @@ export function FilesPanel({
   const total = Object.keys(files).length;
 
   return (
-    <aside {...dropHandlers} className={styles.panel}>
-      <div className={styles.head}>
-        <span className={styles.headTitle}>Файлы</span>
-        <span className={styles.headCount}>{total + uploads.length}</span>
-        <span style={{ flex: 1 }} />
+    <aside {...dropHandlers} className={PANEL}>
+      <div className={HEAD}>
+        <span className={HEAD_TITLE}>Файлы</span>
+        <span className={HEAD_COUNT}>{total + uploads.length}</span>
+        <span className="flex-1" />
         <button
           type="button"
           onClick={() => uploadInputRef.current?.click()}
           title="Загрузить файлы"
           aria-label="Загрузить файлы"
-          className={styles.headBtn}
+          className={HEAD_BTN}
         >
           <UploadIcon />
         </button>
-        <button
-          type="button"
-          onClick={onClose}
-          title="Закрыть файлы"
-          aria-label="Закрыть файлы"
-          className={styles.headBtn}
-        >
+        <button type="button" onClick={onClose} title="Закрыть файлы" aria-label="Закрыть файлы" className={HEAD_BTN}>
           <CloseIcon />
         </button>
       </div>
@@ -87,30 +97,25 @@ export function FilesPanel({
         }}
       />
 
-      <div className={styles.searchWrap}>
-        <div className={styles.search}>
-          <SearchIcon className={styles.searchIcon} />
+      <div className={SEARCH_WRAP}>
+        <div className={SEARCH}>
+          <SearchIcon className={SEARCH_ICON} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Поиск по файлам"
             spellCheck={false}
-            className={styles.searchInput}
+            className={SEARCH_INPUT}
           />
           {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              aria-label="Очистить поиск"
-              className={styles.searchClear}
-            >
+            <button type="button" onClick={() => setQuery("")} aria-label="Очистить поиск" className={SEARCH_CLEAR}>
               <ClearIcon />
             </button>
           )}
         </div>
       </div>
 
-      <div className={styles.body}>
+      <div className={BODY}>
         {!matches && (
           <UploadsSection uploads={uploads} onRemove={onRemoveUpload} onPick={() => uploadInputRef.current?.click()} />
         )}
@@ -119,7 +124,7 @@ export function FilesPanel({
 
         {matches ? (
           matches.length === 0 ? (
-            <p className={styles.empty}>Ничего не найдено</p>
+            <p className={EMPTY}>Ничего не найдено</p>
           ) : (
             matches.map((path) => (
               <FileRow
@@ -148,10 +153,10 @@ export function FilesPanel({
       </div>
 
       {dragging && (
-        <div className={styles.overlay}>
+        <div className={OVERLAY}>
           <DropOverlayIcon />
-          <span className={styles.overlayTitle}>Отпустите файлы</span>
-          <span className={styles.overlayHint}>Добавим их в ресурсы проекта</span>
+          <span className={OVERLAY_TITLE}>Отпустите файлы</span>
+          <span className={OVERLAY_HINT}>Добавим их в ресурсы проекта</span>
         </div>
       )}
     </aside>

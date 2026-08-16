@@ -2,7 +2,7 @@ import type { AppNode, AppScreen } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
 import { NodeInspector } from "./NodeInspector";
 import { ScreenInspector } from "./ScreenInspector";
-import styles from "./Inspector.module.css";
+import { PANEL, PANEL_TITLE } from "./classes";
 
 export function InspectorPanel({ screen, node }: { screen: AppScreen; node: AppNode | null }) {
   const document = useAppDocumentStore((s) => s.document);
@@ -16,8 +16,8 @@ export function InspectorPanel({ screen, node }: { screen: AppScreen; node: AppN
   if (!document) return null;
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.panelTitle}>Инспектор</div>
+    <div className={PANEL}>
+      <div className={PANEL_TITLE}>Инспектор</div>
 
       {!node ? (
         <ScreenInspector

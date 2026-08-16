@@ -1,14 +1,14 @@
-import styles from "./Assistant.module.css";
+import { COLLAPSED, COLLAPSED_BADGE, COLLAPSED_BTN, COLLAPSED_LABEL } from "./classes";
 
 export function CollapsedRail({ pendingCount, onExpand }: { pendingCount: number; onExpand: () => void }) {
   return (
-    <div className={styles.collapsed}>
+    <div className={COLLAPSED}>
       <button
         type="button"
         onClick={onExpand}
         aria-label="Открыть ассистента"
         title="Ассистент (Ctrl+J)"
-        className={styles.collapsedBtn}
+        className={COLLAPSED_BTN}
       >
         <svg width="16" height="16" viewBox="0 0 15 15" fill="none" aria-hidden>
           <path
@@ -18,9 +18,9 @@ export function CollapsedRail({ pendingCount, onExpand }: { pendingCount: number
             strokeLinejoin="round"
           />
         </svg>
-        {pendingCount > 0 && <span className={styles.collapsedBadge}>{pendingCount}</span>}
+        {pendingCount > 0 && <span className={COLLAPSED_BADGE}>{pendingCount}</span>}
       </button>
-      <span className={styles.collapsedLabel}>Ассистент</span>
+      <span className={COLLAPSED_LABEL}>Ассистент</span>
     </div>
   );
 }

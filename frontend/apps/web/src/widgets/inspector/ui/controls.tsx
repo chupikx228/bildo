@@ -1,23 +1,24 @@
 import { useState, type ReactNode } from "react";
 import type { AppNodeStyle } from "@bildo/api";
 import { useOutsideClick } from "@/shared/lib";
-import styles from "./Inspector.module.css";
 
 export function PanelHeader({ typeLabel, title }: { typeLabel: string; title: string }) {
   return (
-    <div className={styles.header}>
+    <div className="px-4 pt-3.5 pb-3 border-b border-line shrink-0">
       <div>
-        <span className={styles.badge}>{typeLabel}</span>
+        <span className="inline-block px-[7px] py-0.5 rounded-full bg-accent-soft text-[10px] font-semibold tracking-[0.08em] uppercase text-accent-strong mb-[5px]">
+          {typeLabel}
+        </span>
       </div>
-      <div className={styles.headerTitle}>{title}</div>
+      <div className="text-sm font-semibold text-text overflow-hidden text-ellipsis whitespace-nowrap">{title}</div>
     </div>
   );
 }
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className={styles.section}>
-      <div className={styles.sectionTitle}>{title}</div>
+    <div className="px-4 pt-3.5 pb-4 border-b border-line">
+      <div className="text-[10px] font-[650] tracking-[0.08em] uppercase text-muted mb-3">{title}</div>
       {children}
     </div>
   );
@@ -25,8 +26,8 @@ export function Section({ title, children }: { title: string; children: ReactNod
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className={styles.field}>
-      <div className={styles.fieldLabel}>{label}</div>
+    <div className="mb-3">
+      <div className="text-[10px] font-medium tracking-[0.06em] uppercase text-subtle mb-1.5">{label}</div>
       {children}
     </div>
   );
@@ -34,9 +35,9 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 export function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className={styles.row}>
-      <span className={styles.rowLabel}>{label}</span>
-      <div className={styles.rowControl}>{children}</div>
+    <div className="flex items-center justify-between gap-3 min-h-8 mb-2">
+      <span className="text-xs text-muted shrink-0">{label}</span>
+      <div className="flex justify-end min-w-0">{children}</div>
     </div>
   );
 }
@@ -56,18 +57,18 @@ export function WeightSelect({ value, onChange }: { value: FontWeight; onChange:
   const current = WEIGHTS.find((w) => w.id === value) ?? WEIGHTS[0]!;
 
   return (
-    <div ref={rootRef} className={styles.select}>
+    <div ref={rootRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={styles.selectTrigger}
+        className="h-[30px] min-w-[120px] px-2.5 rounded-md border border-line-strong bg-surface text-text-soft text-xs cursor-pointer flex items-center justify-between gap-2"
         style={{ fontWeight: current.weight }}
       >
         <span>{current.label}</span>
-        <span className={styles.selectCaret}>▾</span>
+        <span className="text-subtle text-[10px]">▾</span>
       </button>
       {open && (
-        <div className={styles.selectMenu}>
+        <div className="absolute top-[calc(100%+4px)] right-0 z-40 min-w-[140px] p-1 rounded-lg border border-line-strong bg-panel shadow-lg">
           {WEIGHTS.map((w) => (
             <button
               key={w.id}
@@ -76,7 +77,9 @@ export function WeightSelect({ value, onChange }: { value: FontWeight; onChange:
                 onChange(w.id);
                 setOpen(false);
               }}
-              className={[styles.selectOption, w.id === value && styles.selectOptionActive].filter(Boolean).join(" ")}
+              className={`block w-full text-left px-2.5 py-2 border-0 rounded-md bg-transparent text-text-soft text-[13px] cursor-pointer ${
+                w.id === value ? "bg-accent-soft" : "hover:bg-surface-hover"
+              }`}
               style={{ fontWeight: w.weight }}
             >
               {w.label}
@@ -114,7 +117,7 @@ const TEXT_ALIGNS: { id: TextAlign; title: string }[] = [
 
 export function TextAlignButtons({ value, onChange }: { value: TextAlign; onChange: (v: TextAlign) => void }) {
   return (
-    <div className={styles.segmented}>
+    <div className="inline-flex p-0.5 rounded-[7px] border border-line-strong bg-surface gap-px">
       {TEXT_ALIGNS.map((item) => (
         <button
           key={item.id}
@@ -123,7 +126,11 @@ export function TextAlignButtons({ value, onChange }: { value: TextAlign; onChan
           aria-label={item.title}
           aria-pressed={item.id === value}
           onClick={() => onChange(item.id)}
-          className={[styles.segment, item.id === value && styles.segmentActive].filter(Boolean).join(" ")}
+          className={`w-[30px] h-[26px] border-0 rounded-[5px] cursor-pointer grid place-items-center p-0 ${
+            item.id === value
+              ? "bg-panel shadow-[0_1px_2px_rgba(46,55,150,0.16),inset_0_0_0_1px_rgba(92,108,245,0.35)] text-accent-strong"
+              : "bg-transparent text-subtle"
+          }`}
         >
           <AlignLines align={item.id} />
         </button>

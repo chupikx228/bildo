@@ -1,4 +1,6 @@
-:root {
+@import "tailwindcss";
+
+@theme {
   --color-bg: #fbfbfc;
   --color-panel: #ffffff;
   --color-surface: #f4f4f5;
@@ -49,4 +51,131 @@
 
   --font-ui: "Inter Variable", "Inter", system-ui, sans-serif;
   --font-brand: "Syne", "Inter Variable", "Inter", system-ui, sans-serif;
+
+  --animate-code-in: code-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-insert-pop: insert-pop 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-msg-in: msg-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-proposal-in: msg-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-clip-in: msg-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-typing: typing-bounce 1.05s ease-in-out infinite;
+  --animate-orb-a: orb-drift-a 28s ease-in-out infinite;
+  --animate-orb-b: orb-drift-b 34s ease-in-out infinite;
+  --animate-orb-c: orb-drift-c 40s ease-in-out infinite;
+  --animate-veil: veil-rotate 60s linear infinite;
+  --animate-interview-pop: insert-pop 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-interview-step: interview-step 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes interview-step {
+    from {
+      opacity: 0;
+      transform: translateX(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes code-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes insert-pop {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes msg-in {
+    from {
+      opacity: 0;
+      transform: translateY(7px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes typing-bounce {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.55;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+
+  @keyframes orb-drift-a {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.9;
+    }
+    40% {
+      transform: translate3d(8%, 12%, 0) scale(1.08);
+      opacity: 1;
+    }
+    70% {
+      transform: translate3d(3%, 18%, 0) scale(0.96);
+      opacity: 0.75;
+    }
+  }
+
+  @keyframes orb-drift-b {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.85;
+    }
+    35% {
+      transform: translate3d(-10%, 8%, 0) scale(1.1);
+      opacity: 1;
+    }
+    65% {
+      transform: translate3d(-4%, 16%, 0) scale(0.94);
+      opacity: 0.7;
+    }
+  }
+
+  @keyframes orb-drift-c {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.8;
+    }
+    45% {
+      transform: translate3d(6%, -10%, 0) scale(1.12);
+      opacity: 1;
+    }
+    75% {
+      transform: translate3d(-5%, -4%, 0) scale(0.98);
+      opacity: 0.65;
+    }
+  }
+
+  @keyframes veil-rotate {
+    from {
+      transform: rotate(0deg) scale(1.15);
+    }
+    to {
+      transform: rotate(360deg) scale(1.15);
+    }
+  }
 }

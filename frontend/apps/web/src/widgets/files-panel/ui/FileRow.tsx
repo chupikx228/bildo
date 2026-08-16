@@ -1,7 +1,7 @@
 import { formatSize } from "@/shared/attachments";
 import { fileAccent } from "@/shared/lib";
 import { FileIcon } from "./icons";
-import styles from "./FilesPanel.module.css";
+import { FILE_ROW_ACTIVE, FILE_ROW_INACTIVE, ROW_LAYOUT, ROW_NAME, ROW_SIZE } from "./classes";
 
 export function FileRow({
   name,
@@ -21,12 +21,12 @@ export function FileRow({
       type="button"
       onClick={onClick}
       title={name}
-      className={[styles.row, active && styles.rowActive].filter(Boolean).join(" ")}
+      className={`${ROW_LAYOUT} cursor-pointer ${active ? FILE_ROW_ACTIVE : FILE_ROW_INACTIVE}`}
       style={{ paddingLeft: 8 + depth * 12 + 14 }}
     >
       <FileIcon style={{ flexShrink: 0, color: active ? "var(--color-accent-strong)" : fileAccent(name) }} />
-      <span className={styles.rowName}>{name}</span>
-      <span className={styles.rowSize}>{formatSize(size)}</span>
+      <span className={ROW_NAME}>{name}</span>
+      <span className={ROW_SIZE}>{formatSize(size)}</span>
     </button>
   );
 }

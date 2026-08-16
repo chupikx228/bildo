@@ -1,7 +1,6 @@
 import { APP_STAGE_HEIGHT, APP_STAGE_WIDTH, type AppDocument, type AppScreen } from "@bildo/api";
 import { BEZEL, HOME_H, RADIUS_INNER, RADIUS_OUTER, TAB_H, TOP_H, hasTabs, phoneFrameSize } from "../lib/phoneFrame";
 import { Canvas } from "./Canvas";
-import styles from "./PhonePreview.module.css";
 
 const TAB_ICONS: Record<string, string> = {
   home: "⌂",
@@ -43,7 +42,7 @@ export function PhonePreview({
 
   return (
     <div
-      className={styles.frame}
+      className="relative box-border bg-[linear-gradient(155deg,#f0f0f3_0%,#d8d8de_32%,#b9b9c2_62%,#e6e6eb_100%)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7),0_0_0_1px_rgba(16,16,20,0.1),0_24px_56px_rgba(16,16,20,0.16),0_6px_16px_rgba(16,16,20,0.08)] font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Text','Segoe_UI',system-ui,sans-serif]"
       style={{
         width: outerW,
         height: outerH,
@@ -60,7 +59,7 @@ export function PhonePreview({
         <div
           key={i}
           aria-hidden
-          className={styles.sideButton}
+          className="absolute w-[3px] rounded-[2px] bg-[linear-gradient(90deg,#c7c7d0,#a9a9b4)]"
           style={{
             ...(b.side === "left" ? { left: -2 } : { right: -2 }),
             top: b.top,
@@ -70,7 +69,7 @@ export function PhonePreview({
       ))}
 
       <div
-        className={styles.screen}
+        className="relative overflow-hidden shadow-[inset_0_0_0_1px_rgba(16,16,20,0.1)]"
         style={{
           width: APP_STAGE_WIDTH,
           height: TOP_H + APP_STAGE_HEIGHT + tabH + HOME_H,
@@ -79,8 +78,14 @@ export function PhonePreview({
         }}
       >
         <div style={{ height: TOP_H, position: "relative", background: screenBg, flexShrink: 0 }}>
-          <div aria-hidden className={styles.island}>
-            <span aria-hidden className={styles.camera} />
+          <div
+            aria-hidden
+            className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[118px] h-[34px] rounded-[18px] bg-[#0a0a0c] z-[3] flex items-center justify-end pr-[13px]"
+          >
+            <span
+              aria-hidden
+              className="w-[9px] h-[9px] rounded-full bg-[radial-gradient(circle_at_35%_35%,#1c3d4d_0%,#0a1520_60%,#000_100%)] shadow-[inset_0_0_0_1px_rgba(80,140,180,0.28)]"
+            />
           </div>
         </div>
 

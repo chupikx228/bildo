@@ -1,7 +1,7 @@
 import type { TreeNode } from "@/shared/lib";
 import { FileRow } from "./FileRow";
 import { ChevronIcon, FolderIcon } from "./icons";
-import styles from "./FilesPanel.module.css";
+import { CHEVRON, CHEVRON_OPEN, DIR_ROW, FOLDER_ICON, ROW_NAME } from "./classes";
 
 export function TreeRow({
   node,
@@ -36,12 +36,12 @@ export function TreeRow({
       <button
         type="button"
         onClick={() => onToggle(node.path)}
-        className={styles.dirRow}
+        className={DIR_ROW}
         style={{ paddingLeft: 8 + depth * 12 }}
       >
-        <ChevronIcon className={[styles.chevron, !isCollapsed && styles.chevronOpen].filter(Boolean).join(" ")} />
-        <FolderIcon className={styles.folderIcon} />
-        <span className={styles.rowName}>{node.name}</span>
+        <ChevronIcon className={`${CHEVRON} ${!isCollapsed ? CHEVRON_OPEN : ""}`} />
+        <FolderIcon className={FOLDER_ICON} />
+        <span className={ROW_NAME}>{node.name}</span>
       </button>
       {!isCollapsed &&
         node.children.map((child) => (

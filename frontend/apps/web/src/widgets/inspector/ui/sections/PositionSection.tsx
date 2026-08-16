@@ -1,7 +1,7 @@
 import type { AppNodeLayout } from "@bildo/api";
 import { AlignPad, CompactNumber, type HorizontalAlign, type VerticalAlign } from "@/shared/ui";
 import { Section } from "../controls";
-import styles from "../Inspector.module.css";
+import { POSITION, POSITION_FIELDS } from "../classes";
 
 export function PositionSection({
   layout,
@@ -14,11 +14,11 @@ export function PositionSection({
 }) {
   return (
     <Section title="Позиция">
-      <div className={styles.position}>
+      <div className={POSITION}>
         <div style={{ flexShrink: 0 }}>
           <AlignPad horizontal={null} vertical={null} hint={null} onChange={onAlign} />
         </div>
-        <div className={styles.positionFields}>
+        <div className={POSITION_FIELDS}>
           <CompactNumber label="X" value={layout.x} onChange={(x) => onLayout({ x })} />
           <CompactNumber label="Y" value={layout.y} onChange={(y) => onLayout({ y })} />
           <CompactNumber label="W" value={layout.width} onChange={(width) => onLayout({ width })} />

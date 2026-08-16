@@ -6,7 +6,6 @@ import { phoneFrameSize } from "../lib/phoneFrame";
 import { clampZoom, useBoardWheel, useRefit, type View } from "../lib/useBoardView";
 import { BoardZoomControls } from "./BoardZoomControls";
 import { ScreenTile } from "./ScreenTile";
-import styles from "./Board.module.css";
 
 const FRAME_GAP = 56;
 const LABEL_H = 30;
@@ -216,7 +215,7 @@ export function Board({
             type="button"
             onClick={onAddScreen}
             title="Добавить экран"
-            className={styles.addScreen}
+            className="absolute rounded-[50px] border-2 border-dashed border-line bg-[rgba(255,255,255,0.5)] text-subtle flex flex-col items-center justify-center gap-2.5 cursor-pointer transition-[border-color,color,background] duration-[.16s] ease-[ease] hover:border-accent hover:text-accent-strong hover:bg-[rgba(92,108,245,0.05)]"
             style={{
               left: screens.length * (frame.width + FRAME_GAP),
               top: 0,

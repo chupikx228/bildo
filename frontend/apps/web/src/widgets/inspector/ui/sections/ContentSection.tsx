@@ -1,6 +1,6 @@
 import type { AppNode } from "@bildo/api";
 import { Field, Section } from "../controls";
-import styles from "../Inspector.module.css";
+import { INPUT, TEXTAREA } from "../classes";
 
 export function ContentSection({
   node,
@@ -25,7 +25,7 @@ export function ContentSection({
             value={node.name ?? ""}
             placeholder={typeLabel}
             onChange={(e) => onPatch({ name: e.target.value })}
-            className={styles.input}
+            className={INPUT}
           />
         </Field>
       )}
@@ -35,7 +35,7 @@ export function ContentSection({
             rows={3}
             value={node.props?.text ?? ""}
             onChange={(e) => onText(e.target.value)}
-            className={styles.textarea}
+            className={TEXTAREA}
           />
         </Field>
       )}
@@ -44,7 +44,7 @@ export function ContentSection({
           <input
             value={node.props?.placeholder ?? ""}
             onChange={(e) => onPatch({ props: { placeholder: e.target.value } })}
-            className={styles.input}
+            className={INPUT}
           />
         </Field>
       )}
@@ -54,7 +54,7 @@ export function ContentSection({
             value={node.props?.source ?? ""}
             placeholder="https://…"
             onChange={(e) => onPatch({ props: { source: e.target.value } })}
-            className={styles.input}
+            className={INPUT}
           />
         </Field>
       )}
@@ -64,7 +64,7 @@ export function ContentSection({
             rows={3}
             value={(node.props?.data ?? []).join("\n")}
             onChange={(e) => onPatch({ props: { data: e.target.value.split("\n").filter(Boolean) } })}
-            className={styles.textarea}
+            className={TEXTAREA}
           />
         </Field>
       )}

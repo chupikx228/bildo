@@ -3,7 +3,6 @@ import { Button } from "@/shared/ui";
 import { fileAccent, useWindowEvent } from "@/shared/lib";
 import { formatSize } from "@/shared/attachments";
 import { highlight } from "./highlight";
-import styles from "./CodePanel.module.css";
 
 const ENTRY_ORDER = ["app/index.tsx", "app/_layout.tsx", "package.json"];
 
@@ -45,8 +44,8 @@ export function CodePanel({
   }
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.head}>
+    <div className="absolute inset-0 z-[12] flex flex-col bg-[#fbfbfd] animate-code-in">
+      <div className="h-11 shrink-0 flex items-center gap-2 pl-3 pr-2.5 border-b border-line bg-[rgba(255,255,255,0.9)] backdrop-blur-[10px]">
         {!filesOpen && (
           <Button onClick={onOpenFiles} title="Показать файлы проекта">
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
@@ -63,9 +62,9 @@ export function CodePanel({
 
         <Breadcrumb path={current} />
 
-        <span style={{ flex: 1 }} />
+        <span className="flex-1" />
 
-        <span className={styles.meta}>
+        <span className="text-[11px] text-subtle whitespace-nowrap">
           {lines.length} строк · {formatSize(source.length)}
         </span>
 
@@ -103,33 +102,37 @@ export function CodePanel({
         </Button>
       </div>
 
-      <div className={styles.codeWrap}>
-        <pre className={styles.code}>
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        <pre className="flex-1 min-w-0 m-0 overflow-auto pt-3.5 pb-10 font-mono text-[12.5px] leading-5 [tab-size:2]">
           <code>
             {lines.map((line, i) => (
-              <div key={i} className={styles.line}>
-                <span className={styles.lineNo}>{i + 1}</span>
-                <span className={styles.lineText}>{highlight(line, current)}</span>
+              <div key={i} className="flex min-h-5 pr-5">
+                <span className="shrink-0 w-[52px] pr-3.5 text-right text-[#c3c3cd] select-none">{i + 1}</span>
+                <span className="whitespace-pre text-text">{highlight(line, current)}</span>
               </div>
             ))}
           </code>
         </pre>
       </div>
 
-      <div className={styles.footer}>
+      <div className="shrink-0 flex items-center gap-1.5 px-3 py-[7px] border-t border-line bg-panel overflow-x-auto">
         {ENTRY_ORDER.filter((p) => files[p]).map((p) => (
           <button
             key={p}
             type="button"
             onClick={() => onPath(p)}
-            className={[styles.jump, p === current && styles.jumpActive].filter(Boolean).join(" ")}
+            className={`shrink-0 inline-flex items-center gap-1.5 h-[26px] px-2.5 rounded-full border cursor-pointer text-[11px] ${
+              p === current
+                ? "border-accent-line bg-accent-soft text-accent-strong font-semibold"
+                : "border-line bg-transparent text-subtle font-normal"
+            }`}
           >
-            <span className={styles.jumpDot} style={{ background: fileAccent(p) }} />
+            <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ background: fileAccent(p) }} />
             {p}
           </button>
         ))}
-        <span style={{ flex: 1 }} />
-        <span className={styles.readonly}>Только чтение — правки делаются на холсте</span>
+        <span className="flex-1" />
+        <span className="shrink-0 text-[11px] text-faint">Только чтение — правки делаются на холсте</span>
       </div>
     </div>
   );
@@ -138,11 +141,15 @@ export function CodePanel({
 function Breadcrumb({ path }: { path: string }) {
   const parts = path.split("/");
   return (
-    <span className={styles.crumbs}>
+    <span className="inline-flex items-center gap-1 min-w-0 text-xs text-subtle">
       {parts.map((part, i) => (
-        <span key={i} className={styles.crumb}>
-          {i > 0 && <span className={styles.crumbSep}>/</span>}
-          <span className={[styles.crumbText, i === parts.length - 1 && styles.crumbLast].filter(Boolean).join(" ")}>
+        <span key={i} className="inline-flex items-center gap-1 min-w-0">
+          {i > 0 && <span className="text-faint">/</span>}
+          <span
+            className={`overflow-hidden text-ellipsis whitespace-nowrap ${
+              i === parts.length - 1 ? "text-text font-semibold" : ""
+            }`}
+          >
             {part}
           </span>
         </span>

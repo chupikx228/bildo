@@ -1,12 +1,12 @@
-import styles from "./FilesPanel.module.css";
+import { GROUP_ACTION, GROUP_LABEL, GROUP_LABEL_TEXT } from "./classes";
 
 export function GroupLabel({ text, action }: { text: string; action?: { label: string; onClick: () => void } }) {
   return (
-    <div className={styles.groupLabel}>
-      <span className={styles.groupLabelText}>{text}</span>
-      <span style={{ flex: 1 }} />
+    <div className={GROUP_LABEL}>
+      <span className={GROUP_LABEL_TEXT}>{text}</span>
+      <span className="flex-1" />
       {action && (
-        <button type="button" onClick={action.onClick} className={styles.groupAction}>
+        <button type="button" onClick={action.onClick} className={GROUP_ACTION}>
           {action.label}
         </button>
       )}

@@ -9,7 +9,7 @@ import {
   type Attachment,
 } from "@/shared/attachments";
 import { useWindowEvent } from "@/shared/lib";
-import styles from "./Assistant.module.css";
+import { ATTACH, CLIP, CLIP_MENU, CLIP_OPEN, COMPOSER, FIELD, FIELD_ICON, FOOTER, SEND, TEXTAREA } from "./classes";
 
 export function Composer({
   value,
@@ -78,7 +78,7 @@ export function Composer({
   }
 
   return (
-    <div className={styles.footer}>
+    <div className={FOOTER}>
       <div style={{ margin: "10px 10px 0" }}>
         <AttachChips
           items={attachments}
@@ -86,9 +86,9 @@ export function Composer({
         />
       </div>
 
-      <div className={styles.composer}>
-        <div className={styles.field}>
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={styles.fieldIcon} aria-hidden>
+      <div className={COMPOSER}>
+        <div className={FIELD}>
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={FIELD_ICON} aria-hidden>
             <path
               d="M7.5 1.6l1.15 3.1 3.1 1.15-3.1 1.15L7.5 10.1 6.35 7 3.25 5.85l3.1-1.15L7.5 1.6z"
               stroke="currentColor"
@@ -106,7 +106,7 @@ export function Composer({
             rows={1}
             value={value}
             placeholder="Опишите изменение…"
-            className={styles.textarea}
+            className={TEXTAREA}
             onChange={(e) => {
               onValueChange(e.target.value);
               const el = e.currentTarget;
@@ -125,7 +125,7 @@ export function Composer({
 
         <button
           type="button"
-          className={styles.send}
+          className={SEND}
           onClick={submit}
           disabled={(!value.trim() && attachments.length === 0) || busy}
           aria-label="Отправить"
@@ -141,11 +141,11 @@ export function Composer({
           </svg>
         </button>
 
-        <div className={styles.attach} ref={clipRef}>
+        <div className={ATTACH} ref={clipRef}>
           <button
             ref={clipBtnRef}
             type="button"
-            className={[styles.clip, clipOpen && styles.clipOpen].filter(Boolean).join(" ")}
+            className={`${CLIP} ${clipOpen ? CLIP_OPEN : ""}`}
             onClick={toggleClip}
             aria-label="Прикрепить"
             aria-expanded={clipOpen}
@@ -159,7 +159,7 @@ export function Composer({
             createPortal(
               <div
                 ref={menuRef}
-                className={styles.clipMenu}
+                className={CLIP_MENU}
                 role="menu"
                 style={{ bottom: clipPos.bottom, right: clipPos.right }}
               >

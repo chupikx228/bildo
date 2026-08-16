@@ -13,7 +13,6 @@ import { toAttachments, type Attachment } from "@/shared/attachments";
 import { apiClient } from "@/shared/api";
 import { ROUTES } from "@/shared/config";
 import { useWindowEvent } from "@/shared/lib";
-import styles from "./EditorPage.module.css";
 
 const RAIL_OPEN = "352px";
 const RAIL_CLOSED = "52px";
@@ -154,7 +153,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
   if (!screen) return null;
 
   return (
-    <div className={styles.workspace}>
+    <div className="h-[100dvh] min-h-[520px] flex flex-col overflow-hidden bg-bg text-text">
       <EditorHeader
         running={running}
         filesOpen={filesOpen}
@@ -166,14 +165,10 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
         onExport={() => void exportProject()}
       />
 
-      {(shareUrl || lastError) && (
-        <div className={[styles.notice, lastError && styles.noticeError].filter(Boolean).join(" ")}>
-          {lastError ?? `Ссылка скопирована: ${shareUrl}`}
-        </div>
-      )}
+      {(shareUrl || lastError) && <div>{lastError ?? `Ссылка скопирована: ${shareUrl}`}</div>}
 
       <div
-        className={styles.grid}
+        className="min-h-0 flex-1 grid grid-cols-[var(--rail-w,352px)_var(--files-w,0px)_minmax(0,1fr)_minmax(252px,300px)] max-[1020px]:grid-cols-[var(--rail-w,320px)_var(--files-w,0px)_minmax(0,1fr)] max-[720px]:grid-cols-[minmax(0,1fr)]"
         style={
           {
             "--rail-w": chatOpen ? RAIL_OPEN : RAIL_CLOSED,
@@ -182,7 +177,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
         }
       >
         {/* Остаётся смонтированной в свёрнутом виде, чтобы переписка не терялась. */}
-        <aside className={styles.chat}>
+        <aside className="min-w-0 flex flex-col overflow-hidden border-r border-line max-[720px]:hidden">
           <AssistantPanel
             collapsed={!chatOpen}
             onCollapse={() => setChatOpen(false)}
@@ -190,7 +185,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
           />
         </aside>
 
-        <div className={styles.files}>
+        <div className="min-w-0 overflow-hidden flex [&>*]:flex-1 [&>*]:min-w-0 max-[720px]:hidden">
           {filesOpen && (
             <FilesPanel
               files={files}
@@ -207,7 +202,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
           )}
         </div>
 
-        <main className={styles.board}>
+        <main className="relative min-w-0 flex flex-col overflow-hidden bg-board bg-[radial-gradient(150%_130%_at_-12%_-30%,rgba(92,108,245,0.085)_0%,rgba(92,108,245,0.035)_42%,rgba(92,108,245,0)_100%),radial-gradient(110%_100%_at_108%_115%,rgba(255,141,92,0.08)_0%,rgba(255,141,92,0)_100%)] before:content-[''] before:absolute before:inset-0 before:pointer-events-none before:bg-[radial-gradient(circle,rgba(16,16,20,0.05)_1px,transparent_1px)] before:bg-[length:22px_22px]">
           <Board document={document} activeScreenId={screen.id} running={running} />
 
           {running ? <RunningBadge /> : <BoardToolbar />}
@@ -226,7 +221,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
           )}
         </main>
 
-        <aside className={styles.inspector}>
+        <aside className="min-w-0 overflow-hidden bg-panel border-l border-line max-[1020px]:hidden">
           <InspectorPanel screen={screen} node={selectedNode} />
         </aside>
       </div>

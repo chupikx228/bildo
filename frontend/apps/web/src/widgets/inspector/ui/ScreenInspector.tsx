@@ -1,7 +1,7 @@
 import type { AppScreen, AppThemeTokens } from "@bildo/api";
 import { ColorPicker } from "@/shared/ui";
 import { Field, PanelHeader, Row, Section } from "./controls";
-import styles from "./Inspector.module.css";
+import { INPUT, PANEL, SCROLL } from "./classes";
 
 export function ScreenInspector({
   screen,
@@ -15,12 +15,12 @@ export function ScreenInspector({
   onTheme: (patch: Partial<AppThemeTokens>) => void;
 }) {
   return (
-    <div className={styles.panel}>
+    <div className={PANEL}>
       <PanelHeader typeLabel="Экран" title={screen.name} />
-      <div className={styles.scroll}>
+      <div className={SCROLL}>
         <Section title="Содержание">
           <Field label="Имя">
-            <input value={screen.name} onChange={(e) => onRename(e.target.value)} className={styles.input} />
+            <input value={screen.name} onChange={(e) => onRename(e.target.value)} className={INPUT} />
           </Field>
         </Section>
         <Section title="Тема">

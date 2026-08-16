@@ -1,7 +1,7 @@
 import { AttachIcon, formatSize, type Attachment } from "@/shared/attachments";
 import { GroupLabel } from "./GroupLabel";
 import { DropzoneIcon, RemoveIcon } from "./icons";
-import styles from "./FilesPanel.module.css";
+import { DROPZONE, DROPZONE_HINT, DROPZONE_TITLE, REMOVE_UPLOAD, ROW_NAME, ROW_SIZE, UPLOAD_ROW } from "./classes";
 
 export function UploadsSection({
   uploads,
@@ -14,10 +14,10 @@ export function UploadsSection({
 }) {
   if (uploads.length === 0) {
     return (
-      <button type="button" onClick={onPick} className={styles.dropzone}>
+      <button type="button" onClick={onPick} className={DROPZONE}>
         <DropzoneIcon />
-        <span className={styles.dropzoneTitle}>Перетащите файлы сюда</span>
-        <span className={styles.dropzoneHint}>или нажмите, чтобы выбрать</span>
+        <span className={DROPZONE_TITLE}>Перетащите файлы сюда</span>
+        <span className={DROPZONE_HINT}>или нажмите, чтобы выбрать</span>
       </button>
     );
   }
@@ -26,7 +26,7 @@ export function UploadsSection({
     <>
       <GroupLabel text={`Мои файлы · ${uploads.length}`} action={{ label: "Добавить", onClick: onPick }} />
       {uploads.map((a) => (
-        <div key={a.id} className={styles.uploadRow} style={{ paddingLeft: 10 }}>
+        <div key={a.id} className={UPLOAD_ROW} style={{ paddingLeft: 10 }}>
           <span
             style={{
               flexShrink: 0,
@@ -37,13 +37,13 @@ export function UploadsSection({
           >
             <AttachIcon kind={a.kind} />
           </span>
-          <span className={styles.rowName}>{a.name}</span>
-          <span className={styles.rowSize}>{formatSize(a.size)}</span>
+          <span className={ROW_NAME}>{a.name}</span>
+          <span className={ROW_SIZE}>{formatSize(a.size)}</span>
           <button
             type="button"
             onClick={() => onRemove(a.id)}
             aria-label={`Удалить ${a.name}`}
-            className={styles.removeUpload}
+            className={REMOVE_UPLOAD}
           >
             <RemoveIcon />
           </button>

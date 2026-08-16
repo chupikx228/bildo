@@ -1,5 +1,5 @@
 import type { AppAction, AppScreen } from "@bildo/api";
-import styles from "./Inspector.module.css";
+import { INPUT, PRESS_EDITOR } from "./classes";
 
 export function PressEditor({
   actions,
@@ -21,7 +21,7 @@ export function PressEditor({
           : "none";
 
   return (
-    <div className={styles.pressEditor}>
+    <div className={PRESS_EDITOR}>
       <select
         value={kind}
         onChange={(e) => {
@@ -31,7 +31,7 @@ export function PressEditor({
           else if (v === "url") onChange([{ type: "openUrl", url: "https://" }]);
           else if (v.startsWith("nav:")) onChange([{ type: "navigate", route: v.slice(4) }]);
         }}
-        className={styles.input}
+        className={INPUT}
       >
         <option value="none">Нет действия</option>
         <option value="toast">Показать сообщение</option>
@@ -47,7 +47,7 @@ export function PressEditor({
           value={primary.message}
           onChange={(e) => onChange([{ type: "toast", message: e.target.value }])}
           placeholder="Текст сообщения"
-          className={styles.input}
+          className={INPUT}
         />
       )}
       {primary?.type === "openUrl" && (
@@ -55,7 +55,7 @@ export function PressEditor({
           value={primary.url}
           onChange={(e) => onChange([{ type: "openUrl", url: e.target.value }])}
           placeholder="https://"
-          className={styles.input}
+          className={INPUT}
         />
       )}
     </div>

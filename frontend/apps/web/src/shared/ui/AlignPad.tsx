@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import styles from "./AlignPad.module.css";
 
 export type HorizontalAlign = "left" | "center" | "right";
 export type VerticalAlign = "top" | "middle" | "bottom";
@@ -65,17 +64,23 @@ export function AlignPad({
   const showThumb = horizontal != null || vertical != null || picked != null || ready;
 
   return (
-    <div className={styles.root}>
-      <div role="group" aria-label="Выравнивание" className={styles.pad}>
+    <div className="flex items-center gap-3">
+      <div
+        role="group"
+        aria-label="Выравнивание"
+        className="relative w-[84px] h-[84px] rounded-[10px] border border-line-strong bg-surface shrink-0 overflow-hidden"
+      >
         {showThumb && (
           <div
             aria-hidden="true"
-            className={[styles.thumb, ready && styles.thumbReady].filter(Boolean).join(" ")}
+            className={`absolute left-0 top-0 rounded-[5px] bg-panel shadow-[0_0_0_1px_rgba(92,108,245,0.45),0_2px_6px_rgba(46,55,150,0.14),0_0_14px_rgba(92,108,245,0.18)] pointer-events-none z-0 ${
+              ready ? "[transition:transform_280ms_cubic-bezier(0.22,1,0.36,1),box-shadow_280ms_ease]" : ""
+            }`}
             style={{ width: CELL, height: CELL, transform: `translate(${tx}px, ${ty}px)` }}
           />
         )}
 
-        <div className={styles.grid}>
+        <div className="relative z-[1] grid grid-cols-3 grid-rows-3 p-1.5 gap-1 w-full h-full box-border">
           {CELLS.map((cell) => {
             const disabled = horizontalOnly && cell.v !== "middle";
             const active = !disabled && cell.h === thumb.h && cell.v === thumb.v;
@@ -93,19 +98,21 @@ export function AlignPad({
                   setPicked({ h: cell.h, v: nextV });
                   onChange(cell.h, nextV);
                 }}
-                className={styles.cell}
+                className="border-0 rounded-[4px] p-0 cursor-pointer bg-transparent grid place-items-center disabled:opacity-25 disabled:cursor-default"
               >
                 <span
-                  className={[styles.dot, isCenter && styles.dotCenter, active && styles.dotActive]
-                    .filter(Boolean)
-                    .join(" ")}
+                  className={`rounded-[2px] transition-[background,transform] duration-[220ms] ease-[ease] ${
+                    isCenter ? "w-2.5 h-2.5" : "w-2 h-2"
+                  } ${
+                    active ? "bg-accent-strong scale-[1.12] shadow-[0_0_8px_rgba(92,108,245,0.35)]" : "bg-[#a1a1ab]"
+                  }`}
                 />
               </button>
             );
           })}
         </div>
       </div>
-      {caption ? <div className={styles.hint}>{caption}</div> : null}
+      {caption ? <div className="text-[11px] leading-[1.45] text-subtle min-w-0">{caption}</div> : null}
     </div>
   );
 }

@@ -2,9 +2,22 @@ import type { RefObject } from "react";
 import type { Proposal, Turn } from "../lib/planner";
 import { CommitCard } from "./cards";
 import { MessageBubble } from "./MessageBubble";
-import styles from "./Assistant.module.css";
+import {
+  BUBBLE_AI,
+  EMPTY_STATE,
+  EMPTY_TEXT,
+  EXAMPLE,
+  EXAMPLES,
+  MSG,
+  MSG_AI,
+  NOTE,
+  TRANSCRIPT,
+  TRANSCRIPT_INNER,
+  TYPING,
+  TYPING_DOT,
+} from "./classes";
 
-const EXAMPLES = ["Добавь экран профиля", "Светлая тема с индиго-акцентом", "Поставь 3D-модель на главный экран"];
+const EXAMPLES_LIST = ["Добавь экран профиля", "Светлая тема с индиго-акцентом", "Поставь 3D-модель на главный экран"];
 
 export function Transcript({
   scrollRef,
@@ -20,17 +33,17 @@ export function Transcript({
   onResolve: (turnId: string, proposal: Proposal, accept: boolean) => void;
 }) {
   return (
-    <div ref={scrollRef} className={styles.transcript}>
-      <div className={styles.transcriptInner}>
+    <div ref={scrollRef} className={TRANSCRIPT}>
+      <div className={TRANSCRIPT_INNER}>
         {!hasTranscript && (
-          <div className={styles.emptyState}>
-            <p className={styles.emptyText}>
+          <div className={EMPTY_STATE}>
+            <p className={EMPTY_TEXT}>
               Опишите изменение словами. Каждое предложение приходит с диффом — вы подтверждаете его до того, как оно
               попадёт в проект.
             </p>
-            <div className={styles.examples}>
-              {EXAMPLES.map((text) => (
-                <button key={text} type="button" onClick={() => onExample(text)} className={styles.example}>
+            <div className={EXAMPLES}>
+              {EXAMPLES_LIST.map((text) => (
+                <button key={text} type="button" onClick={() => onExample(text)} className={EXAMPLE}>
                   {text}
                 </button>
               ))}
@@ -41,12 +54,12 @@ export function Transcript({
         {turns.map((turn) => {
           if (turn.role === "typing") {
             return (
-              <div key={turn.id} className={[styles.msg, styles.msgAi].join(" ")}>
-                <div className={styles.bubble}>
-                  <span className={styles.typing}>
-                    <span />
-                    <span />
-                    <span />
+              <div key={turn.id} className={`${MSG} ${MSG_AI}`}>
+                <div className={BUBBLE_AI}>
+                  <span className={TYPING}>
+                    <span className={TYPING_DOT} />
+                    <span className={`${TYPING_DOT} [animation-delay:0.14s]`} />
+                    <span className={`${TYPING_DOT} [animation-delay:0.28s]`} />
                   </span>
                 </div>
               </div>
@@ -54,7 +67,7 @@ export function Transcript({
           }
           if (turn.role === "note") {
             return (
-              <div key={turn.id} className={styles.note}>
+              <div key={turn.id} className={NOTE}>
                 {turn.text}
               </div>
             );

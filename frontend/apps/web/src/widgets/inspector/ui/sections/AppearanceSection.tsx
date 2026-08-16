@@ -2,7 +2,7 @@ import type { AppNode, AppNodeStyle } from "@bildo/api";
 import { clamp } from "@/shared/lib";
 import { ColorPicker, StepNumber } from "@/shared/ui";
 import { Row, Section, TextAlignButtons, WeightSelect } from "../controls";
-import styles from "../Inspector.module.css";
+import { OPACITY, OPACITY_BOX, OPACITY_INPUT, OPACITY_SLIDER, OPACITY_UNIT } from "../classes";
 
 const FALLBACK_SURFACE = "#18181B";
 const FALLBACK_TEXT = "#FAFAFA";
@@ -68,17 +68,17 @@ export function AppearanceSection({
         />
       </Row>
       <Row label="Прозрачность">
-        <div className={styles.opacity}>
+        <div className={OPACITY}>
           <input
             type="range"
             min={0}
             max={100}
             value={opacityPercent}
             onChange={(e) => patchStyle({ opacity: Number(e.target.value) / 100 })}
-            className={styles.opacitySlider}
+            className={OPACITY_SLIDER}
             aria-label="Прозрачность"
           />
-          <div className={styles.opacityBox}>
+          <div className={OPACITY_BOX}>
             <input
               type="number"
               min={0}
@@ -96,9 +96,9 @@ export function AppearanceSection({
                 patchStyle({ opacity: clamped / 100 });
               }}
               aria-label="Прозрачность в процентах"
-              className={styles.opacityInput}
+              className={OPACITY_INPUT}
             />
-            <span className={styles.opacityUnit}>%</span>
+            <span className={OPACITY_UNIT}>%</span>
           </div>
         </div>
       </Row>

@@ -4,7 +4,7 @@ import { useAssistantThread } from "../lib/useAssistantThread";
 import { CollapsedRail } from "./CollapsedRail";
 import { Composer } from "./Composer";
 import { Transcript } from "./Transcript";
-import styles from "./Assistant.module.css";
+import { HEAD, HEAD_TITLE, ICON_BTN, PENDING_BADGE, QUIET_BTN, RAIL } from "./classes";
 
 export function AssistantPanel({
   collapsed,
@@ -30,14 +30,18 @@ export function AssistantPanel({
   }
 
   return (
-    <div className={styles.rail}>
-      <div className={styles.head}>
-        <span className={[styles.statusDot, busy && styles.statusDotBusy].filter(Boolean).join(" ")} />
-        <span className={styles.headTitle}>Ассистент</span>
-        {pendingCount > 0 && <span className={styles.pendingBadge}>{pendingCount} на подтверждение</span>}
-        <div style={{ flex: 1 }} />
+    <div className={RAIL}>
+      <div className={HEAD}>
+        <span
+          className={`w-[7px] h-[7px] rounded-full shrink-0 ${
+            busy ? "bg-accent shadow-[0_0_0_3px_var(--color-accent-soft)]" : "bg-ok"
+          }`}
+        />
+        <span className={HEAD_TITLE}>Ассистент</span>
+        {pendingCount > 0 && <span className={PENDING_BADGE}>{pendingCount} на подтверждение</span>}
+        <div className="flex-1" />
         {hasTranscript && (
-          <button type="button" onClick={clear} className={styles.quietBtn} title="Очистить переписку">
+          <button type="button" onClick={clear} className={QUIET_BTN} title="Очистить переписку">
             Очистить
           </button>
         )}
@@ -46,7 +50,7 @@ export function AssistantPanel({
           onClick={onCollapse}
           aria-label="Свернуть панель ассистента"
           title="Свернуть панель"
-          className={styles.iconBtn}
+          className={ICON_BTN}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path

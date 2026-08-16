@@ -15,7 +15,7 @@ import { AppearanceSection } from "./sections/AppearanceSection";
 import { BehaviorSection } from "./sections/BehaviorSection";
 import { ContentSection } from "./sections/ContentSection";
 import { PositionSection } from "./sections/PositionSection";
-import styles from "./Inspector.module.css";
+import { FIELDSET, LOCKED_NOTE, PANEL, SCROLL, SCROLL_LOCKED } from "./classes";
 
 export function NodeInspector({
   screen,
@@ -72,11 +72,11 @@ export function NodeInspector({
   }
 
   return (
-    <div className={styles.panel}>
+    <div className={PANEL}>
       <PanelHeader typeLabel={typeLabel} title={displayTitle} />
-      <div className={[styles.scroll, locked && styles.scrollLocked].filter(Boolean).join(" ")}>
-        <fieldset disabled={locked} className={styles.fieldset}>
-          {locked && <div className={styles.lockedNote}>Закреплено — снимите замок в слоях</div>}
+      <div className={`${SCROLL} ${locked ? SCROLL_LOCKED : ""}`}>
+        <fieldset disabled={locked} className={FIELDSET}>
+          {locked && <div className={LOCKED_NOTE}>Закреплено — снимите замок в слоях</div>}
 
           <ContentSection
             node={node}
