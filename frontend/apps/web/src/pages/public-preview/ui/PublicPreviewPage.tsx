@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useParams } from "react-router";
 import { normalizeAppDocument, useApp } from "@bildo/api";
 import { PhonePreview } from "@/widgets/canvas";
-import styles from "./PublicPreviewPage.module.css";
+
+const WRAPPER = "min-h-[100dvh] grid place-items-center bg-board p-6";
+const STATUS = "text-subtle text-[13px]";
 
 export function PublicPreviewPage() {
   const { id = "" } = useParams<{ id: string }>();
@@ -11,16 +13,16 @@ export function PublicPreviewPage() {
 
   if (isLoading) {
     return (
-      <div className={styles.wrapper}>
-        <p className={styles.status}>Загрузка…</p>
+      <div className={WRAPPER}>
+        <p className={STATUS}>Загрузка…</p>
       </div>
     );
   }
 
   if (isError || !data) {
     return (
-      <div className={styles.wrapper}>
-        <p className={styles.status}>Приложение не найдено.</p>
+      <div className={WRAPPER}>
+        <p className={STATUS}>Приложение не найдено.</p>
       </div>
     );
   }
@@ -29,14 +31,14 @@ export function PublicPreviewPage() {
   const screen = document.screens.find((s) => s.id === screenId) ?? document.screens[0];
   if (!screen) {
     return (
-      <div className={styles.wrapper}>
-        <p className={styles.status}>В приложении пока нет экранов.</p>
+      <div className={WRAPPER}>
+        <p className={STATUS}>В приложении пока нет экранов.</p>
       </div>
     );
   }
 
   return (
-    <div className={styles.wrapper}>
+    <div className={WRAPPER}>
       <PhonePreview document={document} screen={screen} editMode={false} onSelectScreen={setScreenId} />
     </div>
   );

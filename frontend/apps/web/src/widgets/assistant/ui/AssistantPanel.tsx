@@ -12,9 +12,17 @@ import {
 import { useWindowEvent } from "@/shared/lib";
 import { CommitCard, ProposalCard } from "./cards";
 import { assetProposal, plan, shortHash, typingDelayMs, uid, type Proposal, type Turn } from "./planner";
-import styles from "./Assistant.module.css";
 
 const EXAMPLES = ["Добавь экран профиля", "Светлая тема с индиго-акцентом", "Поставь 3D-модель на главный экран"];
+
+const QUIET_BTN_BASE =
+  "border border-line-strong rounded-lg bg-panel text-muted text-xs font-medium cursor-pointer hover:bg-accent-wash hover:border-accent-line hover:text-accent-strong";
+const QUIET_BTN = `${QUIET_BTN_BASE} px-2.5 py-1.5`;
+const ICON_BTN = `${QUIET_BTN_BASE} w-[26px] h-[26px] p-0 grid place-items-center`;
+const MSG_BASE = "flex flex-col gap-1.5 max-w-[92%] animate-msg-in";
+const BUBBLE_BASE = "rounded-[14px] px-3 py-[9px] text-[13px] leading-[1.45] border border-transparent";
+const BUBBLE_USER = `${BUBBLE_BASE} bg-ink text-ink-fg rounded-br-[5px]`;
+const BUBBLE_AI = `${BUBBLE_BASE} bg-surface text-text-soft border-line rounded-bl-[5px]`;
 
 export function AssistantPanel({
   collapsed,
@@ -164,13 +172,13 @@ export function AssistantPanel({
 
   if (collapsed) {
     return (
-      <div className={styles.collapsed}>
+      <div className="flex-1 min-h-0 flex flex-col items-center gap-3 pt-2.5">
         <button
           type="button"
           onClick={onExpand}
           aria-label="Открыть ассистента"
           title="Ассистент (Ctrl+J)"
-          className={styles.collapsedBtn}
+          className="relative w-[34px] h-[34px] rounded-[10px] border border-line-strong bg-panel text-muted grid place-items-center cursor-pointer p-0"
         >
           <svg width="16" height="16" viewBox="0 0 15 15" fill="none" aria-hidden>
             <path
@@ -180,22 +188,36 @@ export function AssistantPanel({
               strokeLinejoin="round"
             />
           </svg>
-          {pendingCount > 0 && <span className={styles.collapsedBadge}>{pendingCount}</span>}
+          {pendingCount > 0 && (
+            <span className="absolute -top-[3px] -right-[3px] min-w-[15px] h-[15px] rounded-full bg-accent text-ink-fg text-[9px] font-bold grid place-items-center border-2 border-panel">
+              {pendingCount}
+            </span>
+          )}
         </button>
-        <span className={styles.collapsedLabel}>Ассистент</span>
+        <span className="[writing-mode:vertical-rl] text-[11px] font-semibold tracking-[0.06em] text-subtle select-none">
+          Ассистент
+        </span>
       </div>
     );
   }
 
   return (
-    <div className={styles.rail}>
-      <div className={styles.head}>
-        <span className={[styles.statusDot, busy && styles.statusDotBusy].filter(Boolean).join(" ")} />
-        <span className={styles.headTitle}>Ассистент</span>
-        {pendingCount > 0 && <span className={styles.pendingBadge}>{pendingCount} на подтверждение</span>}
-        <div style={{ flex: 1 }} />
+    <div className="h-full min-h-0 flex flex-col bg-panel bg-[linear-gradient(180deg,rgba(92,108,245,0.06)_0%,rgba(92,108,245,0)_220px)]">
+      <div className="flex items-center gap-2 h-12 pl-3.5 pr-2.5 border-b border-line shrink-0">
+        <span
+          className={`w-[7px] h-[7px] rounded-full shrink-0 ${
+            busy ? "bg-accent shadow-[0_0_0_3px_var(--color-accent-soft)]" : "bg-ok"
+          }`}
+        />
+        <span className="text-[12.5px] font-semibold text-text">Ассистент</span>
+        {pendingCount > 0 && (
+          <span className="text-[10px] font-semibold text-accent-strong bg-accent-soft rounded-full px-[7px] py-0.5 whitespace-nowrap">
+            {pendingCount} на подтверждение
+          </span>
+        )}
+        <div className="flex-1" />
         {hasTranscript && (
-          <button type="button" onClick={() => setTurns([])} className={styles.quietBtn} title="Очистить переписку">
+          <button type="button" onClick={() => setTurns([])} className={QUIET_BTN} title="Очистить переписку">
             Очистить
           </button>
         )}
@@ -204,7 +226,7 @@ export function AssistantPanel({
           onClick={onCollapse}
           aria-label="Свернуть панель ассистента"
           title="Свернуть панель"
-          className={styles.iconBtn}
+          className={ICON_BTN}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path
@@ -218,17 +240,22 @@ export function AssistantPanel({
         </button>
       </div>
 
-      <div ref={scrollRef} className={styles.transcript}>
-        <div className={styles.transcriptInner}>
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="flex flex-col gap-3 px-3 pt-3.5 pb-4">
           {!hasTranscript && (
-            <div className={styles.emptyState}>
-              <p className={styles.emptyText}>
+            <div className="px-0.5 pt-2.5 pb-1">
+              <p className="m-0 mb-3 text-[12.5px] leading-[1.5] text-muted">
                 Опишите изменение словами. Каждое предложение приходит с диффом — вы подтверждаете его до того, как оно
                 попадёт в проект.
               </p>
-              <div className={styles.examples}>
+              <div className="flex flex-col gap-1.5">
                 {EXAMPLES.map((text) => (
-                  <button key={text} type="button" onClick={() => send(text)} className={styles.example}>
+                  <button
+                    key={text}
+                    type="button"
+                    onClick={() => send(text)}
+                    className="text-left px-2.5 py-2 rounded-control border border-line-strong bg-panel text-muted text-xs cursor-pointer transition-[border-color,color] duration-[.16s] ease-[ease] hover:border-accent-line hover:text-text"
+                  >
                     {text}
                   </button>
                 ))}
@@ -239,12 +266,12 @@ export function AssistantPanel({
           {turns.map((turn) => {
             if (turn.role === "typing") {
               return (
-                <div key={turn.id} className={[styles.msg, styles.msgAi].join(" ")}>
-                  <div className={styles.bubble}>
-                    <span className={styles.typing}>
-                      <span />
-                      <span />
-                      <span />
+                <div key={turn.id} className={`${MSG_BASE} self-start items-start`}>
+                  <div className={BUBBLE_AI}>
+                    <span className="inline-flex items-center gap-1 h-4">
+                      <span className="w-[5px] h-[5px] rounded-full bg-faint animate-typing" />
+                      <span className="w-[5px] h-[5px] rounded-full bg-faint animate-typing [animation-delay:0.14s]" />
+                      <span className="w-[5px] h-[5px] rounded-full bg-faint animate-typing [animation-delay:0.28s]" />
                     </span>
                   </div>
                 </div>
@@ -252,7 +279,7 @@ export function AssistantPanel({
             }
             if (turn.role === "note") {
               return (
-                <div key={turn.id} className={styles.note}>
+                <div key={turn.id} className="self-center text-[11px] text-subtle px-2 py-0.5">
                   {turn.text}
                 </div>
               );
@@ -264,11 +291,11 @@ export function AssistantPanel({
             return (
               <div
                 key={turn.id}
-                className={[styles.msg, turn.role === "user" ? styles.msgUser : styles.msgAi, wide && styles.msgWide]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={`${MSG_BASE} ${turn.role === "user" ? "self-end items-end" : "self-start items-start"} ${
+                  wide ? "max-w-full w-full" : ""
+                }`}
               >
-                {turn.text && <div className={styles.bubble}>{turn.text}</div>}
+                {turn.text && <div className={turn.role === "user" ? BUBBLE_USER : BUBBLE_AI}>{turn.text}</div>}
                 {turn.role === "user" && turn.attachments && turn.attachments.length > 0 && (
                   <AttachChips items={turn.attachments} />
                 )}
@@ -285,7 +312,7 @@ export function AssistantPanel({
         </div>
       </div>
 
-      <div className={styles.footer}>
+      <div className="shrink-0 border-t border-line bg-panel">
         <div style={{ margin: "10px 10px 0" }}>
           <AttachChips
             items={attachments}
@@ -293,9 +320,9 @@ export function AssistantPanel({
           />
         </div>
 
-        <div className={styles.composer}>
-          <div className={styles.field}>
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className={styles.fieldIcon} aria-hidden>
+        <div className="flex items-end gap-2 p-2.5 shrink-0">
+          <div className="flex-1 min-w-0 flex items-center gap-2 rounded-[11px] border border-line-strong bg-panel px-2.5 py-2 transition-[border-color,box-shadow] duration-[.16s] ease-[ease] focus-within:border-[#b9c0fa] focus-within:shadow-[0_0_0_3px_rgba(92,108,245,0.12)]">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" className="shrink-0 text-subtle" aria-hidden>
               <path
                 d="M7.5 1.6l1.15 3.1 3.1 1.15-3.1 1.15L7.5 10.1 6.35 7 3.25 5.85l3.1-1.15L7.5 1.6z"
                 stroke="currentColor"
@@ -313,7 +340,7 @@ export function AssistantPanel({
               rows={1}
               value={value}
               placeholder="Опишите изменение…"
-              className={styles.textarea}
+              className="flex-1 min-w-0 resize-none border-0 outline-0 bg-transparent text-text font-ui font-normal text-[13px] leading-[18px] max-h-[108px] placeholder:text-faint"
               onChange={(e) => {
                 setValue(e.target.value);
                 const el = e.currentTarget;
@@ -332,7 +359,7 @@ export function AssistantPanel({
 
           <button
             type="button"
-            className={styles.send}
+            className="w-9 h-9 shrink-0 grid place-items-center border-0 rounded-[11px] bg-[linear-gradient(180deg,#6b7bff,var(--color-accent-strong))] text-ink-fg cursor-pointer shadow-[0_4px_12px_rgba(92,108,245,0.28)] transition-[background,opacity,transform,box-shadow] duration-[.16s] ease-[ease] disabled:opacity-[.28] disabled:cursor-not-allowed disabled:shadow-none enabled:hover:bg-[linear-gradient(180deg,#7c8aff,#4450c4)] enabled:hover:shadow-[0_6px_16px_rgba(92,108,245,0.36)] enabled:active:scale-[0.94]"
             onClick={() => send(value)}
             disabled={(!value.trim() && attachments.length === 0) || busy}
             aria-label="Отправить"
@@ -348,11 +375,13 @@ export function AssistantPanel({
             </svg>
           </button>
 
-          <div className={styles.attach} ref={clipRef}>
+          <div className="relative shrink-0" ref={clipRef}>
             <button
               ref={clipBtnRef}
               type="button"
-              className={[styles.clip, clipOpen && styles.clipOpen].filter(Boolean).join(" ")}
+              className={`w-9 h-9 grid place-items-center border border-transparent rounded-[11px] bg-transparent text-subtle cursor-pointer p-0 transition-[background,color,border-color] duration-[.14s] ease-[ease] hover:bg-accent-wash hover:border-accent-line hover:text-accent-strong ${
+                clipOpen ? "bg-accent-wash border-accent-line text-accent-strong" : ""
+              }`}
               onClick={toggleClip}
               aria-label="Прикрепить"
               aria-expanded={clipOpen}
@@ -366,7 +395,7 @@ export function AssistantPanel({
               createPortal(
                 <div
                   ref={menuRef}
-                  className={styles.clipMenu}
+                  className="fixed w-[236px] p-1.5 rounded-[14px] border border-line-strong bg-[rgba(255,255,255,0.98)] backdrop-blur-[18px] shadow-lg z-[90] animate-clip-in [&_button]:flex [&_button]:items-center [&_button]:gap-2.5 [&_button]:w-full [&_button]:px-2.5 [&_button]:py-[9px] [&_button]:border-0 [&_button]:rounded-control [&_button]:bg-transparent [&_button]:text-text-soft [&_button]:font-ui [&_button]:text-[13px] [&_button]:text-left [&_button]:cursor-pointer [&_button:hover]:bg-accent-wash [&_button_svg]:shrink-0 [&_button_svg]:text-accent"
                   role="menu"
                   style={{ bottom: clipPos.bottom, right: clipPos.right }}
                 >

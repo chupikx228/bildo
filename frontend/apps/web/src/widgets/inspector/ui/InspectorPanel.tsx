@@ -21,10 +21,16 @@ import {
   type VerticalAlign,
 } from "@/shared/ui";
 import { Field, PanelHeader, Row, Section, TextAlignButtons, WeightSelect } from "./controls";
-import styles from "./Inspector.module.css";
 
 const FALLBACK_SURFACE = "#18181B";
 const FALLBACK_TEXT = "#FAFAFA";
+
+const PANEL = "flex flex-col h-full overflow-hidden";
+const INPUT =
+  "w-full bg-surface border border-line-strong rounded-md px-2.5 py-2 text-xs text-text outline-none box-border";
+const TEXTAREA = `${INPUT} resize-y min-h-[72px] leading-[1.4]`;
+const OPACITY_INPUT =
+  "w-9 border-0 outline-none bg-transparent text-text text-xs text-right tabular-nums p-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-outer-spin-button]:m-0";
 
 export function InspectorPanel({ screen, node }: { screen: AppScreen; node: AppNode | null }) {
   const document = useAppDocumentStore((s) => s.document);
@@ -38,8 +44,10 @@ export function InspectorPanel({ screen, node }: { screen: AppScreen; node: AppN
   if (!document) return null;
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.panelTitle}>Инспектор</div>
+    <div className={PANEL}>
+      <div className="h-12 pl-4 pr-3 border-b border-line flex items-center shrink-0 text-xs font-semibold text-text tracking-[0.01em]">
+        Инспектор
+      </div>
 
       {!node ? (
         <ScreenInspector
@@ -75,12 +83,12 @@ function ScreenInspector({
   onTheme: (patch: Partial<AppThemeTokens>) => void;
 }) {
   return (
-    <div className={styles.panel}>
+    <div className={PANEL}>
       <PanelHeader typeLabel="Экран" title={screen.name} />
-      <div className={styles.scroll}>
+      <div className="flex-1 overflow-y-auto">
         <Section title="Содержание">
           <Field label="Имя">
-            <input value={screen.name} onChange={(e) => onRename(e.target.value)} className={styles.input} />
+            <input value={screen.name} onChange={(e) => onRename(e.target.value)} className={INPUT} />
           </Field>
         </Section>
         <Section title="Тема">
@@ -154,11 +162,15 @@ function NodeInspector({
   }
 
   return (
-    <div className={styles.panel}>
+    <div className={PANEL}>
       <PanelHeader typeLabel={typeLabel} title={displayTitle} />
-      <div className={[styles.scroll, locked && styles.scrollLocked].filter(Boolean).join(" ")}>
-        <fieldset disabled={locked} className={styles.fieldset}>
-          {locked && <div className={styles.lockedNote}>Закреплено — снимите замок в слоях</div>}
+      <div className={`flex-1 overflow-y-auto ${locked ? "opacity-50" : ""}`}>
+        <fieldset disabled={locked} className="border-0 m-0 p-0 min-w-0">
+          {locked && (
+            <div className="px-4 py-2.5 text-[11px] text-muted border-b border-line">
+              Закреплено — снимите замок в слоях
+            </div>
+          )}
 
           <Section title="Содержание">
             {showLayerName && (
@@ -167,7 +179,7 @@ function NodeInspector({
                   value={node.name ?? ""}
                   placeholder={typeLabel}
                   onChange={(e) => onPatch({ name: e.target.value })}
-                  className={styles.input}
+                  className={INPUT}
                 />
               </Field>
             )}
@@ -177,7 +189,7 @@ function NodeInspector({
                   rows={3}
                   value={node.props?.text ?? ""}
                   onChange={(e) => onText(e.target.value)}
-                  className={styles.textarea}
+                  className={TEXTAREA}
                 />
               </Field>
             )}
@@ -186,7 +198,7 @@ function NodeInspector({
                 <input
                   value={node.props?.placeholder ?? ""}
                   onChange={(e) => onPatch({ props: { placeholder: e.target.value } })}
-                  className={styles.input}
+                  className={INPUT}
                 />
               </Field>
             )}
@@ -196,7 +208,7 @@ function NodeInspector({
                   value={node.props?.source ?? ""}
                   placeholder="https://…"
                   onChange={(e) => onPatch({ props: { source: e.target.value } })}
-                  className={styles.input}
+                  className={INPUT}
                 />
               </Field>
             )}
@@ -206,7 +218,7 @@ function NodeInspector({
                   rows={3}
                   value={(node.props?.data ?? []).join("\n")}
                   onChange={(e) => onPatch({ props: { data: e.target.value.split("\n").filter(Boolean) } })}
-                  className={styles.textarea}
+                  className={TEXTAREA}
                 />
               </Field>
             )}
@@ -214,11 +226,11 @@ function NodeInspector({
 
           {node.layout && (
             <Section title="Позиция">
-              <div className={styles.position}>
+              <div className="flex items-start gap-3">
                 <div style={{ flexShrink: 0 }}>
                   <AlignPad horizontal={null} vertical={null} hint={null} onChange={onAlign} />
                 </div>
-                <div className={styles.positionFields}>
+                <div className="flex-1 min-w-0 grid grid-cols-2 gap-1.5">
                   <CompactNumber label="X" value={node.layout.x} onChange={(x) => onLayout({ x })} />
                   <CompactNumber label="Y" value={node.layout.y} onChange={(y) => onLayout({ y })} />
                   <CompactNumber label="W" value={node.layout.width} onChange={(width) => onLayout({ width })} />
@@ -273,17 +285,17 @@ function NodeInspector({
               />
             </Row>
             <Row label="Прозрачность">
-              <div className={styles.opacity}>
+              <div className="flex items-center gap-2">
                 <input
                   type="range"
                   min={0}
                   max={100}
                   value={opacityPercent}
                   onChange={(e) => patchStyle({ opacity: Number(e.target.value) / 100 })}
-                  className={styles.opacitySlider}
+                  className="w-16 accent-accent"
                   aria-label="Прозрачность"
                 />
-                <div className={styles.opacityBox}>
+                <div className="inline-flex items-center h-7 rounded-md border border-line-strong bg-surface px-2 gap-0.5">
                   <input
                     type="number"
                     min={0}
@@ -301,9 +313,9 @@ function NodeInspector({
                       patchStyle({ opacity: clamped / 100 });
                     }}
                     aria-label="Прозрачность в процентах"
-                    className={styles.opacityInput}
+                    className={OPACITY_INPUT}
                   />
-                  <span className={styles.opacityUnit}>%</span>
+                  <span className="text-[11px] text-subtle select-none">%</span>
                 </div>
               </div>
             </Row>
@@ -342,7 +354,7 @@ function PressEditor({
           : "none";
 
   return (
-    <div className={styles.pressEditor}>
+    <div className="grid gap-2">
       <select
         value={kind}
         onChange={(e) => {
@@ -352,7 +364,7 @@ function PressEditor({
           else if (v === "url") onChange([{ type: "openUrl", url: "https://" }]);
           else if (v.startsWith("nav:")) onChange([{ type: "navigate", route: v.slice(4) }]);
         }}
-        className={styles.input}
+        className={INPUT}
       >
         <option value="none">Нет действия</option>
         <option value="toast">Показать сообщение</option>
@@ -368,7 +380,7 @@ function PressEditor({
           value={primary.message}
           onChange={(e) => onChange([{ type: "toast", message: e.target.value }])}
           placeholder="Текст сообщения"
-          className={styles.input}
+          className={INPUT}
         />
       )}
       {primary?.type === "openUrl" && (
@@ -376,7 +388,7 @@ function PressEditor({
           value={primary.url}
           onChange={(e) => onChange([{ type: "openUrl", url: e.target.value }])}
           placeholder="https://"
-          className={styles.input}
+          className={INPUT}
         />
       )}
     </div>

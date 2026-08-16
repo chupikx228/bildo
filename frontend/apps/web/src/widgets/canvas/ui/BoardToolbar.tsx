@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { useAppDocumentStore } from "@/entities/app-document";
-import styles from "./BoardToolbar.module.css";
 
 export function BoardToolbar() {
   const undo = useAppDocumentStore((s) => s.undo);
@@ -14,7 +13,7 @@ export function BoardToolbar() {
   const hasClipboard = useAppDocumentStore((s) => Boolean(s.clipboard));
 
   return (
-    <div className={`${styles.dock} hide-on-mobile`}>
+    <div className="absolute left-4 top-3.5 z-[5] flex items-center gap-0.5 p-[3px] rounded-[11px] border border-line-strong bg-[rgba(255,255,255,0.92)] backdrop-blur-[10px] shadow-md hide-on-mobile">
       <ToolBtn label="Отменить" hint="Ctrl+Z" onClick={undo} disabled={pastLen === 0}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path
@@ -37,7 +36,7 @@ export function BoardToolbar() {
           />
         </svg>
       </ToolBtn>
-      <span className={styles.sep} />
+      <span className="w-px h-[18px] bg-line-strong mx-[3px]" />
       <ToolBtn
         label="Копировать"
         hint="Ctrl+C"
@@ -88,7 +87,7 @@ function ToolBtn({
       title={`${label} (${hint})`}
       onClick={onClick}
       disabled={disabled}
-      className={styles.btn}
+      className="w-7 h-7 border-0 rounded-lg bg-transparent text-muted grid place-items-center cursor-pointer p-0 transition-[background] duration-[.14s] ease-[ease] enabled:hover:bg-surface disabled:text-faint disabled:cursor-default"
     >
       {children}
     </button>
@@ -97,8 +96,8 @@ function ToolBtn({
 
 export function RunningBadge() {
   return (
-    <div className={`${styles.running} hide-on-mobile`}>
-      <span className={styles.runningDot} />
+    <div className="absolute left-4 top-3.5 z-[5] flex items-center gap-[7px] px-3 py-[7px] rounded-full bg-ink text-ink-fg text-[11px] font-semibold shadow-md max-w-[240px] hide-on-mobile">
+      <span className="w-1.5 h-1.5 rounded-full bg-ok shrink-0" />
       Превью — нажатия как в приложении
     </div>
   );

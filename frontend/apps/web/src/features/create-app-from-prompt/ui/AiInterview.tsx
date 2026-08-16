@@ -1,5 +1,19 @@
 import { useState } from "react";
-import styles from "./AiInterview.module.css";
+
+const OPTION_BASE =
+  "inline-flex items-center gap-[7px] px-[13px] py-[9px] rounded-full border text-[13px] cursor-pointer transition-[border-color,background,color,transform] duration-[.14s] ease-[ease] hover:-translate-y-px";
+const FIELD =
+  "w-full mt-3 px-3 py-[11px] rounded-[11px] border border-[#e4e4ea] outline-0 bg-panel text-text text-sm leading-[1.5] box-border resize-y focus:border-accent-line";
+const COUNTER = "m-0 mb-1.5 text-[11px] font-semibold tracking-[0.06em] uppercase text-accent-strong";
+const TITLE = "m-0 mb-1 text-xl font-[650] tracking-[-0.01em] text-text";
+const CAPTION = "m-0 mb-4 text-[13px] leading-[1.5] text-subtle";
+const BODY = "px-5 pt-5 pb-[18px] animate-interview-step";
+const ACTIONS = "flex items-center gap-2.5 mt-[18px]";
+const BACK = "border-0 bg-transparent text-subtle text-[13px] cursor-pointer px-1 py-2 hover:text-text";
+const NEXT_BASE =
+  "px-[18px] py-2.5 border rounded-[10px] text-[13px] font-semibold cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed";
+const NEXT = `${NEXT_BASE} border-line-strong bg-panel text-text-soft enabled:hover:border-accent-line enabled:hover:bg-accent-wash enabled:hover:text-accent-strong`;
+const NEXT_GO = `${NEXT_BASE} border-accent-strong bg-[linear-gradient(180deg,#6b7bff_0%,var(--color-accent)_55%,var(--color-accent-strong)_100%)] text-ink-fg shadow-[0_1px_2px_rgba(46,55,150,0.22),0_6px_16px_rgba(92,108,245,0.22)] enabled:hover:brightness-105`;
 
 export interface InterviewAnswers {
   kind: string;
@@ -176,25 +190,34 @@ export function AiInterview({
   };
 
   return (
-    <div className={styles.interview}>
-      <div className={styles.head}>
-        <div className={styles.steps} role="tablist" aria-label="Шаги интервью">
-          {STEPS.map((s, i) => (
-            <button
-              key={s.id}
-              type="button"
-              role="tab"
-              aria-selected={i === step}
-              onClick={() => setStep(i)}
-              disabled={i > step && !answered(STEPS[i - 1]!)}
-              className={[styles.dot, i === step && styles.dotActive, (i < step || done) && styles.dotDone]
-                .filter(Boolean)
-                .join(" ")}
-              title={s.title}
-            />
-          ))}
+    <div className="w-full rounded-[18px] border border-line-strong bg-[rgba(255,255,255,0.92)] backdrop-blur-[20px] shadow-[0_22px_60px_rgba(16,16,20,0.12),0_2px_6px_rgba(16,16,20,0.05)] overflow-hidden animate-interview-pop">
+      <div className="flex items-center gap-2.5 py-3 pl-4 pr-3 border-b border-line">
+        <div className="flex items-center gap-1.5 flex-1" role="tablist" aria-label="Шаги интервью">
+          {STEPS.map((s, i) => {
+            const isActive = i === step;
+            const isDone = i < step || done;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                role="tab"
+                aria-selected={i === step}
+                onClick={() => setStep(i)}
+                disabled={i > step && !answered(STEPS[i - 1]!)}
+                className={`h-1 border-0 p-0 rounded-full cursor-pointer transition-[background,width] duration-[.18s] ease-[ease] disabled:cursor-default ${
+                  isActive ? "w-10" : "w-[26px]"
+                } ${isActive ? "bg-accent" : isDone ? "bg-accent-line" : "bg-[#e7e7ec]"}`}
+                title={s.title}
+              />
+            );
+          })}
         </div>
-        <button type="button" className={styles.close} onClick={onClose} aria-label="Закрыть интервью">
+        <button
+          type="button"
+          className="w-7 h-7 grid place-items-center border-0 rounded-lg bg-transparent text-subtle cursor-pointer p-0 hover:bg-surface hover:text-text"
+          onClick={onClose}
+          aria-label="Закрыть интервью"
+        >
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
@@ -202,20 +225,24 @@ export function AiInterview({
       </div>
 
       {!done && current ? (
-        <div className={styles.body} key={current.id}>
-          <p className={styles.counter}>
+        <div className={BODY} key={current.id}>
+          <p className={COUNTER}>
             Шаг {step + 1} из {STEPS.length}
           </p>
-          <h2 className={styles.title}>{current.title}</h2>
-          <p className={styles.caption}>{current.caption}</p>
+          <h2 className={TITLE}>{current.title}</h2>
+          <p className={CAPTION}>{current.caption}</p>
 
-          <div className={styles.options}>
+          <div className="flex flex-wrap gap-2">
             {current.options.map((opt) => (
               <button
                 key={opt}
                 type="button"
                 onClick={() => pick(opt)}
-                className={[styles.option, isPicked(opt) && styles.optionPicked].filter(Boolean).join(" ")}
+                className={`${OPTION_BASE} ${
+                  isPicked(opt)
+                    ? "border-accent-line bg-accent-wash text-accent-strong font-semibold"
+                    : "border-[#e4e4ea] bg-panel text-text-soft hover:border-accent-line"
+                }`}
               >
                 {opt}
                 {isPicked(opt) && (
@@ -238,43 +265,38 @@ export function AiInterview({
               value={custom}
               onChange={(e) => setCustom(e.target.value)}
               placeholder="Или своими словами…"
-              className={styles.free}
+              className={FIELD}
             />
           )}
 
-          <div className={styles.actions}>
+          <div className={ACTIONS}>
             {step > 0 && (
-              <button type="button" className={styles.back} onClick={() => setStep((s) => s - 1)}>
+              <button type="button" className={BACK} onClick={() => setStep((s) => s - 1)}>
                 Назад
               </button>
             )}
-            <span style={{ flex: 1 }} />
-            <button type="button" className={styles.next} onClick={goNext} disabled={!answered(current)}>
+            <span className="flex-1" />
+            <button type="button" className={NEXT} onClick={goNext} disabled={!answered(current)}>
               {step === STEPS.length - 1 ? "Собрать бриф" : "Дальше"}
             </button>
           </div>
         </div>
       ) : (
-        <div className={styles.body}>
-          <p className={styles.counter}>Готово</p>
-          <h2 className={styles.title}>Вот что получилось</h2>
-          <p className={styles.caption}>Это ваш промпт — поправьте формулировку, если что-то звучит не так.</p>
+        <div className={BODY}>
+          <p className={COUNTER}>Готово</p>
+          <h2 className={TITLE}>Вот что получилось</h2>
+          <p className={CAPTION}>Это ваш промпт — поправьте формулировку, если что-то звучит не так.</p>
 
-          <textarea
-            value={draft ?? prompt}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={5}
-            className={styles.draft}
-          />
+          <textarea value={draft ?? prompt} onChange={(e) => setDraft(e.target.value)} rows={5} className={FIELD} />
 
-          <div className={styles.actions}>
-            <button type="button" className={styles.back} onClick={() => setStep(STEPS.length - 1)}>
+          <div className={ACTIONS}>
+            <button type="button" className={BACK} onClick={() => setStep(STEPS.length - 1)}>
               Изменить ответы
             </button>
-            <span style={{ flex: 1 }} />
+            <span className="flex-1" />
             <button
               type="button"
-              className={[styles.next, styles.nextGo].join(" ")}
+              className={NEXT_GO}
               disabled={busy}
               onClick={() => onSubmit((draft ?? prompt).trim())}
             >

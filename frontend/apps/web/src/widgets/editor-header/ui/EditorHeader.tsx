@@ -2,7 +2,6 @@ import { Link } from "react-router";
 import { useAppDocumentStore, type AppSaveStatus } from "@/entities/app-document";
 import { BildoLogo, Button } from "@/shared/ui";
 import { ROUTES } from "@/shared/config";
-import styles from "./EditorHeader.module.css";
 
 export function EditorHeader({
   running,
@@ -28,19 +27,22 @@ export function EditorHeader({
   const renameApp = useAppDocumentStore((s) => s.renameApp);
 
   return (
-    <header className={styles.topbar}>
-      <div className={styles.group}>
+    <header className="relative min-h-14 flex items-center gap-3 px-3.5 border-b border-line bg-[rgba(255,255,255,0.86)] backdrop-saturate-[1.8] backdrop-blur-[12px] shrink-0 after:content-[''] after:absolute after:left-0 after:right-0 after:-bottom-px after:h-0.5 after:pointer-events-none after:bg-[linear-gradient(90deg,var(--color-accent)_0%,#a855f7_26%,rgba(255,141,92,0.7)_48%,rgba(92,108,245,0)_76%)] after:opacity-50">
+      <div className="flex items-center gap-2">
         <BildoLogo size="sm" href={ROUTES.apps} />
-        <Link to={ROUTES.apps} className={`${styles.link} hide-on-mobile`}>
+        <Link
+          to={ROUTES.apps}
+          className="inline-flex items-center min-h-8 px-[11px] py-1.5 rounded-control text-muted text-xs font-medium no-underline hover:bg-accent-wash hover:text-accent-strong hide-on-mobile"
+        >
           Приложения
         </Link>
       </div>
 
-      <span className={`${styles.sep} hide-on-mobile`} />
+      <span className="w-px h-5 shrink-0 bg-line hide-on-mobile" />
 
-      <div className={styles.group} style={{ minWidth: 0 }}>
+      <div className="flex items-center gap-2 min-w-0">
         <input
-          className={styles.title}
+          className="w-[190px] h-[30px] min-w-0 px-2 border border-transparent rounded-lg outline-0 bg-transparent text-text font-ui text-[13px] font-semibold leading-[30px] text-ellipsis transition-[background,border-color] duration-[.14s] ease-[ease] hover:bg-surface focus:bg-panel focus:border-accent-line"
           value={name}
           onChange={(e) => renameApp(e.target.value)}
           aria-label="Название приложения"
@@ -49,9 +51,9 @@ export function EditorHeader({
         <SaveBadge status={saveStatus} />
       </div>
 
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
-      <div className={`${styles.group} hide-on-mobile`}>
+      <div className="flex items-center gap-2 hide-on-mobile">
         <Button onClick={onToggleFiles} title="Файлы проекта" aria-pressed={filesOpen} on={filesOpen}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden>
             <path
@@ -77,9 +79,9 @@ export function EditorHeader({
         </Button>
       </div>
 
-      <span className={`${styles.sep} hide-on-mobile`} />
+      <span className="w-px h-5 shrink-0 bg-line hide-on-mobile" />
 
-      <div className={styles.group}>
+      <div className="flex items-center gap-2">
         <Button onClick={onToggleRun} title="Запустить приложение в превью" variant={running ? "danger" : "default"}>
           {running ? (
             <>
@@ -109,19 +111,21 @@ export function EditorHeader({
   );
 }
 
-const BADGE: Record<AppSaveStatus, { className: string; label: string }> = {
-  idle: { className: styles.badgeSaved!, label: "Сохранено" },
-  saved: { className: styles.badgeSaved!, label: "Сохранено" },
-  saving: { className: styles.badgeSaving!, label: "Сохранение…" },
-  dirty: { className: styles.badgeDirty!, label: "Не сохранено" },
-  error: { className: styles.badgeError!, label: "Ошибка" },
+const BADGE: Record<AppSaveStatus, { badge: string; dot: string; label: string }> = {
+  idle: { badge: "bg-ok-soft text-ok-strong", dot: "bg-ok", label: "Сохранено" },
+  saved: { badge: "bg-ok-soft text-ok-strong", dot: "bg-ok", label: "Сохранено" },
+  saving: { badge: "bg-accent-soft text-accent-strong", dot: "bg-accent", label: "Сохранение…" },
+  dirty: { badge: "bg-warn-soft text-warn-strong", dot: "bg-warn", label: "Не сохранено" },
+  error: { badge: "bg-danger-soft text-danger-strong", dot: "bg-danger", label: "Ошибка" },
 };
 
 function SaveBadge({ status }: { status: AppSaveStatus }) {
   const s = BADGE[status];
   return (
-    <span className={[styles.badge, s.className, "hide-on-mobile"].join(" ")}>
-      <span className={styles.badgeDot} />
+    <span
+      className={`inline-flex items-center gap-1.5 h-6 px-[9px] rounded-full text-[11px] font-[550] whitespace-nowrap hide-on-mobile ${s.badge}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
       {s.label}
     </span>
   );
