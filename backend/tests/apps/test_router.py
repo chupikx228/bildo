@@ -71,6 +71,16 @@ async def create_app(client: httpx.AsyncClient, prompt: str = "a habit tracker")
     return str(response.json()["id"])
 
 
+async def create_generated_app(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+    prompt: str = "a habit tracker",
+) -> str:
+    app_id = await create_app(client, prompt)
+    await repository.set_generation_status(UUID(app_id), "ready", None)
+    return app_id
+
+
 async def test_create_app(client: httpx.AsyncClient) -> None:
     response = await client.post("/api/apps", json={"prompt": "a habit tracker"})
 
@@ -138,8 +148,8 @@ async def test_get_app_not_found_returns_404(client: httpx.AsyncClient) -> None:
     assert "error" in response.json()
 
 
-async def test_save_app(client: httpx.AsyncClient) -> None:
-    app_id = await create_app(client)
+async def test_save_app(client: httpx.AsyncClient, repository: InMemoryAppRepository) -> None:
+    app_id = await create_generated_app(client, repository)
 
     response = await client.put(f"/api/apps/{app_id}", json=build_document_payload(app_id))
 
@@ -177,6 +187,18 @@ async def test_validation_error_message_is_russian(client: httpx.AsyncClient) ->
     assert short_prompt.json()["error"] == "Ошибка валидации данных: prompt: слишком короткое значение"
     assert wrong_type.json()["error"] == "Ошибка валидации данных: prompt: должно быть строкой"
     assert "theme: обязательное поле" in incomplete_document.json()["error"]
+
+
+async def test_save_app_while_generation_is_pending_returns_409(client: httpx.AsyncClient) -> None:
+    app_id = await create_app(client)
+
+    response = await client.put(f"/api/apps/{app_id}", json=build_document_payload(app_id))
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "Приложение ещё генерируется, сохранение недоступно"
+
+    get_response = await client.get(f"/api/apps/{app_id}")
+    assert get_response.json()["document"]["name"] == "New app"
 
 
 async def test_save_app_not_found_returns_404(client: httpx.AsyncClient) -> None:
@@ -242,8 +264,11 @@ def find_null_paths(value: object, path: str = "$") -> list[str]:
     return []
 
 
-async def test_document_omits_unset_optional_fields(client: httpx.AsyncClient) -> None:
-    app_id = await create_app(client)
+async def test_document_omits_unset_optional_fields(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_generated_app(client, repository)
     payload = build_document_payload(app_id)
     payload["screens"] = [build_sparse_screen()]
 
