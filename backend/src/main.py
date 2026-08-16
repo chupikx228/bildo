@@ -3,11 +3,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic_core import ErrorDetails
 
 from src.apps.router import router as apps_router
 from src.codegen.router import router as codegen_router
+from src.config import settings
 from src.exceptions import DomainError
 from src.queue.arq_queue import create_arq_pool
 from src.tasks.router import router as tasks_router
@@ -43,6 +45,9 @@ VALIDATION_MESSAGES: dict[str, str] = {
 DEFAULT_VALIDATION_MESSAGE = "некорректное значение"
 VALUE_ERROR_PREFIX = "Value error, "
 
+CORS_METHODS = ["GET", "POST", "PUT", "DELETE"]
+CORS_HEADERS = ["Content-Type"]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -55,6 +60,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Bildo API", lifespan=lifespan)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=CORS_METHODS,
+        allow_headers=CORS_HEADERS,
+    )
 
     for router in routers:
         app.include_router(router)
