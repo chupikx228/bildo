@@ -1,82 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { AppDocument } from "@bildo/api";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { AppDocument, AppScreen } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
-import { clamp, useWindowEvent } from "@/shared/lib";
+import { useWindowEvent } from "@/shared/lib";
 import { phoneFrameSize } from "../lib/phoneFrame";
-import { PhonePreview } from "./PhonePreview";
+import { clampZoom, useBoardWheel, useRefit, type View } from "../lib/useBoardView";
+import { BoardZoomControls } from "./BoardZoomControls";
+import { ScreenTile } from "./ScreenTile";
 
 const FRAME_GAP = 56;
 const LABEL_H = 30;
-const FRAME_RADIUS = 50;
+
 const FIT_PAD = 44;
-const MIN_ZOOM = 0.15;
-const MAX_ZOOM = 3;
-
-interface View {
-  x: number;
-  y: number;
-  zoom: number;
-}
-
-const clampZoom = (z: number) => clamp(z, MIN_ZOOM, MAX_ZOOM);
-
-function useRefit(
-  hostRef: RefObject<HTMLDivElement | null>,
-  touchedRef: RefObject<boolean>,
-  fitRef: RefObject<(() => void) | null>,
-  screensLength: number,
-) {
-  useEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      if (!touchedRef.current) fitRef.current?.();
-    });
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!touchedRef.current) fitRef.current?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screensLength]);
-}
-
-function useBoardWheel(
-  hostRef: RefObject<HTMLDivElement | null>,
-  running: boolean,
-  touchedRef: RefObject<boolean>,
-  setView: React.Dispatch<React.SetStateAction<View>>,
-) {
-  useEffect(() => {
-    const el = hostRef.current;
-    if (!el || running) return;
-
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      touchedRef.current = true;
-      const rect = el.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
-
-      if (e.ctrlKey || e.metaKey) {
-        setView((v) => {
-          const zoom = clampZoom(v.zoom * Math.exp(-e.deltaY * 0.0022));
-          const k = zoom / v.zoom;
-          return { zoom, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
-        });
-        return;
-      }
-      setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
-    };
-
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [hostRef, running, touchedRef, setView]);
-}
 
 export function Board({
   document,
@@ -213,7 +147,6 @@ export function Board({
     if (id) selectScreen(id);
   }
 
-  const zoomPercent = Math.round(view.zoom * 100);
   function zoomAtCenter(factor: number) {
     const el = hostRef.current;
     if (!el) return;
@@ -225,6 +158,10 @@ export function Board({
       const k = zoom / v.zoom;
       return { zoom, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
     });
+  }
+
+  function requestDeleteScreen(screen: AppScreen) {
+    if (window.confirm(`Удалить «${screen.name}»?`)) removeScreen(screen.id);
   }
 
   return (
@@ -252,129 +189,26 @@ export function Board({
           willChange: "transform",
         }}
       >
-        {screens.map((sc, i) => {
-          const active = sc.id === activeScreenId;
-          const left = i * (frame.width + FRAME_GAP);
-          return (
-            <div
-              key={sc.id}
-              style={{ position: "absolute", left, top: 0, width: frame.width }}
-              onPointerDownCapture={() => {
-                if (!active) selectScreen(sc.id);
-              }}
-              onMouseEnter={() => setHoverId(sc.id)}
-              onMouseLeave={() => setHoverId(null)}
-            >
-              {!running && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 4,
-                    top: -LABEL_H + 4,
-                    right: 4,
-                    height: 22,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  {renamingId === sc.id ? (
-                    <input
-                      autoFocus
-                      defaultValue={sc.name}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim();
-                        if (v) renameScreen(sc.id, v);
-                        setRenamingId(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") e.currentTarget.blur();
-                        if (e.key === "Escape") setRenamingId(null);
-                      }}
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        height: 22,
-                        border: "1px solid var(--color-accent)",
-                        borderRadius: 6,
-                        padding: "0 6px",
-                        font: "600 13px/1 var(--font-ui)",
-                        color: "var(--color-text)",
-                        outline: "none",
-                      }}
-                    />
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => selectScreen(sc.id)}
-                        onDoubleClick={() => setRenamingId(sc.id)}
-                        title="Двойной клик — переименовать"
-                        style={{
-                          maxWidth: "100%",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          border: 0,
-                          background: "transparent",
-                          padding: 0,
-                          font: `${active ? 650 : 500} 13px/1 var(--font-ui)`,
-                          color: active ? "var(--color-accent-strong)" : "var(--color-subtle)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {sc.name}
-                      </button>
-                      {document.screens.length > 1 && hoverId === sc.id && (
-                        <button
-                          type="button"
-                          aria-label={`Удалить экран ${sc.name}`}
-                          title="Удалить экран"
-                          onClick={() => {
-                            if (window.confirm(`Удалить «${sc.name}»?`)) removeScreen(sc.id);
-                          }}
-                          style={{
-                            width: 18,
-                            height: 18,
-                            display: "grid",
-                            placeItems: "center",
-                            border: 0,
-                            borderRadius: 5,
-                            background: "transparent",
-                            color: "var(--color-faint)",
-                            cursor: "pointer",
-                            padding: 0,
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                            <path
-                              d="M1.5 1.5l6 6M7.5 1.5l-6 6"
-                              stroke="currentColor"
-                              strokeWidth="1.3"
-                              strokeLinecap="round"
-                            />
-                          </svg>
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              <div
-                style={{
-                  borderRadius: FRAME_RADIUS,
-                  outline: active && !running ? "2px solid var(--color-accent)" : "none",
-                  outlineOffset: 5,
-                  transition: "outline-color .16s ease",
-                }}
-              >
-                <PhonePreview document={document} screen={sc} editMode={!running} onSelectScreen={selectScreen} />
-              </div>
-            </div>
-          );
-        })}
+        {screens.map((sc, i) => (
+          <ScreenTile
+            key={sc.id}
+            document={document}
+            screen={sc}
+            left={i * (frame.width + FRAME_GAP)}
+            frameWidth={frame.width}
+            active={sc.id === activeScreenId}
+            running={running}
+            renaming={renamingId === sc.id}
+            hovered={hoverId === sc.id}
+            canDelete={document.screens.length > 1}
+            onSelect={selectScreen}
+            onHover={setHoverId}
+            onStartRename={setRenamingId}
+            onRename={renameScreen}
+            onStopRename={() => setRenamingId(null)}
+            onRequestDelete={requestDeleteScreen}
+          />
+        ))}
 
         {!running && (
           <button
@@ -397,98 +231,13 @@ export function Board({
         )}
       </div>
 
-      <div
-        className="hide-on-mobile"
-        style={{
-          position: "absolute",
-          right: 16,
-          bottom: 16,
-          zIndex: 4,
-          display: "flex",
-          alignItems: "center",
-          gap: 2,
-          padding: 3,
-          borderRadius: 11,
-          border: "1px solid var(--color-line-strong)",
-          background: "rgba(255,255,255,0.92)",
-          backdropFilter: "blur(10px)",
-          boxShadow: "var(--shadow-md)",
-        }}
-      >
-        <BoardIconBtn label="Уменьшить" onClick={() => zoomAtCenter(1 / 1.2)} disabled={view.zoom <= MIN_ZOOM + 0.001}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M3.5 7h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
-        </BoardIconBtn>
-        <button
-          type="button"
-          onClick={fitAll}
-          title="Вписать всё (Shift+1)"
-          style={{
-            minWidth: 50,
-            height: 28,
-            border: 0,
-            borderRadius: 8,
-            background: "transparent",
-            color: "var(--color-muted)",
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: "inherit",
-            fontVariantNumeric: "tabular-nums",
-            cursor: "pointer",
-          }}
-        >
-          {zoomPercent}%
-        </button>
-        <BoardIconBtn label="Увеличить" onClick={() => zoomAtCenter(1.2)} disabled={view.zoom >= MAX_ZOOM - 0.001}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 3.5v7M3.5 7h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
-        </BoardIconBtn>
-        <span style={{ width: 1, height: 18, background: "var(--color-line-strong)", margin: "0 3px" }} />
-        <BoardIconBtn label="К активному экрану (Shift+2)" onClick={fitActive}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <rect x="4.5" y="2.5" width="5" height="9" rx="1.6" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M1.5 4.5v-2h2M12.5 9.5v2h-2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-        </BoardIconBtn>
-      </div>
+      <BoardZoomControls
+        zoom={view.zoom}
+        onZoomOut={() => zoomAtCenter(1 / 1.2)}
+        onZoomIn={() => zoomAtCenter(1.2)}
+        onFitAll={fitAll}
+        onFitActive={fitActive}
+      />
     </div>
-  );
-}
-
-function BoardIconBtn({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        width: 28,
-        height: 28,
-        border: "none",
-        borderRadius: 8,
-        background: "transparent",
-        color: disabled ? "var(--color-faint)" : "var(--color-muted)",
-        display: "grid",
-        placeItems: "center",
-        cursor: disabled ? "default" : "pointer",
-        padding: 0,
-      }}
-    >
-      {children}
-    </button>
   );
 }

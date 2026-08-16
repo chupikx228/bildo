@@ -1,16 +1,60 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic_core import ErrorDetails
 
 from src.apps.router import router as apps_router
+from src.codegen.router import router as codegen_router
 from src.exceptions import DomainError
+from src.queue.arq_queue import create_arq_pool
+from src.tasks.router import router as tasks_router
 
-routers: list[APIRouter] = [apps_router]
+routers: list[APIRouter] = [apps_router, codegen_router, tasks_router]
+
+VALIDATION_MESSAGES: dict[str, str] = {
+    "missing": "обязательное поле",
+    "string_too_short": "слишком короткое значение",
+    "string_too_long": "слишком длинное значение",
+    "string_type": "должно быть строкой",
+    "int_parsing": "должно быть числом",
+    "int_type": "должно быть числом",
+    "float_parsing": "должно быть числом",
+    "float_type": "должно быть числом",
+    "bool_type": "должно быть булевым значением",
+    "list_type": "должно быть списком",
+    "dict_type": "должно быть объектом",
+    "model_attributes_type": "должно быть объектом",
+    "uuid_parsing": "должно быть идентификатором UUID",
+    "json_invalid": "некорректный JSON",
+    "literal_error": "недопустимое значение",
+    "enum": "недопустимое значение",
+    "union_tag_invalid": "недопустимый тип элемента",
+    "union_tag_not_found": "не указан тип элемента",
+    "extra_forbidden": "лишнее поле",
+    "greater_than": "значение слишком мало",
+    "greater_than_equal": "значение слишком мало",
+    "less_than": "значение слишком велико",
+    "less_than_equal": "значение слишком велико",
+}
+
+DEFAULT_VALIDATION_MESSAGE = "некорректное значение"
+VALUE_ERROR_PREFIX = "Value error, "
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    app.state.arq_redis = await create_arq_pool()
+    try:
+        yield
+    finally:
+        await app.state.arq_redis.aclose()
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Bildo API")
+    app = FastAPI(title="Bildo API", lifespan=lifespan)
 
     for router in routers:
         app.include_router(router)
@@ -28,9 +72,18 @@ def create_app() -> FastAPI:
     return app
 
 
+def _validation_message(error: ErrorDetails) -> str:
+    error_type = error["type"]
+    if error_type == "value_error":
+        message = error["msg"].removeprefix(VALUE_ERROR_PREFIX).strip()
+        return message or DEFAULT_VALIDATION_MESSAGE
+    return VALIDATION_MESSAGES.get(error_type, DEFAULT_VALIDATION_MESSAGE)
+
+
 def _format_validation_error(error: ErrorDetails) -> str:
     location = ".".join(str(part) for part in error["loc"] if part != "body")
-    return f"{location}: {error['msg']}" if location else error["msg"]
+    message = _validation_message(error)
+    return f"{location}: {message}" if location else message
 
 
 app = create_app()

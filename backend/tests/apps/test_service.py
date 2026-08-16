@@ -7,6 +7,7 @@ from src.apps.exceptions import AppNotFound
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
 from tests.apps.in_memory_repository import InMemoryAppRepository
+from tests.in_memory_task_queue import InMemoryTaskQueue
 
 
 def build_document(app_id: str) -> AppDocument:
@@ -41,8 +42,13 @@ def repository() -> InMemoryAppRepository:
 
 
 @pytest.fixture
-def service(repository: InMemoryAppRepository) -> AppService:
-    return AppService(repository)
+def task_queue() -> InMemoryTaskQueue:
+    return InMemoryTaskQueue()
+
+
+@pytest.fixture
+def service(repository: InMemoryAppRepository, task_queue: InMemoryTaskQueue) -> AppService:
+    return AppService(repository, task_queue)
 
 
 async def test_list_apps_is_empty_on_start(service: AppService) -> None:

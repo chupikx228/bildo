@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from src.apps.models import App
-from src.apps.schemas import AppDocument
+from src.apps.schemas import AppDocument, GenerationStatus
 
 
 class InMemoryAppRepository:
@@ -15,13 +15,20 @@ class InMemoryAppRepository:
     async def get(self, app_id: UUID) -> App | None:
         return self._apps.get(app_id)
 
-    async def create(self, name: str, prompt: str | None, document: AppDocument) -> App:
+    async def create(
+        self,
+        name: str,
+        prompt: str | None,
+        document: AppDocument,
+        generation_status: GenerationStatus,
+    ) -> App:
         now = datetime.now(UTC)
         app = App(
             id=UUID(document.id),
             name=name,
             prompt=prompt,
-            document=document.model_dump(mode="json", by_alias=True),
+            document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
+            generation_status=generation_status,
             created_at=now,
             updated_at=now,
         )
@@ -32,10 +39,23 @@ class InMemoryAppRepository:
         app = self._apps.get(app_id)
         if app is None:
             return None
-        app.document = document.model_dump(mode="json", by_alias=True)
+        app.document = document.model_dump(mode="json", by_alias=True, exclude_none=True)
         app.name = document.name
         app.slug = document.slug
         app.updated_at = datetime.now(UTC)
+        return app
+
+    async def set_generation_status(
+        self,
+        app_id: UUID,
+        status: GenerationStatus,
+        error: str | None,
+    ) -> App | None:
+        app = self._apps.get(app_id)
+        if app is None:
+            return None
+        app.generation_status = status
+        app.generation_error = error
         return app
 
     async def delete(self, app_id: UUID) -> bool:
