@@ -1,146 +1,158 @@
+import json
+
 import pytest
+from pydantic import ValidationError
 
-from src.apps.schemas import AppDocument, AppNode, NavigateAction
-from src.generation.service import BUILDERS, TemplateKey, generate_document, select_template
+from src.apps.schemas import AppDocument
+from src.generation.exceptions import GenerationError
+from src.generation.service import generate_document
+from tests.generation.fake_llm_client import FakeLlmClient
+from tests.generation.template_fixtures import build_template_document
 
-TEMPLATE_PROMPTS: dict[TemplateKey, str] = {
-    "habits": "трекер привычек и серии дней",
-    "social": "социальная сеть и лента постов",
-    "shop": "магазин мебели и корзина",
-    "forms": "форма заявки на консультацию",
-    "blank": "приложение про космос",
-}
+PROMPT = "трекер привычек и серии дней"
 
-
-def collect_nodes(node: AppNode) -> list[AppNode]:
-    nodes = [node]
-    for child in node.children:
-        nodes.extend(collect_nodes(child))
-    return nodes
+INCOMPLETE_ANSWER = '{"name": "Приложение"}'
 
 
-def collect_navigate_actions(root: AppNode) -> list[NavigateAction]:
-    actions = []
-    for node in collect_nodes(root):
-        if node.props is None:
-            continue
-        for action in (node.props.on_press or []) + (node.props.on_change or []):
-            if isinstance(action, NavigateAction):
-                actions.append(action)
-    return actions
+def valid_answer(name: str = "Трекер привычек") -> str:
+    document = build_template_document(PROMPT, name)
+    return json.dumps(document.model_dump(mode="json", by_alias=True), ensure_ascii=False)
 
 
-@pytest.mark.parametrize(
-    ("prompt", "expected"),
-    [
-        ("трекер привычек на каждый день", "habits"),
-        ("habit tracker with a streak", "habits"),
-        ("медитация по утрам", "habits"),
-        ("соцсеть для музыкантов", "social"),
-        ("app with a feed and friends", "social"),
-        ("чат для команды", "social"),
-        ("интернет-магазин и корзина", "shop"),
-        ("online store with a cart", "shop"),
-        ("доставка еды", "shop"),
-        ("форма обратной связи", "forms"),
-        ("a signup form", "forms"),
-        ("опрос сотрудников", "forms"),
-    ],
-)
-def test_select_template_by_keyword(prompt: str, expected: TemplateKey) -> None:
-    assert select_template(prompt) == expected
+def validation_error_of(answer: str) -> str:
+    try:
+        AppDocument.model_validate(json.loads(answer))
+    except ValidationError as error:
+        return str(error)
+    raise AssertionError("Ответ неожиданно прошёл валидацию документа")
 
 
-def test_select_template_ignores_case() -> None:
-    assert select_template("ПРИВЫЧКИ КАЖДЫЙ ДЕНЬ") == "habits"
-    assert select_template("Online STORE") == "shop"
+async def test_generate_document_returns_validated_document() -> None:
+    client = FakeLlmClient([valid_answer()])
+
+    document = await generate_document(PROMPT, None, client=client, max_attempts=3)
+
+    assert document.name == "Трекер привычек"
+    assert document.screens != []
+    assert len(client.calls) == 1
 
 
-def test_select_template_defaults_to_blank() -> None:
-    assert select_template("приложение про космос") == "blank"
-    assert select_template("something entirely different") == "blank"
+async def test_generate_document_passes_app_document_schema() -> None:
+    client = FakeLlmClient([valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, max_attempts=3)
+
+    assert client.schemas[0] == AppDocument.model_json_schema(by_alias=True)
 
 
-def test_first_matching_keyword_wins() -> None:
-    assert select_template("трекер привычек и магазин") == "habits"
+async def test_generate_document_accepts_answer_wrapped_in_code_fence() -> None:
+    client = FakeLlmClient([f"```json\n{valid_answer()}\n```"])
+
+    document = await generate_document(PROMPT, None, client=client, max_attempts=3)
+
+    assert document.screens != []
 
 
-def test_different_keywords_produce_different_documents() -> None:
-    names = {generate_document(prompt, None).name for prompt in TEMPLATE_PROMPTS.values()}
+async def test_generate_document_overwrites_prompt_and_timestamps() -> None:
+    client = FakeLlmClient([valid_answer()])
 
-    assert len(names) == len(TEMPLATE_PROMPTS)
+    document = await generate_document(PROMPT, None, client=client, max_attempts=3)
 
-
-@pytest.mark.parametrize(("key", "prompt"), list(TEMPLATE_PROMPTS.items()))
-def test_generate_document_matches_selected_template(key: TemplateKey, prompt: str) -> None:
-    document = generate_document(prompt, None)
-
-    assert document.name == BUILDERS[key]().name
-
-
-@pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))
-def test_generate_document_is_valid_app_document(prompt: str) -> None:
-    document = generate_document(prompt, None)
-
-    payload = document.model_dump(mode="json", by_alias=True)
-
-    assert AppDocument.model_validate(payload) == document
-
-
-@pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))
-def test_generate_document_keeps_prompt_and_timestamps(prompt: str) -> None:
-    document = generate_document(prompt, None)
-
-    assert document.prompt == prompt
+    assert document.prompt == PROMPT
     assert document.created_at == document.updated_at
     assert document.created_at != ""
 
 
-@pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))
-def test_generate_document_has_screens_reachable_from_navigation(prompt: str) -> None:
-    document = generate_document(prompt, None)
+async def test_generate_document_uses_given_name() -> None:
+    client = FakeLlmClient([valid_answer()])
 
-    screen_ids = {screen.id for screen in document.screens}
-
-    assert document.screens != []
-    assert set(document.navigation.roots) <= screen_ids
-
-
-@pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))
-def test_generate_document_routes_are_bare_identifiers(prompt: str) -> None:
-    document = generate_document(prompt, None)
-
-    assert all(not screen.route.startswith("/") for screen in document.screens)
-
-
-@pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))
-def test_generate_document_navigate_actions_point_at_existing_screens(prompt: str) -> None:
-    document = generate_document(prompt, None)
-
-    routes = {screen.route for screen in document.screens}
-    targets = [action.route for screen in document.screens for action in collect_navigate_actions(screen.root)]
-
-    assert set(targets) <= routes
-    assert targets != [] or len(document.screens) == 1
-
-
-@pytest.mark.parametrize("prompt", list(TEMPLATE_PROMPTS.values()))
-def test_generate_document_node_ids_are_unique(prompt: str) -> None:
-    document = generate_document(prompt, None)
-
-    node_ids = [node.id for screen in document.screens for node in collect_nodes(screen.root)]
-
-    assert len(node_ids) == len(set(node_ids))
-
-
-def test_generate_document_uses_given_name() -> None:
-    document = generate_document("трекер привычек", "Мои привычки")
+    document = await generate_document(PROMPT, "Мои привычки", client=client, max_attempts=3)
 
     assert document.name == "Мои привычки"
 
 
-def test_generate_document_gives_unique_ids() -> None:
-    first = generate_document("трекер привычек", None)
-    second = generate_document("трекер привычек", None)
+async def test_generate_document_retries_after_invalid_answer() -> None:
+    client = FakeLlmClient(["совсем не json", valid_answer()])
 
-    assert first.id != second.id
+    document = await generate_document(PROMPT, None, client=client, max_attempts=3)
+
+    assert document.screens != []
+    assert len(client.calls) == 2
+
+
+async def test_generate_document_feeds_invalid_answer_back_to_the_model() -> None:
+    client = FakeLlmClient([INCOMPLETE_ANSWER, valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, max_attempts=3)
+
+    retry_messages = client.calls[1]
+    assert retry_messages[:2] == client.calls[0]
+    assert retry_messages[2] == {"role": "assistant", "content": INCOMPLETE_ANSWER}
+    assert "screens" in retry_messages[3]["content"]
+
+
+async def test_generate_document_puts_the_exact_validation_error_into_the_dialog() -> None:
+    client = FakeLlmClient([INCOMPLETE_ANSWER, valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, max_attempts=3)
+
+    assert validation_error_of(INCOMPLETE_ANSWER) in client.calls[1][3]["content"]
+
+
+async def test_generate_document_keeps_the_whole_dialog_across_retries() -> None:
+    client = FakeLlmClient([INCOMPLETE_ANSWER, "совсем не json", valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, max_attempts=3)
+
+    assert len(client.calls[1]) == len(client.calls[0]) + 2
+    assert len(client.calls[2]) == len(client.calls[0]) + 4
+    assert client.calls[2][:4] == client.calls[1]
+    assert client.calls[2][4] == {"role": "assistant", "content": "совсем не json"}
+
+
+async def test_generate_document_fails_after_max_attempts() -> None:
+    client = FakeLlmClient(["не json", "тоже не json", "и это не json"])
+
+    with pytest.raises(GenerationError):
+        await generate_document(PROMPT, None, client=client, max_attempts=3)
+
+    assert len(client.calls) == 3
+
+
+@pytest.mark.parametrize("max_attempts", [1, 2, 3, 5])
+async def test_generate_document_spends_exactly_max_attempts(max_attempts: int) -> None:
+    client = FakeLlmClient(["не json"] * max_attempts)
+
+    with pytest.raises(GenerationError):
+        await generate_document(PROMPT, None, client=client, max_attempts=max_attempts)
+
+    assert len(client.calls) == max_attempts
+
+
+@pytest.mark.parametrize("max_attempts", [1, 2, 3, 5])
+async def test_generate_document_still_succeeds_on_the_last_allowed_attempt(max_attempts: int) -> None:
+    client = FakeLlmClient([*["не json"] * (max_attempts - 1), valid_answer()])
+
+    document = await generate_document(PROMPT, None, client=client, max_attempts=max_attempts)
+
+    assert document.screens != []
+    assert len(client.calls) == max_attempts
+
+
+async def test_generate_document_reports_the_last_validation_error() -> None:
+    client = FakeLlmClient(["не json", INCOMPLETE_ANSWER])
+
+    with pytest.raises(GenerationError) as error:
+        await generate_document(PROMPT, None, client=client, max_attempts=2)
+
+    assert validation_error_of(INCOMPLETE_ANSWER) in error.value.message
+    assert "2 попыток" in error.value.message
+
+
+async def test_generate_document_never_falls_back_to_a_template() -> None:
+    client = FakeLlmClient(["не json"])
+
+    with pytest.raises(GenerationError) as error:
+        await generate_document(PROMPT, None, client=client, max_attempts=1)
+
+    assert "RouterAI" in error.value.message

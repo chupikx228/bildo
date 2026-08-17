@@ -1,12 +1,24 @@
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from arq import func
 from arq.connections import RedisSettings
 from arq.worker import Function
 
+from src.generation.dependencies import build_llm_client
+from src.generation.llm_client import LlmClient
 from src.queue.arq_queue import get_redis_settings
 from src.queue.jobs import BUILD_EXPORT_ZIP_JOB, GENERATE_APP_DOCUMENT_JOB
 from src.worker.tasks import build_export_zip, generate_app_document
+
+
+async def startup(ctx: dict[Any, Any]) -> None:
+    ctx["llm_client"] = build_llm_client()
+
+
+async def shutdown(ctx: dict[Any, Any]) -> None:
+    llm_client: LlmClient | None = ctx.get("llm_client")
+    if llm_client is not None:
+        await llm_client.aclose()
 
 
 class WorkerSettings:
@@ -15,3 +27,5 @@ class WorkerSettings:
         func(build_export_zip, name=BUILD_EXPORT_ZIP_JOB),
     ]
     redis_settings: RedisSettings = get_redis_settings()
+    on_startup = startup
+    on_shutdown = shutdown

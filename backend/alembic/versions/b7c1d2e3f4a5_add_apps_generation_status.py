@@ -1,11 +1,3 @@
-"""add apps generation status
-
-Revision ID: b7c1d2e3f4a5
-Revises: a1b2c3d4e5f6
-Create Date: 2026-08-15 12:40:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

@@ -1,11 +1,3 @@
-"""create apps table
-
-Revision ID: cdd05b7da65c
-Revises:
-Create Date: 2026-08-14 18:47:18.645813
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op

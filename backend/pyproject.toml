@@ -12,6 +12,7 @@ dependencies = [
     "alembic>=1.14",
     "redis>=5.2",
     "arq>=0.26",
+    "openai>=3.1",
 ]
 
 [dependency-groups]
@@ -52,6 +53,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+"src/generation/prompt.py" = ["RUF001"]
 "alembic/**" = ["N999", "E402", "I001"]
 
 [tool.ruff.lint.flake8-bugbear]
@@ -115,6 +117,8 @@ source_modules = [
     "src.apps.service",
     "src.codegen.service",
     "src.generation.service",
+    "src.generation.llm_client",
+    "src.generation.prompt",
     "src.tasks.service",
 ]
 forbidden_modules = ["sqlalchemy", "fastapi"]
