@@ -6,8 +6,8 @@ import pytest
 from src.apps.exceptions import AppGenerationInProgress, AppNotFound
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
-from src.generation.service import generate_document
 from tests.apps.in_memory_repository import InMemoryAppRepository
+from tests.generation.template_fixtures import build_template_document
 from tests.in_memory_task_queue import InMemoryTaskQueue
 
 
@@ -85,7 +85,7 @@ async def test_mark_generated_replaces_placeholder_document(
     repository: InMemoryAppRepository,
 ) -> None:
     app_id = await service.create_from_prompt("трекер привычек", None)
-    generated = generate_document("трекер привычек", None)
+    generated = build_template_document("трекер привычек", None)
 
     await service.mark_generated(app_id, generated)
 
@@ -120,7 +120,7 @@ async def test_save_document_is_allowed_once_generation_finished(
     repository: InMemoryAppRepository,
 ) -> None:
     app_id = await service.create_from_prompt("трекер привычек", None)
-    await service.mark_generated(app_id, generate_document("трекер привычек", None))
+    await service.mark_generated(app_id, build_template_document("трекер привычек", None))
 
     saved = await service.save_document(app_id, build_document(str(app_id)))
 

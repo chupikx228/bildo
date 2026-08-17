@@ -8,8 +8,8 @@ import pytest
 
 from src.apps.schemas import AppDocument
 from src.codegen.service import ExpoFileMap, generate_files
-from src.generation.service import TemplateKey, generate_document, select_template
 from tests.codegen.max_coverage_document import build_max_coverage_document
+from tests.generation.template_fixtures import TemplateKey, build_template_document, select_template
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CODEGEN_CLI = REPO_ROOT / "frontend" / "apps" / "web" / "scripts" / "codegen-cli.ts"
@@ -95,7 +95,7 @@ def test_codegen_cli_script_exists() -> None:
 def test_generators_agree_on_template_documents(template: TemplateKey) -> None:
     prompt = TEMPLATE_PROMPTS[template]
     assert select_template(prompt) == template
-    document = generate_document(prompt, None)
+    document = build_template_document(prompt, None)
 
     assert_generators_agree(f"the {template} template", document)
 
