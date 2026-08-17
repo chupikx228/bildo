@@ -1,11 +1,3 @@
-"""make apps owner_id nullable
-
-Revision ID: a1b2c3d4e5f6
-Revises: cdd05b7da65c
-Create Date: 2026-08-14 19:30:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 from alembic import op
