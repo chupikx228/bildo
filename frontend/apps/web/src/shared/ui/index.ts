@@ -3,3 +3,5 @@ export * from "./BildoLogo";
 export * from "./NumberField";
 export * from "./ColorPicker";
 export * from "./AlignPad";
+export * from "./Modal";
+export * from "./QueryState";

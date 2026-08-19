@@ -6,13 +6,14 @@ import { AssistantPanel } from "@/widgets/assistant";
 import { Board, BoardToolbar, RunningBadge } from "@/widgets/canvas";
 import { CodePanel } from "@/widgets/code-panel";
 import { EditorHeader } from "@/widgets/editor-header";
+import { AppsModal } from "@/widgets/apps-modal";
 import { FilesPanel } from "@/widgets/files-panel";
 import { InsertDock } from "@/widgets/insert-dock";
 import { InspectorPanel } from "@/widgets/inspector";
 import { toAttachments, type Attachment } from "@/shared/attachments";
 import { apiClient } from "@/shared/api";
 import { ROUTES } from "@/shared/config";
-import { useWindowEvent } from "@/shared/lib";
+import { useSearchFlag, useWindowEvent } from "@/shared/lib";
 
 const RAIL_OPEN = "352px";
 const RAIL_CLOSED = "52px";
@@ -40,6 +41,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
   const [codeOpen, setCodeOpen] = useState(false);
   const [codePath, setCodePath] = useState<string | null>(null);
   const [uploads, setUploads] = useState<Attachment[]>([]);
+  const appsModal = useSearchFlag("apps");
 
   const { flush } = useAutosave(appId);
 
@@ -158,12 +160,15 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
         running={running}
         filesOpen={filesOpen}
         codeOpen={codeOpen}
+        onOpenApps={appsModal.setOn}
         onToggleFiles={() => setFilesOpen((v) => !v)}
         onToggleCode={() => setCodeOpen((v) => !v)}
         onToggleRun={toggleRun}
         onShare={share}
         onExport={() => void exportProject()}
       />
+
+      <AppsModal open={appsModal.on} onClose={appsModal.setOff} currentId={appId} />
 
       {(shareUrl || lastError) && <div>{lastError ?? `Ссылка скопирована: ${shareUrl}`}</div>}
 
