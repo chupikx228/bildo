@@ -1,4 +1,3 @@
-import { Link } from "react-router";
 import { useAppDocumentStore, type AppSaveStatus } from "@/entities/app-document";
 import { BildoLogo, Button } from "@/shared/ui";
 import { ROUTES } from "@/shared/config";
@@ -7,6 +6,7 @@ export function EditorHeader({
   running,
   filesOpen,
   codeOpen,
+  onOpenApps,
   onToggleFiles,
   onToggleCode,
   onToggleRun,
@@ -16,6 +16,7 @@ export function EditorHeader({
   running: boolean;
   filesOpen: boolean;
   codeOpen: boolean;
+  onOpenApps: () => void;
   onToggleFiles: () => void;
   onToggleCode: () => void;
   onToggleRun: () => void;
@@ -29,13 +30,14 @@ export function EditorHeader({
   return (
     <header className="relative min-h-14 flex items-center gap-3 px-3.5 border-b border-line bg-[rgba(255,255,255,0.86)] backdrop-saturate-[1.8] backdrop-blur-[12px] shrink-0 after:content-[''] after:absolute after:left-0 after:right-0 after:-bottom-px after:h-0.5 after:pointer-events-none after:bg-[linear-gradient(90deg,var(--color-accent)_0%,#a855f7_26%,rgba(255,141,92,0.7)_48%,rgba(92,108,245,0)_76%)] after:opacity-50">
       <div className="flex items-center gap-2">
-        <BildoLogo size="sm" href={ROUTES.apps} />
-        <Link
-          to={ROUTES.apps}
-          className="inline-flex items-center min-h-8 px-[11px] py-1.5 rounded-control text-muted text-xs font-medium no-underline hover:bg-accent-wash hover:text-accent-strong hide-on-mobile"
+        <BildoLogo size="sm" href={ROUTES.home} />
+        <button
+          type="button"
+          onClick={onOpenApps}
+          className="inline-flex items-center min-h-8 px-[11px] py-1.5 rounded-control text-muted text-xs font-medium bg-transparent border-0 cursor-pointer hover:bg-accent-wash hover:text-accent-strong hide-on-mobile"
         >
           Приложения
-        </Link>
+        </button>
       </div>
 
       <span className="w-px h-5 shrink-0 bg-line hide-on-mobile" />
