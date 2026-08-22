@@ -1,6 +1,6 @@
 import type { AppNodeLayout } from "@bildo/api";
 import { AlignPad, CompactNumber, type HorizontalAlign, type VerticalAlign } from "@/shared/ui";
-import { Section } from "../controls";
+import { Section } from "../Section";
 import { POSITION, POSITION_FIELDS } from "../classes";
 
 export function PositionSection({

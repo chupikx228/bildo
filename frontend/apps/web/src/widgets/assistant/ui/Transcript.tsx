@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import type { Proposal, Turn } from "../lib/planner";
-import { CommitCard } from "./cards";
+import { CommitCard } from "./CommitCard";
 import { MessageBubble } from "./MessageBubble";
 import {
   BUBBLE_AI,

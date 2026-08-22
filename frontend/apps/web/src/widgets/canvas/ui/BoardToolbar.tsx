@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import { useAppDocumentStore } from "@/entities/app-document";
+import { ToolBtn } from "./ToolBtn";
 
 export function BoardToolbar() {
   const undo = useAppDocumentStore((s) => s.undo);
@@ -63,42 +63,6 @@ export function BoardToolbar() {
           <rect x="4.5" y="5.5" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.15" />
         </svg>
       </ToolBtn>
-    </div>
-  );
-}
-
-function ToolBtn({
-  label,
-  hint,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  hint: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={`${label} (${hint})`}
-      onClick={onClick}
-      disabled={disabled}
-      className="w-7 h-7 border-0 rounded-lg bg-transparent text-muted grid place-items-center cursor-pointer p-0 transition-[background] duration-[.14s] ease-[ease] enabled:hover:bg-surface disabled:text-faint disabled:cursor-default"
-    >
-      {children}
-    </button>
-  );
-}
-
-export function RunningBadge() {
-  return (
-    <div className="absolute left-4 top-3.5 z-[5] flex items-center gap-[7px] px-3 py-[7px] rounded-full bg-ink text-ink-fg text-[11px] font-semibold shadow-md max-w-[240px] hide-on-mobile">
-      <span className="w-1.5 h-1.5 rounded-full bg-ok shrink-0" />
-      Превью — нажатия как в приложении
     </div>
   );
 }

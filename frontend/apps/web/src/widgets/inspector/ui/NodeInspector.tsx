@@ -10,7 +10,7 @@ import {
   type AppScreen,
 } from "@bildo/api";
 import { type HorizontalAlign, type VerticalAlign } from "@/shared/ui";
-import { PanelHeader } from "./controls";
+import { PanelHeader } from "./PanelHeader";
 import { AppearanceSection } from "./sections/AppearanceSection";
 import { BehaviorSection } from "./sections/BehaviorSection";
 import { ContentSection } from "./sections/ContentSection";

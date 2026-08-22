@@ -1,5 +1,6 @@
 import type { AppNode } from "@bildo/api";
-import { Field, Section } from "../controls";
+import { Field } from "../Field";
+import { Section } from "../Section";
 import { INPUT, TEXTAREA } from "../classes";
 
 export function ContentSection({
