@@ -1,6 +1,6 @@
 import { AttachChips } from "@/shared/attachments";
 import type { Proposal, Turn } from "../lib/planner";
-import { ProposalCard } from "./cards";
+import { ProposalCard } from "./ProposalCard";
 import { BUBBLE_AI, BUBBLE_USER, MSG, MSG_AI, MSG_USER, MSG_WIDE } from "./classes";
 
 type MessageTurn = Extract<Turn, { role: "user" | "ai" }>;

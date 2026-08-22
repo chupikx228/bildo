@@ -1,6 +1,9 @@
 import type { AppScreen, AppThemeTokens } from "@bildo/api";
 import { ColorPicker } from "@/shared/ui";
-import { Field, PanelHeader, Row, Section } from "./controls";
+import { Field } from "./Field";
+import { PanelHeader } from "./PanelHeader";
+import { Row } from "./Row";
+import { Section } from "./Section";
 import { INPUT, PANEL, SCROLL } from "./classes";
 
 export function ScreenInspector({

@@ -1,5 +1,6 @@
 import type { AppAction, AppScreen } from "@bildo/api";
-import { Field, Section } from "../controls";
+import { Field } from "../Field";
+import { Section } from "../Section";
 import { PressEditor } from "../PressEditor";
 
 export function BehaviorSection({

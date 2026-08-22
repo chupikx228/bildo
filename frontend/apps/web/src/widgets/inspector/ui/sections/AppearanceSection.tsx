@@ -1,7 +1,10 @@
 import type { AppNode, AppNodeStyle } from "@bildo/api";
 import { clamp } from "@/shared/lib";
 import { ColorPicker, StepNumber } from "@/shared/ui";
-import { Row, Section, TextAlignButtons, WeightSelect } from "../controls";
+import { Row } from "../Row";
+import { Section } from "../Section";
+import { TextAlignButtons } from "../TextAlignButtons";
+import { WeightSelect } from "../WeightSelect";
 import { OPACITY, OPACITY_BOX, OPACITY_INPUT, OPACITY_SLIDER, OPACITY_UNIT } from "../classes";
 
 const FALLBACK_SURFACE = "#18181B";
