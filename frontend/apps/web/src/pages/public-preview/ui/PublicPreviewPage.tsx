@@ -45,7 +45,20 @@ export function PublicPreviewPage() {
     );
   }
 
-  const document = normalizeAppDocument(data);
+  if (data.generationStatus !== "ready") {
+    return (
+      <div className={WRAPPER}>
+        {backButton}
+        <p className={STATUS}>
+          {data.generationStatus === "failed"
+            ? (data.generationError ?? "Не удалось сгенерировать приложение")
+            : "Генерируем приложение…"}
+        </p>
+      </div>
+    );
+  }
+
+  const document = normalizeAppDocument(data.document);
   const screen = document.screens.find((s) => s.id === screenId) ?? document.screens[0];
   if (!screen) {
     return (

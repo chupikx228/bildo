@@ -16,9 +16,9 @@ export function EditorPage() {
 
   const loadedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!data || loadedRef.current === id) return;
+    if (!data || data.generationStatus !== "ready" || loadedRef.current === id) return;
     loadedRef.current = id;
-    setDocument({ ...data, id });
+    setDocument({ ...data.document, id });
   }, [data, id, setDocument]);
 
   if (isLoading) {
@@ -37,10 +37,18 @@ export function EditorPage() {
     );
   }
 
-  if (!document) {
+  if (data?.generationStatus === "failed") {
     return (
       <div className={WORKSPACE}>
-        <p className={STATUS}>Готовим редактор…</p>
+        <p className={STATUS}>{data.generationError ?? "Не удалось сгенерировать приложение"}</p>
+      </div>
+    );
+  }
+
+  if (data?.generationStatus === "pending" || !document) {
+    return (
+      <div className={WORKSPACE}>
+        <p className={STATUS}>Генерируем приложение…</p>
       </div>
     );
   }

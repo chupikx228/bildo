@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { useApiClient } from "../context";
-import { appDocumentSchema, appSummarySchema, type AppDocument, type AppSummary } from "./model";
+import {
+  appDetailSchema,
+  appDocumentSchema,
+  appSummarySchema,
+  type AppDetail,
+  type AppDocument,
+  type AppSummary,
+  type GenerationStatus,
+} from "./model";
 
 const createAppResponseSchema = z.object({ id: z.string() });
 
@@ -27,10 +35,22 @@ export function useApp(id: string) {
   return useQuery({
     queryKey: appsKeys.detail(id),
     queryFn: async () => {
-      const data = await client.get<{ id: string; name: string; slug?: string; document: AppDocument }>(`/apps/${id}`);
-      return appDocumentSchema.parse(data.document);
+      const data = await client.get<{
+        id: string;
+        name: string;
+        slug?: string;
+        document: AppDocument;
+        generationStatus: GenerationStatus;
+        generationError?: string | null;
+      }>(`/apps/${id}`);
+      return appDetailSchema.parse({
+        document: data.document,
+        generationStatus: data.generationStatus,
+        generationError: data.generationError ?? null,
+      });
     },
     enabled: Boolean(id),
+    refetchInterval: (query) => (query.state.data?.generationStatus === "pending" ? 800 : false),
   });
 }
 
@@ -57,7 +77,9 @@ export function useSaveApp(id: string) {
       return appDocumentSchema.parse(data.document);
     },
     onSuccess: (document) => {
-      queryClient.setQueryData(appsKeys.detail(id), document);
+      queryClient.setQueryData<AppDetail>(appsKeys.detail(id), (prev) =>
+        prev ? { ...prev, document } : { document, generationStatus: "ready", generationError: null },
+      );
     },
   });
 }

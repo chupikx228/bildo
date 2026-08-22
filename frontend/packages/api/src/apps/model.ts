@@ -164,6 +164,16 @@ export const appSummarySchema = z.object({
 });
 export type AppSummary = z.infer<typeof appSummarySchema>;
 
+export const generationStatusSchema = z.enum(["pending", "ready", "failed"]);
+export type GenerationStatus = z.infer<typeof generationStatusSchema>;
+
+export const appDetailSchema = z.object({
+  document: appDocumentSchema,
+  generationStatus: generationStatusSchema,
+  generationError: z.string().nullable(),
+});
+export type AppDetail = z.infer<typeof appDetailSchema>;
+
 export const APP_STAGE_WIDTH = 370;
 export const APP_STAGE_HEIGHT = 640;
 
