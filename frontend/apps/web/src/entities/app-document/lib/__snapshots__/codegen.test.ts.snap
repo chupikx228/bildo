@@ -1,0 +1,310 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`codegenExpoProject — project shape > matches the recorded snapshot of every generated file 1`] = `
+{
+  ".gitignore": "node_modules/
+.expo/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+",
+  "README.md": "# Cover App!
+
+Сгенерировано bildo (AppDocument → Expo).
+
+## Запуск
+
+\`\`\`bash
+npm install
+npx expo start
+\`\`\`
+
+Отсканируйте QR в **Expo Go** (iOS/Android) или нажмите \`w\` для web.
+
+Промпт: —
+",
+  "app.json": "{
+  "expo": {
+    "name": "Cover App!",
+    "slug": "cover-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "cover-app",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bildo.coverapp"
+    },
+    "android": {
+      "package": "com.bildo.coverapp",
+      "adaptiveIcon": {
+        "backgroundColor": "#09090B"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}",
+  "app/_layout.tsx": "import { Tabs } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AppStateProvider } from './state';
+import { theme } from '../theme';
+
+export default function Layout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppStateProvider>
+          <Tabs
+            screenOptions={{
+              headerStyle: { backgroundColor: theme.colorSurface },
+              headerTintColor: theme.colorText,
+              tabBarStyle: { backgroundColor: theme.colorSurface, borderTopColor: theme.colorBorder },
+              tabBarActiveTintColor: theme.colorPrimary,
+              tabBarInactiveTintColor: theme.colorTextMuted,
+              sceneStyle: { backgroundColor: theme.colorBg },
+            }}
+          >
+            <Tabs.Screen name="index" options={{ title: 'Home' }} />
+            <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+          </Tabs>
+        </AppStateProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+}
+",
+  "app/index.tsx": "import { Alert, FlatList, Image, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { useRouter } from 'expo-router';
+import { theme } from '../theme';
+import { useAppState } from './state';
+
+export default function IndexScreen() {
+  const router = useRouter();
+  const { state, setVar } = useAppState();
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colorBg }} edges={['top', 'left', 'right']}>
+      <StatusBar style="auto" />
+    <View style={{
+  flex: 1
+}}>
+      <Text style={{
+  position: 'absolute',
+  left: 8,
+  top: 8,
+  width: 200,
+  height: 30,
+  zIndex: 3,
+  color: '#fff',
+  fontWeight: '600'
+}}>He said \\'hi\\'\\nnext\\\\end</Text>
+      <Text style={{
+  position: 'absolute',
+  left: 8,
+  top: 40,
+  width: 200,
+  height: 30
+}}>{String(state['title'] ?? '')}</Text>
+      <Pressable style={{
+  position: 'absolute',
+  left: 8,
+  top: 80,
+  width: 120,
+  height: 44
+}} onPress={() => {
+    router.push('/profile');
+    setVar('count', 1);
+    Alert.alert('', 'done');
+    Linking.openURL('https://x.dev');
+  }}>
+        <Text style={{ color: theme.colorPrimaryFg, fontWeight: '600', textAlign: 'center' }}>Go</Text>
+      </Pressable>
+      <Pressable style={{
+  position: 'absolute',
+  left: 140,
+  top: 80,
+  width: 120,
+  height: 44
+}} onPress={() => {
+    router.push('/profile');
+  }}>
+        <Text style={{ color: theme.colorPrimaryFg, fontWeight: '600', textAlign: 'center' }}>Profile</Text>
+      </Pressable>
+      <TextInput
+        placeholder="Name"
+        placeholderTextColor="#71717A"
+        style={{
+  position: 'absolute',
+  left: 8,
+  top: 130,
+  width: 200,
+  height: 44
+}}
+        value={String(state['name'] ?? '')}
+        onChangeText={(t) => setVar('name', t)}
+      />
+      {null}
+      <View style={{
+  position: 'absolute',
+  left: 8,
+  top: 210,
+  width: 200,
+  height: 16
+}} />
+      <Image source={{ uri: 'https://img.dev/a.png' }} style={{
+  position: 'absolute',
+  left: 8,
+  top: 230,
+  width: 200,
+  height: 100
+}} />
+      <View style={[{
+  position: 'absolute',
+  left: 8,
+  top: 340,
+  width: 200,
+  height: 100
+}, { backgroundColor: '#27272A', alignItems: 'center', justifyContent: 'center' }]}><Text style={{ color: '#71717A' }}>Image</Text></View>
+      <FlatList
+        style={{
+  position: 'absolute',
+  left: 8,
+  top: 450,
+  width: 200,
+  height: 120
+}}
+        data={["a","b"]}
+        keyExtractor={(item, i) => String(i)}
+        renderItem={({ item }) => (
+          <View style={{ padding: 12, backgroundColor: '#18181B', borderRadius: 10, marginBottom: 8 }}>
+            <Text style={{ color: '#FAFAFA' }}>{String(item)}</Text>
+          </View>
+        )}
+      />
+    </View>
+    </SafeAreaView>
+  );
+}
+",
+  "app/profile.tsx": "import { ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { theme } from '../theme';
+
+export default function ProfileScreen() {
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colorBg }} edges={['top', 'left', 'right']}>
+      <StatusBar style="auto" />
+    <ScrollView style={{
+  flex: 1
+}} contentContainerStyle={{ flexGrow: 1 }}>
+      <Text style={{
+  position: 'absolute',
+  left: 8,
+  top: 8,
+  width: 100,
+  height: 20
+}}>Profile</Text>
+    </ScrollView>
+    </SafeAreaView>
+  );
+}
+",
+  "app/state.tsx": "import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+
+type Vars = Record<string, string | number | boolean>;
+
+type CtxValue = {
+  state: Vars;
+  setVar: (k: string, v: string | number | boolean) => void;
+};
+
+const Ctx = createContext<CtxValue | null>(null);
+
+const initial: Vars = {};
+
+export function AppStateProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<Vars>(initial);
+  const setVar = useCallback((k: string, v: string | number | boolean) => {
+    setState(s => ({ ...s, [k]: v }));
+  }, []);
+  const value = useMemo(() => ({ state, setVar }), [state, setVar]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useAppState(): CtxValue {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error('useAppState must be used within AppStateProvider');
+  return ctx;
+}
+",
+  "babel.config.js": "module.exports = function (api) {
+  api.cache(true);
+  return { presets: ['babel-preset-expo'] };
+};
+",
+  "package.json": "{
+  "name": "cover-app",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "expo": "~52.0.46",
+    "expo-router": "~4.0.20",
+    "expo-status-bar": "~2.0.1",
+    "expo-linking": "~7.0.5",
+    "expo-constants": "~17.0.8",
+    "react": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-gesture-handler": "~2.20.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "babel-preset-expo": "~12.0.0",
+    "typescript": "~5.3.3",
+    "@types/react": "~18.3.12"
+  },
+  "private": true
+}",
+  "theme.ts": "export const theme = {
+  "colorBg": "#09090B",
+  "colorSurface": "#18181B",
+  "colorBorder": "#27272A",
+  "colorText": "#FAFAFA",
+  "colorTextMuted": "#A1A1AA",
+  "colorPrimary": "#5C6CF5",
+  "colorPrimaryFg": "#FFFFFF",
+  "radiusBase": "12px",
+  "fontBody": "System",
+  "fontHeading": "System"
+} as const;
+",
+  "tsconfig.json": "{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true
+  }
+}",
+}
+`;
