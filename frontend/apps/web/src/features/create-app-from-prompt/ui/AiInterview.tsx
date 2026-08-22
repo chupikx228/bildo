@@ -11,9 +11,9 @@ const BODY = "px-5 pt-5 pb-[18px] animate-interview-step";
 const ACTIONS = "flex items-center gap-2.5 mt-[18px]";
 const BACK = "border-0 bg-transparent text-subtle text-[13px] cursor-pointer px-1 py-2 hover:text-text";
 const NEXT_BASE =
-  "px-[18px] py-2.5 border rounded-[10px] text-[13px] font-semibold cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed";
-const NEXT = `${NEXT_BASE} border-line-strong bg-panel text-text-soft enabled:hover:border-accent-line enabled:hover:bg-accent-wash enabled:hover:text-accent-strong`;
-const NEXT_GO = `${NEXT_BASE} border-accent-strong bg-[linear-gradient(180deg,#6b7bff_0%,var(--color-accent)_55%,var(--color-accent-strong)_100%)] text-ink-fg shadow-[0_1px_2px_rgba(46,55,150,0.22),0_6px_16px_rgba(92,108,245,0.22)] enabled:hover:brightness-105`;
+  "px-[18px] py-2.5 border rounded-[10px] text-[13px] font-semibold cursor-pointer disabled:cursor-not-allowed";
+const NEXT = `${NEXT_BASE} disabled:opacity-45 border-line-strong bg-panel text-text-soft enabled:hover:border-accent-line enabled:hover:bg-accent-wash enabled:hover:text-accent-strong`;
+const NEXT_GO = `${NEXT_BASE} grid place-items-center border-accent-strong bg-[linear-gradient(180deg,#6b7bff_0%,var(--color-accent)_55%,var(--color-accent-strong)_100%)] text-ink-fg shadow-[0_1px_2px_rgba(46,55,150,0.22),0_6px_16px_rgba(92,108,245,0.22)] enabled:hover:brightness-105`;
 
 export interface InterviewAnswers {
   kind: string;
@@ -296,11 +296,15 @@ export function AiInterview({
             <span className="flex-1" />
             <button
               type="button"
-              className={NEXT_GO}
+              className={`${NEXT_GO} ${busy ? "cursor-wait" : ""}`}
               disabled={busy}
+              aria-busy={busy}
               onClick={() => onSubmit((draft ?? prompt).trim())}
             >
-              {busy ? "Собираем…" : "Создать приложение"}
+              <span className="[grid-area:1/1] invisible" aria-hidden>
+                Создать приложение
+              </span>
+              <span className="[grid-area:1/1]">{busy ? "Собираем…" : "Создать приложение"}</span>
             </button>
           </div>
         </div>
