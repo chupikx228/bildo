@@ -1,0 +1,10 @@
+case "$1" in
+  /*) msg="$1" ;;
+  *) msg="$(pwd)/$1" ;;
+esac
+
+if [ -d frontend/node_modules/@commitlint ]; then
+  (cd frontend && pnpm exec commitlint --edit "$msg")
+else
+  echo "husky: commitlint not installed — run 'cd frontend && pnpm install'. Skipping commit message check." >&2
+fi

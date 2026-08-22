@@ -1,0 +1,27 @@
+range="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+if [ -n "$range" ]; then
+  changed="$(git diff --name-only "$range"...HEAD 2>/dev/null || true)"
+else
+  changed="$(git diff --name-only origin/main...HEAD 2>/dev/null || true)"
+fi
+if [ -z "$changed" ]; then
+  changed="$(printf 'frontend/\nbackend/\n')"
+fi
+
+if echo "$changed" | grep -q '^frontend/'; then
+  if [ -d frontend/node_modules ]; then
+    echo "husky: frontend in push → pnpm test"
+    (cd frontend && pnpm test) || exit 1
+  else
+    echo "husky: frontend/node_modules missing — run 'cd frontend && pnpm install'. Skipping frontend tests." >&2
+  fi
+fi
+
+if echo "$changed" | grep -q '^backend/'; then
+  if command -v make >/dev/null 2>&1 && command -v uv >/dev/null 2>&1; then
+    echo "husky: backend in push → make check"
+    (cd backend && make check) || exit 1
+  else
+    echo "husky: backend toolchain (make/uv) not found — skipping backend checks; backend CI still enforces them." >&2
+  fi
+fi
