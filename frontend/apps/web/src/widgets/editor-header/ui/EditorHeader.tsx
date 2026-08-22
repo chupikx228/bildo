@@ -47,6 +47,7 @@ export function EditorHeader({
           className="w-[190px] h-[30px] min-w-0 px-2 border border-transparent rounded-lg outline-0 bg-transparent text-text font-ui text-[13px] font-semibold leading-[30px] text-ellipsis transition-[background,border-color] duration-[.14s] ease-[ease] hover:bg-surface focus:bg-panel focus:border-accent-line"
           value={name}
           onChange={(e) => renameApp(e.target.value)}
+          onBlur={(e) => renameApp(e.target.value.trim())}
           aria-label="Название приложения"
           spellCheck={false}
         />

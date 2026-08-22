@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useSaveApp, type AppDocument } from "@bildo/api";
+import { ApiError, useSaveApp, type AppDocument } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
 
 const AUTOSAVE_MS = 1200;
@@ -11,7 +11,7 @@ export function useAutosave(appId: string) {
 
   const timerRef = useRef<number | null>(null);
   const latestRef = useRef<AppDocument | null>(null);
-  const skipRef = useRef(true);
+  const seenRef = useRef<AppDocument | null>(null);
   const inFlightRef = useRef<Promise<unknown> | null>(null);
 
   const saveRef = useRef(saveApp.mutateAsync);
@@ -31,7 +31,11 @@ export function useAutosave(appId: string) {
       await run;
       statusRef.current("saved");
       return true;
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        statusRef.current("saved");
+        return true;
+      }
       statusRef.current("error", "Не удалось сохранить");
       return false;
     } finally {
@@ -41,10 +45,10 @@ export function useAutosave(appId: string) {
 
   useEffect(() => {
     if (!document) return;
-    if (skipRef.current) {
-      skipRef.current = false;
-      return;
-    }
+    if (seenRef.current === document) return;
+    const isInitial = seenRef.current === null;
+    seenRef.current = document;
+    if (isInitial) return;
     statusRef.current("dirty");
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {

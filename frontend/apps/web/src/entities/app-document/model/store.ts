@@ -283,7 +283,7 @@ export const useAppDocumentStore = create<AppStore>()(
       set((state) => {
         if (!state.document) return;
         pushPast(state, "Имя", "rename-app");
-        state.document.name = name.trim() || state.document.name;
+        state.document.name = name.trim() === "" ? state.document.name : name;
         touch(state.document);
       }),
 
