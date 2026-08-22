@@ -8,7 +8,7 @@ export default defineConfig({
   forbidOnly: CI,
   retries: CI ? 2 : 0,
   workers: CI ? 1 : undefined,
-  reporter: CI ? "line" : "list",
+  reporter: CI ? [["line"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: "http://localhost:5173",
     trace: "on-first-retry",

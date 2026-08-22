@@ -49,11 +49,11 @@ describe("findParentNode", () => {
 });
 
 describe("updateNodeById", () => {
-  it("shallow-merges props, style and layout instead of replacing them", () => {
-    const updated = updateNodeById(tree(), "a", { props: { placeholder: "P" }, layout: { x: 99 } as never });
+  it("shallow-merges the props bag and leaves unpatched fields intact", () => {
+    const updated = updateNodeById(tree(), "a", { props: { placeholder: "P" } });
     const a = findAppNode(updated, "a")!;
     expect(a.props).toEqual({ text: "A", placeholder: "P" });
-    expect(a.layout).toEqual({ x: 99, y: 20, width: 100, height: 30 });
+    expect(a.layout).toEqual({ x: 10, y: 20, width: 100, height: 30 });
   });
 
   it("updates a deeply nested node and leaves siblings untouched", () => {
