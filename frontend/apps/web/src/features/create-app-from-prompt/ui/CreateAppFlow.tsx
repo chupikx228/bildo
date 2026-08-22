@@ -58,7 +58,9 @@ export function CreateAppFlow() {
     }
   };
 
-  const canSend = prompt.trim().length >= MIN_PROMPT_LENGTH && !createApp.isPending;
+  const pending = createApp.isPending;
+  const promptReady = prompt.trim().length >= MIN_PROMPT_LENGTH;
+  const canSend = promptReady && !pending;
 
   if (mode === "interview") {
     return (
@@ -84,7 +86,7 @@ export function CreateAppFlow() {
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Например: трекер привычек с вкладками «Сегодня», «Статистика» и настройками…"
           rows={4}
-          disabled={createApp.isPending}
+          disabled={pending}
           className="w-full min-h-24 resize-y border-0 outline-0 bg-transparent text-text text-[15px] leading-[1.5] box-border placeholder:text-[#a5a5b0]"
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -204,9 +206,17 @@ export function CreateAppFlow() {
           <button
             type="submit"
             disabled={!canSend}
-            className="px-[18px] py-2.5 border-0 rounded-[10px] bg-[linear-gradient(180deg,#6b7bff_0%,var(--color-accent)_55%,var(--color-accent-strong)_100%)] text-ink-fg text-[13px] font-semibold cursor-pointer shadow-[0_1px_2px_rgba(46,55,150,0.22),0_6px_16px_rgba(92,108,245,0.22)] transition-[filter,box-shadow] duration-[.16s] ease-[ease] enabled:hover:brightness-105 disabled:bg-none disabled:bg-[#ececef] disabled:text-[#a5a5b0] disabled:shadow-none disabled:cursor-not-allowed"
+            aria-busy={pending}
+            className={`grid place-items-center px-[18px] py-2.5 border-0 rounded-[10px] text-[13px] font-semibold transition-[filter,box-shadow,background-color,color] duration-[.16s] ease-[ease] ${
+              promptReady
+                ? "bg-[linear-gradient(180deg,#6b7bff_0%,var(--color-accent)_55%,var(--color-accent-strong)_100%)] text-ink-fg shadow-[0_1px_2px_rgba(46,55,150,0.22),0_6px_16px_rgba(92,108,245,0.22)] enabled:hover:brightness-105"
+                : "bg-[#ececef] text-[#a5a5b0] shadow-none"
+            } ${pending ? "cursor-wait" : canSend ? "cursor-pointer" : "cursor-not-allowed"}`}
           >
-            {createApp.isPending ? "Собираем…" : "Создать приложение"}
+            <span className="[grid-area:1/1] invisible" aria-hidden>
+              Создать приложение
+            </span>
+            <span className="[grid-area:1/1]">{pending ? "Собираем…" : "Создать приложение"}</span>
           </button>
         </div>
       </form>
@@ -216,7 +226,7 @@ export function CreateAppFlow() {
           <button
             key={ex}
             type="button"
-            disabled={createApp.isPending}
+            disabled={pending}
             onClick={() => void submit(ex)}
             className="px-3 py-2 rounded-full border border-[#e4e4ea] bg-[rgba(255,255,255,0.72)] backdrop-blur-[8px] text-muted text-xs cursor-pointer text-left max-w-full disabled:cursor-not-allowed"
           >
