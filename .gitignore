@@ -2,6 +2,11 @@ node_modules/
 dist/
 .turbo/
 *.local
+
+playwright-report/
+test-results/
+blob-report/
+.playwright/
 .DS_Store
 .env
 .env.*
