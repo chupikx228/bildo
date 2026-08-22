@@ -32,6 +32,9 @@ jobs:
       - name: Формат, линт, типы
         run: pnpm check
 
+      - name: Тесты
+        run: pnpm test
+
       - name: Прод-сборка
         run: pnpm build
 

@@ -1,0 +1,19 @@
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if echo "$staged" | grep -q '^frontend/'; then
+  if [ -d frontend/node_modules ]; then
+    echo "husky: frontend staged → lint-staged + typecheck"
+    (cd frontend && pnpm exec lint-staged && pnpm typecheck) || exit 1
+  else
+    echo "husky: frontend/node_modules missing — run 'cd frontend && pnpm install'. Skipping frontend checks." >&2
+  fi
+fi
+
+if echo "$staged" | grep -q '^backend/'; then
+  if command -v make >/dev/null 2>&1 && command -v uv >/dev/null 2>&1; then
+    echo "husky: backend staged → lint + types + arch"
+    (cd backend && make format-check lint typecheck arch) || exit 1
+  else
+    echo "husky: backend toolchain (make/uv) not found — skipping backend checks; backend CI still enforces them." >&2
+  fi
+fi
