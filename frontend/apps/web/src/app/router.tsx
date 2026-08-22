@@ -1,11 +1,15 @@
+import { Suspense, type ReactNode } from "react";
 import { createBrowserRouter } from "react-router";
-import { HomePage } from "@/pages/home";
-import { EditorPage } from "@/pages/editor";
-import { PublicPreviewPage } from "@/pages/public-preview";
 import { ROUTES } from "@/shared/config";
+import { EditorPage, HomePage, PublicPreviewPage } from "./lazyPages";
+import { RouteFallback } from "./RouteFallback";
+
+function lazyRoute(element: ReactNode): ReactNode {
+  return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
+}
 
 export const router = createBrowserRouter([
-  { path: ROUTES.home, element: <HomePage /> },
-  { path: ROUTES.editor(":id"), element: <EditorPage /> },
-  { path: ROUTES.publicPreview(":id"), element: <PublicPreviewPage /> },
+  { path: ROUTES.home, element: lazyRoute(<HomePage />) },
+  { path: ROUTES.editor(":id"), element: lazyRoute(<EditorPage />) },
+  { path: ROUTES.publicPreview(":id"), element: lazyRoute(<PublicPreviewPage />) },
 ]);
