@@ -12,6 +12,7 @@
 | [frontend/overview.md](.claude/knowledge/frontend/overview.md) | стек, структура монорепо, что перенесено из прототипа, кодстайл, команды |
 | [frontend/fsd.md](.claude/knowledge/frontend/fsd.md) | слои FSD, сегменты, публичный API слайса, правила стилей |
 | [frontend/state-management.md](.claude/knowledge/frontend/state-management.md) | Zustand против TanStack Query — чей какой кусок состояния |
+| [frontend/testing.md](.claude/knowledge/frontend/testing.md) | тесты фронта: как запускать, где лежат, Vitest + два окружения, RTL, что с e2e |
 | [backend/overview.md](.claude/knowledge/backend/overview.md) | стек бэкенда и с чем интегрируется фронт |
 | [backend/architecture.md](.claude/knowledge/backend/architecture.md) | слои, Repository + Interface, SOLID, скелеты кода |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | ветки, Conventional Commits, задачи в Jira, пул-реквесты |
@@ -24,6 +25,7 @@
 @.claude/knowledge/frontend/overview.md
 @.claude/knowledge/frontend/fsd.md
 @.claude/knowledge/frontend/state-management.md
+@.claude/knowledge/frontend/testing.md
 @.claude/knowledge/backend/overview.md
 @.claude/knowledge/backend/architecture.md
 @CONTRIBUTING.md
