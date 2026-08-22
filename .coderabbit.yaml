@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# Конфиг автоматического ревью CodeRabbit. Он advisory — мерж не блокирует.
+# Смысл настроек — не дублировать то, что уже ловят ESLint/Prettier/tsc и
+# ruff/mypy/import-linter в CI, и дать ревьюеру контекст правил проекта.
+language: "ru-RU"
+tone_instructions: >-
+  Ищи настоящие баги, логические ошибки, дублирование, мёртвый код и проблемы
+  безопасности. Не повторяй придирки, которые уже ловят линтеры и форматтеры в
+  CI (ESLint, Prettier, tsc, ruff, mypy, import-linter). Пиши коротко и по делу.
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  poem: false
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+  path_filters:
+    - "!**/pnpm-lock.yaml"
+    - "!**/uv.lock"
+    - "!**/*.zip"
+    - "!frontend/apps/web/dist/**"
+  path_instructions:
+    - path: "frontend/**"
+      instructions: >-
+        Не дублируй находки ESLint (включая границы слоёв FSD), Prettier и tsc —
+        они уже в CI. Правила проекта: комментариев в коде нет; только TypeScript,
+        строгая типизация, без any; стили — Tailwind v4 утилитами и токенами
+        дизайн-системы (CSS Modules и сырой hex в классах запрещены); слои FSD
+        app→pages→widgets→features→entities→shared, импорт только вниз и только
+        через публичный index.ts слайса; один компонент — один файл. Форму
+        AppDocument (packages/api/src/apps/model.ts) правь синхронно с Pydantic на
+        бэке; codegen.ts правь синхронно с backend/src/codegen/service.py.
+    - path: "backend/**"
+      instructions: >-
+        Не дублируй находки ruff, mypy strict и import-linter — они уже в CI.
+        Правила: слои router→service→repository, зависимости только вниз и на
+        абстракцию; Repository описывается Protocol, сервис не импортирует
+        sqlalchemy/fastapi; всё, что ходит в сеть или БД — async; доменные
+        исключения, а не HTTPException в сервисе; camelCase-ключи JSON документа
+        сохраняются наружу. Порт генератора codegen/service.py держи в парите с
+        frontend codegen.ts.
+  tools:
+    ruff:
+      enabled: false
+    eslint:
+      enabled: false
+    gitleaks:
+      enabled: true
+chat:
+  auto_reply: true
