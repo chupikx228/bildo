@@ -54,3 +54,8 @@ reviews:
       enabled: true
 chat:
   auto_reply: true
+knowledge_base:
+  jira:
+    usage: "enabled"
+    project_keys:
+      - "BIL"
