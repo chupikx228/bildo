@@ -81,13 +81,14 @@ class AppService:
                 "updated_at": datetime.now(UTC).isoformat(),
             }
         )
-        await self._repository.update_document(app_id, generated)
-        await self._repository.set_generation_status(app_id, "ready", None)
+        app = await self._repository.update_document(app, generated)
+        await self._repository.set_generation_status(app, "ready", None)
 
     async def mark_generation_failed(self, app_id: UUID, error: str) -> None:
-        app = await self._repository.set_generation_status(app_id, "failed", error)
+        app = await self._repository.get(app_id)
         if app is None:
             raise AppNotFound(app_id)
+        await self._repository.set_generation_status(app, "failed", error)
 
     async def save_document(self, app_id: UUID, document: AppDocument) -> AppDocument:
         current = await self._repository.get(app_id)
@@ -95,9 +96,7 @@ class AppService:
             raise AppNotFound(app_id)
         if current.generation_status == "pending":
             raise AppGenerationInProgress(app_id)
-        app = await self._repository.update_document(app_id, document)
-        if app is None:
-            raise AppNotFound(app_id)
+        app = await self._repository.update_document(current, document)
         return AppDocument.model_validate(app.document)
 
     async def delete(self, app_id: UUID) -> bool:

@@ -21,14 +21,14 @@ class AppRepository(Protocol):
         generation_status: GenerationStatus,
     ) -> App: ...
 
-    async def update_document(self, app_id: UUID, document: AppDocument) -> App | None: ...
+    async def update_document(self, app: App, document: AppDocument) -> App: ...
 
     async def set_generation_status(
         self,
-        app_id: UUID,
+        app: App,
         status: GenerationStatus,
         error: str | None,
-    ) -> App | None: ...
+    ) -> App: ...
 
     async def delete(self, app_id: UUID) -> bool: ...
 
@@ -63,10 +63,7 @@ class SqlAlchemyAppRepository:
         await self._session.flush()
         return app
 
-    async def update_document(self, app_id: UUID, document: AppDocument) -> App | None:
-        app = await self._session.get(App, app_id)
-        if app is None:
-            return None
+    async def update_document(self, app: App, document: AppDocument) -> App:
         app.document = document.model_dump(mode="json", by_alias=True, exclude_none=True)
         app.name = document.name
         app.slug = document.slug
@@ -75,13 +72,10 @@ class SqlAlchemyAppRepository:
 
     async def set_generation_status(
         self,
-        app_id: UUID,
+        app: App,
         status: GenerationStatus,
         error: str | None,
-    ) -> App | None:
-        app = await self._session.get(App, app_id)
-        if app is None:
-            return None
+    ) -> App:
         app.generation_status = status
         app.generation_error = error
         await self._session.flush()

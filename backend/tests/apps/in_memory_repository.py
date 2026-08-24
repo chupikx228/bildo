@@ -35,10 +35,7 @@ class InMemoryAppRepository:
         self._apps[app.id] = app
         return app
 
-    async def update_document(self, app_id: UUID, document: AppDocument) -> App | None:
-        app = self._apps.get(app_id)
-        if app is None:
-            return None
+    async def update_document(self, app: App, document: AppDocument) -> App:
         app.document = document.model_dump(mode="json", by_alias=True, exclude_none=True)
         app.name = document.name
         app.slug = document.slug
@@ -47,13 +44,10 @@ class InMemoryAppRepository:
 
     async def set_generation_status(
         self,
-        app_id: UUID,
+        app: App,
         status: GenerationStatus,
         error: str | None,
-    ) -> App | None:
-        app = self._apps.get(app_id)
-        if app is None:
-            return None
+    ) -> App:
         app.generation_status = status
         app.generation_error = error
         return app
