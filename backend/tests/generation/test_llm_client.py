@@ -100,6 +100,31 @@ async def test_downgrades_to_json_object_when_json_schema_is_rejected(build_clie
     assert gateway.payloads[1]["response_format"] == {"type": "json_object"}
 
 
+class EmbeddedErrorGateway:
+    def __init__(self, rejected: set[str]) -> None:
+        self._rejected = rejected
+        self.modes: list[str] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        payload: dict[str, Any] = json.loads(request.content)
+        response_format = payload.get("response_format")
+        mode = NO_FORMAT if response_format is None else str(response_format["type"])
+        self.modes.append(mode)
+        if mode in self._rejected:
+            return httpx.Response(200, json={"error": f"response_format {mode} is not supported"})
+        return httpx.Response(200, json=completion_body(ANSWER))
+
+
+async def test_downgrades_when_gateway_embeds_the_error_in_a_200_response(build_client: BuildClient) -> None:
+    gateway = EmbeddedErrorGateway(rejected={"json_schema"})
+    client = build_client(gateway)
+
+    assert await complete(client) == ANSWER
+    await client.aclose()
+
+    assert gateway.modes == ["json_schema", "json_object"]
+
+
 async def test_downgrades_on_unprocessable_entity_too(build_client: BuildClient) -> None:
     gateway = StubGateway(rejected={"json_schema"}, status=422)
     client = build_client(gateway)
