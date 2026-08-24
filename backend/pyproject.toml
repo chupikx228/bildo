@@ -134,5 +134,5 @@ forbidden_modules = ["arq", "sqlalchemy", "fastapi", "src.queue.arq_queue"]
 name = "Domains communicate only through the public layer (service/schemas)"
 type = "forbidden"
 source_modules = ["src.codegen", "src.generation"]
-forbidden_modules = ["src.apps.repository", "src.apps.models", "src.apps.service"]
+forbidden_modules = ["src.apps.repository", "src.apps.models"]
 allow_indirect_imports = true

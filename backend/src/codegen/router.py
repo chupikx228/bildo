@@ -1,8 +1,10 @@
+from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Response
 
-from src.apps.dependencies import AppServiceDep
+from src.apps.dependencies import get_app_service
+from src.apps.service import AppService
 from src.codegen.exceptions import ExportTimeout
 from src.codegen.service import slugify
 from src.queue.dependencies import TaskQueueDep
@@ -14,7 +16,11 @@ router = APIRouter(prefix="/api/apps", tags=["codegen"])
 
 
 @router.get("/{app_id}/export", response_class=Response)
-async def export_app(app_id: UUID, service: AppServiceDep, task_queue: TaskQueueDep) -> Response:
+async def export_app(
+    app_id: UUID,
+    service: Annotated[AppService, Depends(get_app_service)],
+    task_queue: TaskQueueDep,
+) -> Response:
     app = await service.get_app(app_id)
     try:
         archive: bytes = await task_queue.enqueue_and_wait(
