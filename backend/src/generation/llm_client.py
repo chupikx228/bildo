@@ -60,10 +60,15 @@ class RouterAiLlmClient:
                     response_format=_response_format(self._mode, schema_name, schema),
                 )
             except (BadRequestError, UnprocessableEntityError) as error:
-                self._downgrade_response_format(error)
+                self._downgrade_response_format(str(error))
                 continue
             except APIError as error:
                 raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
+
+            provider_error = _extract_provider_error(completion)
+            if provider_error is not None:
+                self._downgrade_response_format(provider_error)
+                continue
 
             return _extract_content(completion)
 
@@ -80,16 +85,16 @@ class RouterAiLlmClient:
             logger.info("RouterAI client ready: base_url=%s model=%s", self._base_url, self._model)
         return self._client
 
-    def _downgrade_response_format(self, error: APIError) -> None:
+    def _downgrade_response_format(self, detail: str) -> None:
         downgraded = RESPONSE_FORMAT_DOWNGRADE[self._mode]
         if downgraded is None:
-            raise GenerationError(f"RouterAI отклонил запрос генерации: {error}") from error
+            raise GenerationError(f"RouterAI отклонил запрос генерации: {detail}")
         logger.warning(
             "RouterAI rejected response_format=%s for model %s, falling back to %s: %s",
             self._mode,
             self._model,
             downgraded,
-            error,
+            detail,
         )
         self._mode = downgraded
 
@@ -111,6 +116,15 @@ def _to_message_param(message: ChatMessage) -> ChatCompletionMessageParam:
     if message["role"] == "assistant":
         return ChatCompletionAssistantMessageParam(role="assistant", content=message["content"])
     return ChatCompletionUserMessageParam(role="user", content=message["content"])
+
+
+def _extract_provider_error(completion: ChatCompletion) -> str | None:
+    if completion.choices:
+        return None
+    error = getattr(completion, "error", None)
+    if error is None:
+        return None
+    return str(error)
 
 
 def _extract_content(completion: ChatCompletion) -> str:
