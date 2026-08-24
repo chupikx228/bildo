@@ -53,21 +53,22 @@ class RouterAiLlmClient:
         payload = [_to_message_param(message) for message in messages]
 
         while True:
+            mode = self._mode
             try:
                 completion = await client.chat.completions.create(
                     model=self._model,
                     messages=payload,
-                    response_format=_response_format(self._mode, schema_name, schema),
+                    response_format=_response_format(mode, schema_name, schema),
                 )
             except (BadRequestError, UnprocessableEntityError) as error:
-                self._downgrade_response_format(str(error))
+                self._downgrade_response_format(mode, str(error))
                 continue
             except APIError as error:
                 raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
 
             provider_error = _extract_provider_error(completion)
             if provider_error is not None:
-                self._downgrade_response_format(provider_error)
+                self._downgrade_response_format(mode, provider_error)
                 continue
 
             return _extract_content(completion)
@@ -85,13 +86,15 @@ class RouterAiLlmClient:
             logger.info("RouterAI client ready: base_url=%s model=%s", self._base_url, self._model)
         return self._client
 
-    def _downgrade_response_format(self, detail: str) -> None:
-        downgraded = RESPONSE_FORMAT_DOWNGRADE[self._mode]
+    def _downgrade_response_format(self, observed_mode: ResponseFormatMode, detail: str) -> None:
+        if self._mode != observed_mode:
+            return
+        downgraded = RESPONSE_FORMAT_DOWNGRADE[observed_mode]
         if downgraded is None:
             raise GenerationError(f"RouterAI отклонил запрос генерации: {detail}")
         logger.warning(
             "RouterAI rejected response_format=%s for model %s, falling back to %s: %s",
-            self._mode,
+            observed_mode,
             self._model,
             downgraded,
             detail,

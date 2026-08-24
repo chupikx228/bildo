@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import Callable
 from typing import Any
@@ -32,7 +33,15 @@ def completion_body(content: str | None) -> dict[str, Any]:
         "object": "chat.completion",
         "created": 0,
         "model": MODEL,
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
+        "provider": "DeepSeek",
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": content, "reasoning": None},
+                "finish_reason": "stop",
+                "native_finish_reason": "stop",
+            }
+        ],
     }
 
 
@@ -100,6 +109,35 @@ async def test_downgrades_to_json_object_when_json_schema_is_rejected(build_clie
     assert gateway.payloads[1]["response_format"] == {"type": "json_object"}
 
 
+def embedded_error_body(mode: str) -> dict[str, Any]:
+    raw = json.dumps(
+        {
+            "error": {
+                "message": f"response_format {mode} is not supported",
+                "type": "invalid_request_error",
+                "param": None,
+                "code": None,
+            }
+        }
+    )
+    return {
+        "id": "gen-test",
+        "object": "chat.completion",
+        "created": 0,
+        "model": MODEL,
+        "provider": "DeepSeek",
+        "choices": [],
+        "error": {
+            "message": "Provider returned error",
+            "code": 400,
+            "metadata": {"provider_name": "DeepSeek", "raw": raw},
+        },
+        "previous_errors": [
+            {"provider_name": "DeepSeek", "error": {"message": "Provider returned error", "code": 400}},
+        ],
+    }
+
+
 class EmbeddedErrorGateway:
     def __init__(self, rejected: set[str]) -> None:
         self._rejected = rejected
@@ -111,7 +149,7 @@ class EmbeddedErrorGateway:
         mode = NO_FORMAT if response_format is None else str(response_format["type"])
         self.modes.append(mode)
         if mode in self._rejected:
-            return httpx.Response(200, json={"error": f"response_format {mode} is not supported"})
+            return httpx.Response(200, json=embedded_error_body(mode))
         return httpx.Response(200, json=completion_body(ANSWER))
 
 
@@ -212,3 +250,46 @@ async def test_missing_api_key_is_reported_before_any_request(monkeypatch: pytes
 
     with pytest.raises(GenerationNotConfiguredError):
         await complete(client)
+
+
+async def test_concurrent_completions_converge_on_the_response_format_without_racing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    concurrency = 8
+    barrier = asyncio.Barrier(concurrency)
+
+    class ConcurrentRejectGateway:
+        def __init__(self, rejected: set[str]) -> None:
+            self._rejected = rejected
+            self.modes: list[str] = []
+
+        async def __call__(self, request: httpx.Request) -> httpx.Response:
+            payload: dict[str, Any] = json.loads(request.content)
+            response_format = payload.get("response_format")
+            mode = NO_FORMAT if response_format is None else str(response_format["type"])
+            self.modes.append(mode)
+            await barrier.wait()
+            if mode in self._rejected:
+                return httpx.Response(400, json={"error": {"message": f"response_format {mode} is not supported"}})
+            return httpx.Response(200, json=completion_body(ANSWER))
+
+    gateway = ConcurrentRejectGateway(rejected={"json_schema"})
+
+    def make_openai(*, api_key: str, base_url: str) -> AsyncOpenAI:
+        return AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            max_retries=0,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(gateway)),
+        )
+
+    monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
+    client = RouterAiLlmClient("test-key", BASE_URL, MODEL)
+
+    results = await asyncio.gather(*(complete(client) for _ in range(concurrency)))
+    await client.aclose()
+
+    assert results == [ANSWER] * concurrency
+    assert client._mode == "json_object"
+    assert gateway.modes.count("json_schema") == concurrency
+    assert gateway.modes.count("json_object") == concurrency
