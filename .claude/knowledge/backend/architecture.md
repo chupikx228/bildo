@@ -586,11 +586,24 @@ make fix     # отформатировать и починить всё авт�
 
 ## 13. Тесты
 
-Минимум, который должен быть:
+Все три уровня закрыты (BIL-24):
 
 - **Сервисы** — с репозиторием в памяти, без БД. Именно ради этого нужен Protocol: `InMemoryAppRepository` реализует те же методы, и `AppService` не замечает подмены.
-- **Репозитории** — на реальном PostgreSQL (testcontainers или отдельная тестовая БД). Мокать SQLAlchemy бессмысленно: так проверяется только то, что мок настроен.
-- **Роутеры** — через `httpx.AsyncClient`, проверяются коды ответов и формы тел из [`../api-contract.md`](../api-contract.md).
+- **Репозитории** — на реальном PostgreSQL через testcontainers (`tests/apps/test_repository.py`, `tests/conftest.py`). Мокать SQLAlchemy бессмысленно: так проверяется только то, что мок настроен.
+- **Роутеры** — через `httpx.AsyncClient` с in-memory репозиторием, проверяются коды ответов и формы тел из [`../api-contract.md`](../api-contract.md).
+- **Integration/e2e** (`tests/integration/`) — полный HTTP-стек (`httpx.AsyncClient` + ASGI-транспорт) поверх реального PostgreSQL: создание приложения → генерация → сохранение документа → чтение → удаление, 409 на `PUT` во время `pending`, 404 с телом ошибки, экспорт (реальный zip-архив через inline-прогон `build_export_zip`).
+
+### Маркер `integration` и Docker
+
+Тесты, которым нужен реальный Postgres (репозитории и `tests/integration/`), помечены `@pytest.mark.integration` и требуют Docker — `tests/conftest.py` поднимает `PostgresContainer` через testcontainers и сам определяет доступность Docker (`requires_docker = pytest.mark.skipif(...)`). Без Docker эти тесты **скипаются**, а не падают — `pnpm`-эквивалент здесь, `make check`/`make coverage`, остаётся зелёным и у тех, кто Docker не поставил.
+
+В CI (`.github/workflows/backend.yml`) Docker на хостед `ubuntu-latest` раннере доступен из коробки для джобов, идущих прямо на хосте (не в `container:`) — подтверждено официальным software-манифестом `actions/runner-images` для Ubuntu 24.04 (Docker Client/Server/Compose/Buildx предустановлены) и независимо блогом Docker Inc. про testcontainers на GitHub Actions. Никаких `services:`-блоков, `docker:dind` или Ryuk-специфичных переменных окружения (`TESTCONTAINERS_RYUK_DISABLED` и т.п. — это workaround для rootless/ограниченных сред, не для стандартных hosted-раннеров) не нужно. Перед шагом тестов в workflow стоит диагностический шаг `docker info` — чтобы недоступность демона (если раннер вдруг изменится) падала явной ошибкой, а не непрозрачным сбоем Ryuk/testcontainers внутри pytest. Перепроверить на практике после пуша: открыть последний прогон джоба `check` в Actions и убедиться, что шаг «Tests with coverage» показывает **150 passed**, а не 137 (137 — признак того, что integration-тесты скипнулись бы из-за недоступности Docker).
+
+### Покрытие
+
+`make coverage` (или `make check`, который его включает) — `pytest --cov=src --cov-report=term-missing`, порог из `[tool.coverage.report].fail_under` в `backend/pyproject.toml`. Порог **84%** подобран с запасом в несколько пунктов вниз от обеих измеренных базовых линий: ~91.7% с Docker (все 150 тестов, включая integration) и ~87.7% без Docker (137 тестов, integration скипнуты) — обе цифры измерены на реальном прогоне, не оценены на глаз. Запас нужен именно из-за этого разрыва: локальный прогон без Docker закономерно даёт меньший процент (не выполняются строки, которые покрывают только integration-тесты), и порог обязан проходить в обоих случаях, иначе `make check` ломался бы просто потому, что у разработчика не поставлен Docker.
+
+Не покрыто сознательно: `src/worker/main.py` (сборка `WorkerSettings`, `on_startup`/`on_shutdown` — инфраструктурная обвязка Arq, тестируется бы только против настоящего Redis) и часть `src/queue/arq_queue.py`/`src/dependencies.py` (создание реального пула соединений) — оба не участвуют ни в одном юнит- или integration-сценарии и не влияют на бизнес-логику.
 
 ---
 

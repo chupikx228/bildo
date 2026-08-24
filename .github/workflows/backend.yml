@@ -51,5 +51,8 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Tests
-        run: uv run pytest
+      - name: Docker availability (integration tests need it)
+        run: docker info
+
+      - name: Tests with coverage
+        run: uv run pytest --cov=src --cov-report=term-missing
