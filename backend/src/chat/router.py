@@ -1,11 +1,17 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 
 from src.apps.schemas import AppDocument
 from src.chat.dependencies import ChatServiceDep
 from src.chat.models import ChatMessage as ChatMessageRecord
-from src.chat.schemas import ChatMessage, ChatMessageListResponse, DecisionRequest
+from src.chat.schemas import (
+    ChatMessage,
+    ChatMessageListResponse,
+    DecisionRequest,
+    SendMessageRequest,
+    SendMessageResponse,
+)
 
 router = APIRouter(prefix="/api/apps/{app_id}/chat", tags=["chat"])
 
@@ -14,6 +20,12 @@ router = APIRouter(prefix="/api/apps/{app_id}/chat", tags=["chat"])
 async def list_messages(app_id: UUID, service: ChatServiceDep) -> ChatMessageListResponse:
     messages = await service.list_messages(app_id)
     return ChatMessageListResponse(messages=[_to_schema(message) for message in messages])
+
+
+@router.post("/messages", status_code=status.HTTP_202_ACCEPTED, response_model=SendMessageResponse)
+async def send_message(app_id: UUID, body: SendMessageRequest, service: ChatServiceDep) -> SendMessageResponse:
+    task_id = await service.send_message(app_id, body.content)
+    return SendMessageResponse(task_id=task_id)
 
 
 @router.post("/messages/{message_id}/decision")

@@ -50,17 +50,3 @@ def build_messages(prompt: str, name: str | None) -> list[ChatMessage]:
         ChatMessage(role="system", content=build_system_prompt()),
         ChatMessage(role="user", content=request),
     ]
-
-
-def build_retry_messages(raw_answer: str, error: str) -> list[ChatMessage]:
-    return [
-        ChatMessage(role="assistant", content=raw_answer),
-        ChatMessage(
-            role="user",
-            content=(
-                "Этот ответ не прошёл валидацию документа приложения:\n"
-                f"{error}\n\n"
-                "Исправь перечисленные ошибки и верни весь документ целиком одним JSON-объектом."
-            ),
-        ),
-    ]

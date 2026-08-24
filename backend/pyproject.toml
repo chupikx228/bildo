@@ -56,6 +56,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "src/generation/prompt.py" = ["RUF001"]
+"src/chat/prompt.py" = ["RUF001"]
 "alembic/**" = ["N999", "E402", "I001"]
 
 [tool.ruff.lint.flake8-bugbear]
@@ -134,10 +135,12 @@ type = "forbidden"
 source_modules = [
     "src.apps.service",
     "src.chat.service",
+    "src.chat.prompt",
     "src.codegen.service",
     "src.generation.service",
     "src.generation.llm_client",
     "src.generation.prompt",
+    "src.generation.structured_output",
     "src.tasks.service",
 ]
 forbidden_modules = ["sqlalchemy", "fastapi", "arq"]
@@ -150,8 +153,14 @@ source_modules = ["src.queue.base"]
 forbidden_modules = ["arq", "sqlalchemy", "fastapi", "src.queue.arq_queue"]
 
 [[tool.importlinter.contracts]]
+name = "Transaction abstraction doesn't know about its SQLAlchemy implementation"
+type = "forbidden"
+source_modules = ["src.transaction.base"]
+forbidden_modules = ["sqlalchemy", "fastapi", "arq", "src.transaction.session_transaction"]
+
+[[tool.importlinter.contracts]]
 name = "Domains communicate only through the public layer (service/schemas)"
 type = "forbidden"
-source_modules = ["src.codegen", "src.generation"]
+source_modules = ["src.codegen", "src.generation", "src.chat.service", "src.chat.prompt"]
 forbidden_modules = ["src.apps.repository", "src.apps.models"]
 allow_indirect_imports = true
