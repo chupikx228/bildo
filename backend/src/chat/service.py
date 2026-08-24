@@ -27,9 +27,9 @@ class ChatService:
         await self._app_service.get_app(app_id)
         return await self._repository.create_message(app_id, role, content, proposed_document)
 
-    async def record_decision(self, message_id: UUID, accepted: bool) -> ChatMessage:
+    async def record_decision(self, app_id: UUID, message_id: UUID, accepted: bool) -> ChatMessage:
         message = await self._repository.get_message(message_id)
-        if message is None:
+        if message is None or message.app_id != app_id:
             raise ChatMessageNotFound(message_id)
         if message.role != "assistant" or message.proposed_document is None:
             raise MessageNotDecidable(message_id)

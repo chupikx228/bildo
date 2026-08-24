@@ -23,7 +23,7 @@ async def decide_message(
     body: DecisionRequest,
     service: ChatServiceDep,
 ) -> dict[str, object]:
-    message = await service.record_decision(message_id, body.accepted)
+    message = await service.record_decision(app_id, message_id, body.accepted)
     return {"ok": True, "message": _to_schema(message)}
 
 
