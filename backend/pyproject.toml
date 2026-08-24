@@ -121,7 +121,7 @@ source_modules = [
     "src.generation.prompt",
     "src.tasks.service",
 ]
-forbidden_modules = ["sqlalchemy", "fastapi"]
+forbidden_modules = ["sqlalchemy", "fastapi", "arq"]
 allow_indirect_imports = "true"
 
 [[tool.importlinter.contracts]]

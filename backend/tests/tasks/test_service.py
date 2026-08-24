@@ -1,40 +1,39 @@
 import pytest
-from arq.jobs import JobStatus
 
+from src.queue.base import JobStatus, JobStatusInfo
 from src.tasks.schemas import TaskStatus
 from src.tasks.service import TaskService
-from tests.tasks.fake_job import FakeJobState, FakeResultInfo, install_fake_job
+from tests.tasks.fake_job import FakeJobStatusReader
 
 TASK_ID = "8c90a14f-0000-4000-8000-000000000000"
 
 
 @pytest.fixture
-def states() -> dict[str, FakeJobState]:
+def states() -> dict[str, JobStatusInfo]:
     return {}
 
 
 @pytest.fixture
-def service(monkeypatch: pytest.MonkeyPatch, states: dict[str, FakeJobState]) -> TaskService:
-    install_fake_job(monkeypatch, states)
-    return TaskService(object())  # type: ignore[arg-type]
+def service(states: dict[str, JobStatusInfo]) -> TaskService:
+    return TaskService(FakeJobStatusReader(states))
 
 
 @pytest.mark.parametrize(
     ("job_status", "expected"),
     [
-        (JobStatus.deferred, "deferred"),
-        (JobStatus.queued, "queued"),
-        (JobStatus.in_progress, "in_progress"),
-        (JobStatus.not_found, "not_found"),
+        ("deferred", "deferred"),
+        ("queued", "queued"),
+        ("in_progress", "in_progress"),
+        ("not_found", "not_found"),
     ],
 )
 async def test_get_status_maps_job_status(
     service: TaskService,
-    states: dict[str, FakeJobState],
+    states: dict[str, JobStatusInfo],
     job_status: JobStatus,
     expected: TaskStatus,
 ) -> None:
-    states[TASK_ID] = FakeJobState(status=job_status)
+    states[TASK_ID] = JobStatusInfo(status=job_status)
 
     response = await service.get_status(TASK_ID)
 
@@ -52,12 +51,9 @@ async def test_get_status_returns_not_found_for_unknown_task(service: TaskServic
 
 async def test_get_status_returns_result_of_successful_job(
     service: TaskService,
-    states: dict[str, FakeJobState],
+    states: dict[str, JobStatusInfo],
 ) -> None:
-    states[TASK_ID] = FakeJobState(
-        status=JobStatus.complete,
-        result_info=FakeResultInfo(success=True, result={"files": 12}),
-    )
+    states[TASK_ID] = JobStatusInfo(status="complete", result={"files": 12})
 
     response = await service.get_status(TASK_ID)
 
@@ -68,12 +64,9 @@ async def test_get_status_returns_result_of_successful_job(
 
 async def test_get_status_returns_error_of_failed_job(
     service: TaskService,
-    states: dict[str, FakeJobState],
+    states: dict[str, JobStatusInfo],
 ) -> None:
-    states[TASK_ID] = FakeJobState(
-        status=JobStatus.complete,
-        result_info=FakeResultInfo(success=False, result=RuntimeError("Ошибка генерации приложения")),
-    )
+    states[TASK_ID] = JobStatusInfo(status="complete", error="Ошибка генерации приложения")
 
     response = await service.get_status(TASK_ID)
 
@@ -84,9 +77,9 @@ async def test_get_status_returns_error_of_failed_job(
 
 async def test_get_status_survives_expired_result_of_complete_job(
     service: TaskService,
-    states: dict[str, FakeJobState],
+    states: dict[str, JobStatusInfo],
 ) -> None:
-    states[TASK_ID] = FakeJobState(status=JobStatus.complete, result_info=None)
+    states[TASK_ID] = JobStatusInfo(status="complete")
 
     response = await service.get_status(TASK_ID)
 

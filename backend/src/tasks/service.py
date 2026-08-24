@@ -1,31 +1,11 @@
-from arq.connections import ArqRedis
-from arq.jobs import Job, JobStatus
-
-from src.tasks.schemas import TaskStatus, TaskStatusResponse
-
-STATUS_BY_JOB_STATUS: dict[JobStatus, TaskStatus] = {
-    JobStatus.deferred: "deferred",
-    JobStatus.queued: "queued",
-    JobStatus.in_progress: "in_progress",
-    JobStatus.complete: "complete",
-    JobStatus.not_found: "not_found",
-}
+from src.queue.base import JobStatusReader
+from src.tasks.schemas import TaskStatusResponse
 
 
 class TaskService:
-    def __init__(self, redis: ArqRedis) -> None:
-        self._redis = redis
+    def __init__(self, job_status_reader: JobStatusReader) -> None:
+        self._job_status_reader = job_status_reader
 
     async def get_status(self, task_id: str) -> TaskStatusResponse:
-        job = Job(task_id, self._redis)
-        job_status = await job.status()
-        status = STATUS_BY_JOB_STATUS[job_status]
-        if job_status is not JobStatus.complete:
-            return TaskStatusResponse(id=task_id, status=status)
-
-        info = await job.result_info()
-        if info is None:
-            return TaskStatusResponse(id=task_id, status=status)
-        if info.success:
-            return TaskStatusResponse(id=task_id, status=status, result=info.result)
-        return TaskStatusResponse(id=task_id, status=status, error=str(info.result))
+        info = await self._job_status_reader.read(task_id)
+        return TaskStatusResponse(id=task_id, status=info.status, result=info.result, error=info.error)
