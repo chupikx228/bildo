@@ -77,7 +77,9 @@ async def create_generated_app(
     prompt: str = "a habit tracker",
 ) -> str:
     app_id = await create_app(client, prompt)
-    await repository.set_generation_status(UUID(app_id), "ready", None)
+    app = await repository.get(UUID(app_id))
+    assert app is not None
+    await repository.set_generation_status(app, "ready", None)
     return app_id
 
 
