@@ -24,3 +24,5 @@ __pycache__/
 .vscode/
 
 .claude/settings.local.json
+backend/.coverage
+backend/htmlcov/
