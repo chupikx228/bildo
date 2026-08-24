@@ -126,13 +126,14 @@ include_external_packages = true
 name = "Layers: router → service → repository. Dependencies only point down"
 type = "layers"
 layers = ["(router)", "(service)", "(repository)", "(models)"]
-containers = ["src.apps", "src.codegen", "src.generation", "src.tasks"]
+containers = ["src.apps", "src.chat", "src.codegen", "src.generation", "src.tasks"]
 
 [[tool.importlinter.contracts]]
 name = "Dependency Inversion: service doesn't know about SQLAlchemy or FastAPI"
 type = "forbidden"
 source_modules = [
     "src.apps.service",
+    "src.chat.service",
     "src.codegen.service",
     "src.generation.service",
     "src.generation.llm_client",

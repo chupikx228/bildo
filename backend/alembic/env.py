@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-import src.apps.models  # noqa: F401
+import src.apps.models
+import src.chat.models  # noqa: F401
 from src.config import settings
 from src.database import Base
 
