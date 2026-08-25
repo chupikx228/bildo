@@ -107,7 +107,7 @@ def storage(
 
 
 async def create_pending_app(repository: InMemoryAppRepository) -> UUID:
-    service = AppService(repository, InMemoryTaskQueue())
+    service = AppService(repository, InMemoryTaskQueue(), InMemoryTransaction())
     return await service.create_from_prompt(PROMPT, None)
 
 
@@ -262,7 +262,7 @@ async def test_chat_turn_takes_exactly_the_kwargs_the_chat_service_enqueues(
     assert app is not None
     await repository.set_generation_status(app, "ready", None)
     queue = InMemoryTaskQueue()
-    app_service = AppService(repository, queue)
+    app_service = AppService(repository, queue, InMemoryTransaction())
     service = ChatService(InMemoryChatRepository(), app_service, InMemoryTransaction(), queue)
 
     await service.send_message(app_id, "добавь экран настроек")

@@ -14,6 +14,7 @@ from src.main import app
 from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.in_memory_task_queue import InMemoryTaskQueue
+from tests.in_memory_transaction import InMemoryTransaction
 
 
 def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, object]:
@@ -58,7 +59,7 @@ async def client(
     repository: InMemoryAppRepository,
     task_queue: InMemoryTaskQueue,
 ) -> AsyncIterator[httpx.AsyncClient]:
-    app.dependency_overrides[get_app_service] = lambda: AppService(repository, task_queue)
+    app.dependency_overrides[get_app_service] = lambda: AppService(repository, task_queue, InMemoryTransaction())
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
         yield async_client
