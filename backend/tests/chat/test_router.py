@@ -28,7 +28,7 @@ def chat_repository() -> InMemoryChatRepository:
 
 @pytest.fixture
 def app_service(app_repository: InMemoryAppRepository) -> AppService:
-    return AppService(app_repository, InMemoryTaskQueue())
+    return AppService(app_repository, InMemoryTaskQueue(), InMemoryTransaction())
 
 
 @pytest.fixture

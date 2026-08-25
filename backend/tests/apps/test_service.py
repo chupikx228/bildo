@@ -9,6 +9,7 @@ from src.apps.service import AppService
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.generation.template_fixtures import build_template_document
 from tests.in_memory_task_queue import InMemoryTaskQueue
+from tests.in_memory_transaction import FailingTransaction, InMemoryTransaction
 
 
 def build_document(app_id: str) -> AppDocument:
@@ -43,13 +44,27 @@ def repository() -> InMemoryAppRepository:
 
 
 @pytest.fixture
-def task_queue() -> InMemoryTaskQueue:
-    return InMemoryTaskQueue()
+def events() -> list[str]:
+    return []
 
 
 @pytest.fixture
-def service(repository: InMemoryAppRepository, task_queue: InMemoryTaskQueue) -> AppService:
-    return AppService(repository, task_queue)
+def task_queue(events: list[str]) -> InMemoryTaskQueue:
+    return InMemoryTaskQueue(events=events)
+
+
+@pytest.fixture
+def transaction(events: list[str]) -> InMemoryTransaction:
+    return InMemoryTransaction(events)
+
+
+@pytest.fixture
+def service(
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+    transaction: InMemoryTransaction,
+) -> AppService:
+    return AppService(repository, task_queue, transaction)
 
 
 async def test_list_apps_is_empty_on_start(service: AppService) -> None:
@@ -66,6 +81,29 @@ async def test_create_from_prompt_creates_valid_document(service: AppService) ->
     assert document.prompt == "a habit tracker"
     assert document.screens == []
     assert document.theme.color_primary == "#5C6CF5"
+
+
+async def test_create_from_prompt_commits_the_app_before_enqueuing_generation(
+    service: AppService,
+    events: list[str],
+) -> None:
+    await service.create_from_prompt("a habit tracker", None)
+
+    assert events == ["commit", "enqueue"]
+
+
+async def test_create_from_prompt_does_not_enqueue_generation_when_the_commit_fails(
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+    events: list[str],
+) -> None:
+    service = AppService(repository, task_queue, FailingTransaction(events))
+
+    with pytest.raises(RuntimeError):
+        await service.create_from_prompt("a habit tracker", None)
+
+    assert events == ["commit"]
+    assert task_queue.jobs == []
 
 
 async def test_get_app_raises_not_found_for_unknown_id(service: AppService) -> None:

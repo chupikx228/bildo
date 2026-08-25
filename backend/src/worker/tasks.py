@@ -28,7 +28,7 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
     llm_client: LlmClient = ctx["llm_client"]
     try:
         async with async_session_factory() as session:
-            service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis))
+            service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis), SessionTransaction(session))
             document = await generate_document(
                 prompt,
                 name,
@@ -39,7 +39,11 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
             await session.commit()
     except Exception as error:
         async with async_session_factory() as failure_session:
-            failure_service = AppService(SqlAlchemyAppRepository(failure_session), ArqTaskQueue(redis))
+            failure_service = AppService(
+                SqlAlchemyAppRepository(failure_session),
+                ArqTaskQueue(redis),
+                SessionTransaction(failure_session),
+            )
             await failure_service.mark_generation_failed(UUID(app_id), f"Ошибка генерации приложения: {error}")
             await failure_session.commit()
         raise
@@ -48,7 +52,7 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
 async def build_export_zip(ctx: dict[Any, Any], app_id: str) -> bytes:
     redis: ArqRedis = ctx["redis"]
     async with async_session_factory() as session:
-        service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis))
+        service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis), SessionTransaction(session))
         app = await service.get_app(UUID(app_id))
         document = AppDocument.model_validate(app.document)
     return build_zip(generate_files(document))
@@ -59,8 +63,8 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
     llm_client: LlmClient = ctx["llm_client"]
     answered_message_id = UUID(message_id)
     async with async_session_factory() as session:
-        app_service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis))
         transaction = SessionTransaction(session)
+        app_service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis), transaction)
         chat_service = ChatService(SqlAlchemyChatRepository(session), app_service, transaction)
         if await chat_service.has_reply(answered_message_id):
             return

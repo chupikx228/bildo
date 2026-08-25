@@ -7,6 +7,7 @@ from src.apps.repository import AppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppSummary, AppThemeTokens
 from src.queue.base import TaskQueue
 from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
+from src.transaction.base import Transaction
 
 DEFAULT_THEME = AppThemeTokens(
     color_bg="#FBFBFC",
@@ -25,9 +26,10 @@ DEFAULT_APP_NAME = "New app"
 
 
 class AppService:
-    def __init__(self, repository: AppRepository, task_queue: TaskQueue) -> None:
+    def __init__(self, repository: AppRepository, task_queue: TaskQueue, transaction: Transaction) -> None:
         self._repository = repository
         self._task_queue = task_queue
+        self._transaction = transaction
 
     async def list_apps(self) -> list[AppSummary]:
         apps = await self._repository.list_all()
@@ -57,15 +59,16 @@ class AppService:
             created_at=now,
             updated_at=now,
         )
-        app = await self._repository.create(document_name, prompt, document, "pending")
+        await self._repository.create(document_name, prompt, document, "pending")
+        await self._transaction.commit()
         await self._task_queue.enqueue(
             GENERATE_APP_DOCUMENT_JOB,
-            str(app.id),
-            app_id=str(app.id),
+            str(app_id),
+            app_id=str(app_id),
             prompt=prompt,
             name=name,
         )
-        return app.id
+        return app_id
 
     async def mark_generated(self, app_id: UUID, document: AppDocument) -> None:
         app = await self._repository.get(app_id)
