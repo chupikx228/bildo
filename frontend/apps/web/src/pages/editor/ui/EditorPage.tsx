@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useParams } from "react-router";
 import { useApp } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
+import { AppGeneratingScreen, LOADING_LABEL } from "@/shared/ui";
 import { EditorWorkspace } from "./EditorWorkspace";
 
 const WORKSPACE = "h-[100dvh] min-h-[520px] flex flex-col overflow-hidden bg-bg text-text";
@@ -22,11 +23,7 @@ export function EditorPage() {
   }, [data, id, setDocument]);
 
   if (isLoading) {
-    return (
-      <div className={WORKSPACE}>
-        <p className={STATUS}>Загрузка приложения…</p>
-      </div>
-    );
+    return <AppGeneratingScreen label={LOADING_LABEL} />;
   }
 
   if (isError) {
@@ -46,11 +43,7 @@ export function EditorPage() {
   }
 
   if (data?.generationStatus === "pending" || !document) {
-    return (
-      <div className={WORKSPACE}>
-        <p className={STATUS}>Генерируем приложение…</p>
-      </div>
-    );
+    return <AppGeneratingScreen />;
   }
 
   return <EditorWorkspace appId={id} document={document} />;
