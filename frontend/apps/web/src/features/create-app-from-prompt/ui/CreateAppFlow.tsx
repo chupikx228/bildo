@@ -70,6 +70,7 @@ export function CreateAppFlow() {
     return (
       <AiInterview
         busy={createApp.isPending}
+        error={error}
         onClose={() => setMode("prompt")}
         onSubmit={(text) => void submit(text)}
       />
