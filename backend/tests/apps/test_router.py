@@ -11,7 +11,7 @@ from src.apps.dependencies import get_app_service
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
 from src.config import settings
-from src.generation.model_catalog import ModelInfo
+from src.generation.model_catalog import CURATED_MODELS
 from src.main import app
 from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
 from tests.apps.in_memory_repository import InMemoryAppRepository
@@ -19,8 +19,9 @@ from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
 from tests.in_memory_task_queue import InMemoryTaskQueue
 from tests.in_memory_transaction import InMemoryTransaction
 
-VALID_MODEL = "openai/gpt-5"
+VALID_MODEL = "anthropic/claude-opus-5"
 UNKNOWN_MODEL = "bogus/model"
+UNCURATED_MODEL = "openai/gpt-5.6-luna"
 
 
 def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, object]:
@@ -62,7 +63,7 @@ def task_queue() -> InMemoryTaskQueue:
 
 @pytest.fixture
 def catalog() -> InMemoryModelCatalog:
-    return InMemoryModelCatalog([ModelInfo(id=VALID_MODEL, name="OpenAI: GPT-5", pro=True)])
+    return InMemoryModelCatalog(list(CURATED_MODELS))
 
 
 @pytest.fixture
@@ -356,15 +357,17 @@ async def test_create_app_without_a_chosen_model_stores_the_default(
     assert task_queue.jobs[0].kwargs["model"] == settings.routerai_model
 
 
-async def test_create_app_rejects_a_model_missing_from_the_catalog(
+@pytest.mark.parametrize("model", [UNKNOWN_MODEL, UNCURATED_MODEL], ids=["unknown", "outside-the-curated-list"])
+async def test_create_app_rejects_a_model_outside_the_curated_list(
     client: httpx.AsyncClient,
     repository: InMemoryAppRepository,
     task_queue: InMemoryTaskQueue,
+    model: str,
 ) -> None:
-    response = await client.post("/api/apps", json={"prompt": "a habit tracker", "model": UNKNOWN_MODEL})
+    response = await client.post("/api/apps", json={"prompt": "a habit tracker", "model": model})
 
     assert response.status_code == 422
-    assert response.json() == {"error": f"Модель «{UNKNOWN_MODEL}» недоступна в каталоге RouterAI"}
+    assert response.json() == {"error": f"Модель «{model}» недоступна"}
     assert repository.creates == 0
     assert await repository.list_all() == []
     assert task_queue.jobs == []

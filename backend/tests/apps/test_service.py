@@ -7,7 +7,7 @@ from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidMod
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
 from src.config import settings
-from src.generation.model_catalog import ModelInfo
+from src.generation.model_catalog import CURATED_MODELS
 from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
@@ -15,8 +15,9 @@ from tests.generation.template_fixtures import build_template_document
 from tests.in_memory_task_queue import InMemoryTaskQueue
 from tests.in_memory_transaction import FailingTransaction, InMemoryTransaction
 
-VALID_MODEL = "openai/gpt-5"
+VALID_MODEL = "anthropic/claude-opus-5"
 UNKNOWN_MODEL = "bogus/model"
+UNCURATED_MODEL = "openai/gpt-5.6-luna"
 
 
 def build_document(app_id: str) -> AppDocument:
@@ -67,7 +68,7 @@ def transaction(events: list[str]) -> InMemoryTransaction:
 
 @pytest.fixture
 def catalog() -> InMemoryModelCatalog:
-    return InMemoryModelCatalog([ModelInfo(id=VALID_MODEL, name="OpenAI: GPT-5", pro=True)])
+    return InMemoryModelCatalog(list(CURATED_MODELS))
 
 
 @pytest.fixture
@@ -266,17 +267,19 @@ async def test_create_from_prompt_keeps_a_model_present_in_the_catalog(
     }
 
 
-async def test_create_from_prompt_rejects_a_model_missing_from_the_catalog(
+@pytest.mark.parametrize("model", [UNKNOWN_MODEL, UNCURATED_MODEL], ids=["unknown", "outside-the-curated-list"])
+async def test_create_from_prompt_rejects_a_model_outside_the_curated_list(
     service: AppService,
     repository: InMemoryAppRepository,
     task_queue: InMemoryTaskQueue,
     transaction: InMemoryTransaction,
     events: list[str],
+    model: str,
 ) -> None:
     with pytest.raises(InvalidModel) as raised:
-        await service.create_from_prompt("a habit tracker", None, UNKNOWN_MODEL)
+        await service.create_from_prompt("a habit tracker", None, model)
 
-    assert raised.value.message == f"Модель «{UNKNOWN_MODEL}» недоступна в каталоге RouterAI"
+    assert raised.value.message == f"Модель «{model}» недоступна"
     assert repository.creates == 0
     assert await repository.list_all() == []
     assert task_queue.jobs == []

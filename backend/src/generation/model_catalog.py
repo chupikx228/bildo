@@ -6,19 +6,29 @@ from typing import Any, Protocol
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from src.generation.exceptions import ModelCatalogUnavailable
-
 logger = logging.getLogger(__name__)
 
 CATALOG_TTL_SECONDS = 3600.0
 CATALOG_TIMEOUT_SECONDS = 10.0
-PRO_PROMPT_PRICE = 1e-4
 
 
 class ModelInfo(BaseModel):
     id: str
     name: str
     pro: bool = False
+
+
+CURATED_MODELS: tuple[ModelInfo, ...] = (
+    ModelInfo(id="deepseek/deepseek-v4-pro", name="DeepSeek V4 Pro", pro=False),
+    ModelInfo(id="openai/gpt-5.6-terra", name="OpenAI GPT-5.6 Terra", pro=False),
+    ModelInfo(id="anthropic/claude-opus-5", name="Claude Opus 5", pro=True),
+    ModelInfo(id="anthropic/claude-fable-5", name="Claude Fable 5", pro=True),
+    ModelInfo(id="openai/gpt-5.6-sol", name="OpenAI GPT-5.6 Sol", pro=True),
+    ModelInfo(id="x-ai/grok-4.6", name="Grok 4.6", pro=True),
+    ModelInfo(id="anthropic/claude-sonnet-5", name="Claude Sonnet 5", pro=True),
+)
+
+CURATED_MODEL_IDS: frozenset[str] = frozenset(model.id for model in CURATED_MODELS)
 
 
 class ModelCatalog(Protocol):
@@ -39,8 +49,7 @@ class RouterAiModelCatalog:
         self._url = f"{base_url.rstrip('/')}/models"
         self._ttl_seconds = ttl_seconds
         self._timeout_seconds = timeout_seconds
-        self._models: list[ModelInfo] = []
-        self._ids: frozenset[str] = frozenset()
+        self._valid_ids: frozenset[str] = CURATED_MODEL_IDS
         self._fetched_at: float | None = None
         self._lock = asyncio.Lock()
 
@@ -51,30 +60,30 @@ class RouterAiModelCatalog:
             if self._is_fresh():
                 return
             try:
-                models = await self._fetch()
+                upstream_ids = await self._fetch()
             except (httpx.HTTPError, ValueError, ValidationError) as error:
-                if not self._models:
-                    raise ModelCatalogUnavailable from error
-                logger.warning("RouterAI model catalog refresh failed, keeping the cached copy: %s", error)
+                logger.warning("RouterAI model catalog refresh failed, curated models stay available: %s", error)
                 return
-            self._store(models)
+            self._store(upstream_ids)
 
     def is_valid(self, model_id: str) -> bool:
-        return model_id in self._ids
+        return model_id in self._valid_ids
 
     def list_models(self) -> list[ModelInfo]:
-        return list(self._models)
+        return [model for model in CURATED_MODELS if model.id in self._valid_ids]
 
     def _is_fresh(self) -> bool:
         return self._fetched_at is not None and time.monotonic() - self._fetched_at < self._ttl_seconds
 
-    def _store(self, models: list[ModelInfo]) -> None:
-        self._models = models
-        self._ids = frozenset(model.id for model in models)
+    def _store(self, upstream_ids: frozenset[str]) -> None:
+        self._valid_ids = CURATED_MODEL_IDS & upstream_ids
         self._fetched_at = time.monotonic()
-        logger.info("RouterAI model catalog cached: %s models from %s", len(models), self._url)
+        logger.info("RouterAI model catalog cached: %s models from %s", len(upstream_ids), self._url)
+        missing = sorted(CURATED_MODEL_IDS - upstream_ids)
+        if missing:
+            logger.warning("Curated models are missing from the RouterAI catalog: %s", ", ".join(missing))
 
-    async def _fetch(self) -> list[ModelInfo]:
+    async def _fetch(self) -> frozenset[str]:
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             response = await client.get(self._url)
             response.raise_for_status()
@@ -82,38 +91,20 @@ class RouterAiModelCatalog:
         return _parse_catalog(payload)
 
 
-def _parse_catalog(payload: Any) -> list[ModelInfo]:
+def _parse_catalog(payload: Any) -> frozenset[str]:
     items = payload.get("data") if isinstance(payload, dict) else payload
     if not isinstance(items, list):
         raise ValueError("Каталог моделей RouterAI вернул ответ без списка моделей")
-    models = [model for model in (_to_model_info(item) for item in items) if model is not None]
-    if not models:
+    model_ids = frozenset(model_id for model_id in (_to_model_id(item) for item in items) if model_id is not None)
+    if not model_ids:
         raise ValueError("Каталог моделей RouterAI вернул пустой список моделей")
-    return models
+    return model_ids
 
 
-def _to_model_info(item: Any) -> ModelInfo | None:
+def _to_model_id(item: Any) -> str | None:
     if not isinstance(item, dict):
         return None
     model_id = item.get("id")
     if not isinstance(model_id, str) or not model_id:
         return None
-    name = item.get("name")
-    return ModelInfo(
-        id=model_id,
-        name=name if isinstance(name, str) and name else model_id,
-        pro=_is_pro(item),
-    )
-
-
-def _is_pro(item: dict[str, Any]) -> bool:
-    pricing = item.get("pricing")
-    if not isinstance(pricing, dict):
-        return False
-    price = pricing.get("prompt")
-    if not isinstance(price, str | int | float):
-        return False
-    try:
-        return float(price) >= PRO_PROMPT_PRICE
-    except ValueError:
-        return False
+    return model_id

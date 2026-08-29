@@ -1,4 +1,3 @@
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -14,12 +13,9 @@ from src.codegen.router import router as codegen_router
 from src.config import settings
 from src.exceptions import DomainError
 from src.generation.dependencies import get_model_catalog
-from src.generation.exceptions import ModelCatalogUnavailable
 from src.generation.router import router as models_router
 from src.queue.arq_queue import create_arq_pool
 from src.tasks.router import router as tasks_router
-
-logger = logging.getLogger(__name__)
 
 routers: list[APIRouter] = [apps_router, chat_router, codegen_router, models_router, tasks_router]
 
@@ -59,18 +55,11 @@ CORS_HEADERS = ["Content-Type"]
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.arq_redis = await create_arq_pool()
-    await _warm_model_catalog()
+    await get_model_catalog().ensure_fresh()
     try:
         yield
     finally:
         await app.state.arq_redis.aclose()
-
-
-async def _warm_model_catalog() -> None:
-    try:
-        await get_model_catalog().ensure_fresh()
-    except ModelCatalogUnavailable:
-        logger.warning("RouterAI model catalog is unavailable at startup, it will be fetched on the first request")
 
 
 def create_app() -> FastAPI:

@@ -1,11 +1,11 @@
+import logging
 from collections.abc import Callable
 from typing import Any
 
 import httpx
 import pytest
 
-from src.generation.exceptions import ModelCatalogUnavailable
-from src.generation.model_catalog import RouterAiModelCatalog
+from src.generation.model_catalog import CURATED_MODELS, RouterAiModelCatalog
 
 BASE_URL = "https://routerai.test/api/v1"
 CATALOG_URL = f"{BASE_URL}/models"
@@ -13,21 +13,20 @@ CATALOG_URL = f"{BASE_URL}/models"
 Handler = Callable[[httpx.Request], httpx.Response]
 BuildCatalog = Callable[..., RouterAiModelCatalog]
 
+UPSTREAM_ONLY_MODEL = "openai/gpt-5.6-luna"
 
-def model_entry(model_id: str, name: str, prompt_price: float | None) -> dict[str, Any]:
-    entry: dict[str, Any] = {"id": model_id, "name": name}
-    if prompt_price is not None:
-        entry["pricing"] = {"prompt": prompt_price, "completion": prompt_price * 2}
-    return entry
+
+def model_entry(model_id: str) -> dict[str, Any]:
+    return {"id": model_id, "name": model_id, "pricing": {"prompt": 1.39e-04}}
 
 
 CATALOG_BODY: dict[str, Any] = {
-    "data": [
-        model_entry("deepseek/deepseek-v4-flash", "DeepSeek: V4 Flash", 8.3e-06),
-        model_entry("openai/gpt-5", "OpenAI: GPT-5", 1.39e-04),
-        model_entry("free/model", "Free model", None),
-    ]
+    "data": [*(model_entry(model.id) for model in CURATED_MODELS), model_entry(UPSTREAM_ONLY_MODEL)]
 }
+
+MISSING_MODEL_ID = CURATED_MODELS[0].id
+
+WITHOUT_FIRST_CURATED_BODY: dict[str, Any] = {"data": [model_entry(model.id) for model in CURATED_MODELS[1:]]}
 
 
 class StubCatalogGateway:
@@ -57,56 +56,46 @@ def build_catalog(monkeypatch: pytest.MonkeyPatch) -> BuildCatalog:
     return build
 
 
-async def test_catalog_is_empty_before_the_first_fetch(build_catalog: BuildCatalog) -> None:
+def test_the_curated_list_is_the_one_agreed_with_the_customer() -> None:
+    assert [(model.id, model.name, model.pro) for model in CURATED_MODELS] == [
+        ("deepseek/deepseek-v4-pro", "DeepSeek V4 Pro", False),
+        ("openai/gpt-5.6-terra", "OpenAI GPT-5.6 Terra", False),
+        ("anthropic/claude-opus-5", "Claude Opus 5", True),
+        ("anthropic/claude-fable-5", "Claude Fable 5", True),
+        ("openai/gpt-5.6-sol", "OpenAI GPT-5.6 Sol", True),
+        ("x-ai/grok-4.6", "Grok 4.6", True),
+        ("anthropic/claude-sonnet-5", "Claude Sonnet 5", True),
+    ]
+
+
+async def test_the_curated_models_are_served_before_the_first_fetch(build_catalog: BuildCatalog) -> None:
     catalog = build_catalog(StubCatalogGateway([CATALOG_BODY]))
 
-    assert catalog.list_models() == []
-    assert not catalog.is_valid("openai/gpt-5")
+    assert catalog.list_models() == list(CURATED_MODELS)
+    assert catalog.is_valid("anthropic/claude-opus-5")
 
 
-async def test_ensure_fresh_fetches_the_catalog(build_catalog: BuildCatalog) -> None:
+async def test_every_curated_model_stays_served_when_upstream_has_them_all(
+    build_catalog: BuildCatalog,
+) -> None:
     gateway = StubCatalogGateway([CATALOG_BODY])
     catalog = build_catalog(gateway)
 
     await catalog.ensure_fresh()
 
     assert gateway.requests == [CATALOG_URL]
-    assert [model.id for model in catalog.list_models()] == [
-        "deepseek/deepseek-v4-flash",
-        "openai/gpt-5",
-        "free/model",
-    ]
-    assert catalog.is_valid("openai/gpt-5")
-    assert not catalog.is_valid("openai/gpt-404")
+    assert catalog.list_models() == list(CURATED_MODELS)
 
 
-async def test_expensive_models_are_marked_as_pro(build_catalog: BuildCatalog) -> None:
+async def test_a_model_outside_the_curated_list_is_rejected_even_when_upstream_has_it(
+    build_catalog: BuildCatalog,
+) -> None:
     catalog = build_catalog(StubCatalogGateway([CATALOG_BODY]))
 
     await catalog.ensure_fresh()
 
-    assert {model.id: model.pro for model in catalog.list_models()} == {
-        "deepseek/deepseek-v4-flash": False,
-        "openai/gpt-5": True,
-        "free/model": False,
-    }
-
-
-async def test_a_model_without_a_name_falls_back_to_its_id(build_catalog: BuildCatalog) -> None:
-    catalog = build_catalog(StubCatalogGateway([{"data": [{"id": "vendor/model"}]}]))
-
-    await catalog.ensure_fresh()
-
-    assert catalog.list_models()[0].name == "vendor/model"
-
-
-async def test_unusable_entries_are_skipped(build_catalog: BuildCatalog) -> None:
-    body = {"data": ["строка", {"name": "без идентификатора"}, {"id": ""}, model_entry("vendor/model", "Model", None)]}
-    catalog = build_catalog(StubCatalogGateway([body]))
-
-    await catalog.ensure_fresh()
-
-    assert [model.id for model in catalog.list_models()] == ["vendor/model"]
+    assert not catalog.is_valid(UPSTREAM_ONLY_MODEL)
+    assert not catalog.is_valid("bogus/model")
 
 
 async def test_a_fresh_catalog_is_not_fetched_again(build_catalog: BuildCatalog) -> None:
@@ -120,35 +109,68 @@ async def test_a_fresh_catalog_is_not_fetched_again(build_catalog: BuildCatalog)
 
 
 async def test_an_expired_catalog_is_fetched_again(build_catalog: BuildCatalog) -> None:
-    gateway = StubCatalogGateway([CATALOG_BODY, {"data": [model_entry("vendor/next", "Next", None)]}])
+    gateway = StubCatalogGateway([CATALOG_BODY, CATALOG_BODY])
     catalog = build_catalog(gateway, ttl_seconds=0.0)
 
     await catalog.ensure_fresh()
     await catalog.ensure_fresh()
 
     assert len(gateway.requests) == 2
-    assert [model.id for model in catalog.list_models()] == ["vendor/next"]
+
+
+async def test_a_curated_model_missing_upstream_is_dropped_and_logged_as_a_warning(
+    build_catalog: BuildCatalog,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    catalog = build_catalog(StubCatalogGateway([WITHOUT_FIRST_CURATED_BODY]))
+
+    with caplog.at_level(logging.WARNING):
+        await catalog.ensure_fresh()
+
+    assert MISSING_MODEL_ID in caplog.text
+    assert not catalog.is_valid(MISSING_MODEL_ID)
+    assert catalog.list_models() == list(CURATED_MODELS[1:])
+    assert all(catalog.is_valid(model.id) for model in CURATED_MODELS[1:])
+
+
+async def test_a_failed_refresh_keeps_the_previous_intersection(
+    build_catalog: BuildCatalog,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    gateway = StubCatalogGateway([WITHOUT_FIRST_CURATED_BODY, 500])
+    catalog = build_catalog(gateway, ttl_seconds=0.0)
+
+    await catalog.ensure_fresh()
+    with caplog.at_level(logging.WARNING):
+        await catalog.ensure_fresh()
+
+    assert len(gateway.requests) == 2
+    assert "refresh failed" in caplog.text
+    assert not catalog.is_valid(MISSING_MODEL_ID)
+    assert catalog.list_models() == list(CURATED_MODELS[1:])
 
 
 @pytest.mark.parametrize("body", [500, {"models": []}, {"data": []}], ids=["http-error", "no-data", "empty-data"])
-async def test_an_empty_catalog_reports_that_it_is_unavailable(
+async def test_an_upstream_failure_before_any_success_still_serves_every_curated_model(
     build_catalog: BuildCatalog,
+    caplog: pytest.LogCaptureFixture,
     body: dict[str, Any] | int,
 ) -> None:
     catalog = build_catalog(StubCatalogGateway([body]))
 
-    with pytest.raises(ModelCatalogUnavailable):
+    with caplog.at_level(logging.WARNING):
         await catalog.ensure_fresh()
 
-    assert catalog.list_models() == []
+    assert "refresh failed" in caplog.text
+    assert catalog.list_models() == list(CURATED_MODELS)
+    assert catalog.is_valid("anthropic/claude-opus-5")
 
 
-async def test_a_failed_refresh_keeps_the_previously_cached_models(build_catalog: BuildCatalog) -> None:
-    gateway = StubCatalogGateway([CATALOG_BODY, 500])
-    catalog = build_catalog(gateway, ttl_seconds=0.0)
+async def test_a_failed_refresh_is_retried_on_the_next_call(build_catalog: BuildCatalog) -> None:
+    gateway = StubCatalogGateway([500, CATALOG_BODY])
+    catalog = build_catalog(gateway)
 
     await catalog.ensure_fresh()
     await catalog.ensure_fresh()
 
     assert len(gateway.requests) == 2
-    assert catalog.is_valid("openai/gpt-5")

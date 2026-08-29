@@ -19,5 +19,5 @@ class InvalidModel(DomainError):  # noqa: N818
     status_code = 422
 
     def __init__(self, model: str) -> None:
-        self.message = f"Модель «{model}» недоступна в каталоге RouterAI"
+        self.message = f"Модель «{model}» недоступна"
         super().__init__(model)
