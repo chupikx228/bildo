@@ -59,6 +59,29 @@ describe("parseRefineMessage — content", () => {
     expect(parseRefineMessage("добавь кнопку")).toContainEqual({ op: "addComponent", type: "Button", text: "OK" });
   });
 
+  it("adds a named button from the Russian forms", () => {
+    expect(parseRefineMessage("кнопка «Сохранить»")).toContainEqual({
+      op: "addComponent",
+      type: "Button",
+      text: "Сохранить",
+    });
+    expect(parseRefineMessage("кнопку «Отправить»")).toContainEqual({
+      op: "addComponent",
+      type: "Button",
+      text: "Отправить",
+    });
+    expect(parseRefineMessage("кнопки «Назад»")).toContainEqual({
+      op: "addComponent",
+      type: "Button",
+      text: "Назад",
+    });
+    expect(parseRefineMessage("кнопка: «Готово»")).toContainEqual({
+      op: "addComponent",
+      type: "Button",
+      text: "Готово",
+    });
+  });
+
   it("adds input, container and text components", () => {
     expect(parseRefineMessage("добавь поле")).toContainEqual({ op: "addComponent", type: "TextInput" });
     expect(parseRefineMessage("добавь карточку")).toContainEqual({ op: "addComponent", type: "View" });

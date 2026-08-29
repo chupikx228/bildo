@@ -86,7 +86,7 @@ export function parseRefineMessage(message: string): AppPatch[] {
     patches.push({ op: "setText", text: setText[1].trim() });
   }
 
-  const btn = /(?:кнопк\w*|button)\s*[:=]?\s*[«"](.+?)[»"]/i.exec(text);
+  const btn = /(?:кнопк[а-яё]*|button)\s*[:=]?\s*[«"](.+?)[»"]/i.exec(text);
   if (btn?.[1]) {
     patches.push({ op: "addComponent", type: "Button", text: btn[1].trim() });
   } else if (/добав(ь|ить)\s+кнопк/.test(lower)) {
