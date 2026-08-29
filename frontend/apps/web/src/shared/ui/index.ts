@@ -6,3 +6,4 @@ export * from "./AlignPad";
 export * from "./Modal";
 export * from "./QueryState";
 export * from "./ErrorScreen";
+export * from "./icons";
