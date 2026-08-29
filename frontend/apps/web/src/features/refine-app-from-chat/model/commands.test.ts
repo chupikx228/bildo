@@ -133,11 +133,12 @@ describe("refineAppFromMessage — applied against the store", () => {
     expect(store().document!.theme.colorBg).toBe("#FFFFFF");
   });
 
-  it("fully unwinds an assistant turn once its checkpoints are drained", () => {
+  it("unwinds an assistant turn in a single undo, and redo re-applies it", () => {
     refineAppFromMessage("назови «FitApp»");
     store().undo();
-    store().undo();
     expect(store().document!.name).toBe("Original");
+    store().redo();
+    expect(store().document!.name).toBe("FitApp");
   });
 
   it("returns an error with help and touches nothing when nothing matches", () => {

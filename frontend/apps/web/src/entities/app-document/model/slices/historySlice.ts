@@ -11,7 +11,7 @@ export interface HistorySlice {
   redo(): void;
   createCheckpoint(label?: string): void;
   beginAiTurn(label?: string): void;
-  endAiTurn(label?: string): void;
+  endAiTurn(): void;
 }
 
 export const createHistorySlice: AppSlice<HistorySlice> = (set, get) => ({
@@ -83,10 +83,9 @@ export const createHistorySlice: AppSlice<HistorySlice> = (set, get) => ({
     });
   },
 
-  endAiTurn: (label = "После AI") => {
+  endAiTurn: () => {
     set((s) => {
       s.aiBatch = false;
     });
-    get().createCheckpoint(label);
   },
 });
