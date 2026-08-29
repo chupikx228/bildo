@@ -141,6 +141,13 @@ describe("refineAppFromMessage — applied against the store", () => {
     expect(store().document!.name).toBe("FitApp");
   });
 
+  it("closes the AI turn even when a command bails out early", () => {
+    store().selectScreen(null);
+    const result = refineAppFromMessage("удали экран");
+    expect(result.ok).toBe(false);
+    expect(store().aiBatch).toBe(false);
+  });
+
   it("returns an error with help and touches nothing when nothing matches", () => {
     const result = refineAppFromMessage("привет");
     expect(result.ok).toBe(false);
