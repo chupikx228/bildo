@@ -5,3 +5,4 @@ export * from "./ColorPicker";
 export * from "./AlignPad";
 export * from "./Modal";
 export * from "./QueryState";
+export * from "./icons";
