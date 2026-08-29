@@ -10,6 +10,7 @@ describe("MODELS", () => {
   });
 
   it("has Auto as the default and unique ids", () => {
+    expect(DEFAULT_MODEL_ID).toBe("auto");
     expect(MODELS.some((m) => m.id === DEFAULT_MODEL_ID)).toBe(true);
     expect(new Set(MODELS.map((m) => m.id)).size).toBe(MODELS.length);
   });

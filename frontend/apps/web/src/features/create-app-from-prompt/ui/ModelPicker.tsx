@@ -5,7 +5,7 @@ import { MODELS, type ModelId } from "../model/models";
 import { ModelRow } from "./ModelRow";
 
 const POPOVER =
-  "absolute left-0 bottom-[calc(100%+8px)] w-[264px] p-1.5 rounded-[14px] border border-line-strong bg-[rgba(255,255,255,0.98)] backdrop-blur-[18px] shadow-[0_18px_48px_rgba(16,16,20,0.14),0_2px_6px_rgba(16,16,20,0.06)] z-20 animate-insert-pop max-h-[320px] overflow-auto";
+  "absolute left-0 bottom-[calc(100%+8px)] w-[264px] p-1.5 rounded-[14px] border border-line-strong bg-[rgba(255,255,255,0.98)] backdrop-blur-[18px] shadow-lg z-20 animate-insert-pop max-h-[320px] overflow-auto";
 
 export function ModelPicker({ value, onChange }: { value: ModelId; onChange: (id: ModelId) => void }) {
   const [open, setOpen] = useState(false);
