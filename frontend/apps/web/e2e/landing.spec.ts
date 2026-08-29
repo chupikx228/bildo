@@ -34,3 +34,47 @@ test("an example prompt creates an app in one click", async ({ page }) => {
   await page.getByRole("button", { name: "Трекер привычек: сегодня, статистика, настройки" }).click();
   await expect(page).toHaveURL(new RegExp(`/editor/${NEW_APP_ID}$`));
 });
+
+test("the picked model is listed from the catalog and sent with the create request", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Выбрать модель" }).click();
+
+  const option = page.getByRole("option", { name: /OpenAI: GPT-5/ });
+  await expect(option).toBeVisible();
+  await expect(page.getByRole("option", { name: /DeepSeek V4 Flash/ })).toBeVisible();
+  await option.click();
+
+  await page.getByPlaceholder(/Например/).fill("трекер привычек");
+  const request = page.waitForRequest((r) => r.url().includes("/api/apps") && r.method() === "POST");
+  await page.getByRole("button", { name: "Создать приложение" }).click();
+
+  expect((await request).postDataJSON()).toMatchObject({ prompt: "трекер привычек", model: "openai/gpt-5" });
+});
+
+test("without touching the picker the create request asks for the auto model", async ({ page }) => {
+  await page.goto("/");
+  await page.getByPlaceholder(/Например/).fill("трекер привычек");
+  const request = page.waitForRequest((r) => r.url().includes("/api/apps") && r.method() === "POST");
+  await page.getByRole("button", { name: "Создать приложение" }).click();
+
+  expect((await request).postDataJSON()).toMatchObject({ model: "auto" });
+});
+
+test("a rejected model from the create request is shown to the user", async ({ page }) => {
+  await page.goto("/");
+  await page.route(
+    (url) => url.pathname === "/api/apps",
+    (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Модель «openai/gpt-5» недоступна в каталоге RouterAI" }),
+      }),
+  );
+
+  await page.getByPlaceholder(/Например/).fill("трекер привычек");
+  await page.getByRole("button", { name: "Создать приложение" }).click();
+
+  await expect(page.getByText("Модель «openai/gpt-5» недоступна в каталоге RouterAI")).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+});

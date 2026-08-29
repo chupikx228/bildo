@@ -179,6 +179,7 @@ class AppSummary(OmitNoneModel):
 class CreateAppRequest(CamelModel):
     prompt: Annotated[str, Field(min_length=3)]
     name: str | None = None
+    model: str | None = None
 
 
 class CreateAppResponse(CamelModel):

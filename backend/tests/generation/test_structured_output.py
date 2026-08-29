@@ -18,6 +18,8 @@ from tests.generation.template_fixtures import build_template_document
 
 PROMPT = "трекер привычек и серии дней"
 
+MODEL = "test/model"
+
 MESSAGES: list[ChatMessage] = [
     ChatMessage(role="system", content="системный промпт"),
     ChatMessage(role="user", content=PROMPT),
@@ -71,6 +73,7 @@ async def run(case: Case, client: FakeLlmClient, max_attempts: int = 3) -> BaseM
     return await generate_structured(
         MESSAGES,
         client=client,
+        model=MODEL,
         schema_name=case.schema_name,
         schema=case.schema,
         target_model=case.target_model,

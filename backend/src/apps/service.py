@@ -1,10 +1,12 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from src.apps.exceptions import AppGenerationInProgress, AppNotFound
+from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel
 from src.apps.models import App
 from src.apps.repository import AppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppSummary, AppThemeTokens
+from src.config import settings
+from src.generation.model_catalog import ModelCatalog
 from src.queue.base import TaskQueue
 from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
 from src.transaction.base import Transaction
@@ -24,12 +26,21 @@ DEFAULT_THEME = AppThemeTokens(
 
 DEFAULT_APP_NAME = "New app"
 
+AUTO_MODEL = "auto"
+
 
 class AppService:
-    def __init__(self, repository: AppRepository, task_queue: TaskQueue, transaction: Transaction) -> None:
+    def __init__(
+        self,
+        repository: AppRepository,
+        task_queue: TaskQueue,
+        transaction: Transaction,
+        model_catalog: ModelCatalog,
+    ) -> None:
         self._repository = repository
         self._task_queue = task_queue
         self._transaction = transaction
+        self._model_catalog = model_catalog
 
     async def list_apps(self) -> list[AppSummary]:
         apps = await self._repository.list_all()
@@ -44,7 +55,8 @@ class AppService:
             raise AppNotFound(app_id)
         return app
 
-    async def create_from_prompt(self, prompt: str, name: str | None) -> UUID:
+    async def create_from_prompt(self, prompt: str, name: str | None, model: str | None = None) -> UUID:
+        resolved_model = await self._resolve_model(model)
         app_id = uuid4()
         now = datetime.now(UTC).isoformat()
         document_name = name or DEFAULT_APP_NAME
@@ -59,7 +71,7 @@ class AppService:
             created_at=now,
             updated_at=now,
         )
-        await self._repository.create(document_name, prompt, document, "pending")
+        await self._repository.create(document_name, prompt, document, "pending", resolved_model)
         await self._transaction.commit()
         await self._task_queue.enqueue(
             GENERATE_APP_DOCUMENT_JOB,
@@ -67,8 +79,18 @@ class AppService:
             app_id=str(app_id),
             prompt=prompt,
             name=name,
+            model=resolved_model,
         )
         return app_id
+
+    async def _resolve_model(self, model: str | None) -> str:
+        requested = (model or "").strip()
+        if not requested or requested == AUTO_MODEL:
+            return settings.routerai_model
+        await self._model_catalog.ensure_fresh()
+        if not self._model_catalog.is_valid(requested):
+            raise InvalidModel(requested)
+        return requested
 
     async def mark_generated(self, app_id: UUID, document: AppDocument) -> None:
         app = await self._repository.get(app_id)

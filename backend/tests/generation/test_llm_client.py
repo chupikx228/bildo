@@ -76,13 +76,13 @@ def build_client(monkeypatch: pytest.MonkeyPatch) -> BuildClient:
             )
 
         monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
-        return RouterAiLlmClient("test-key", BASE_URL, MODEL)
+        return RouterAiLlmClient("test-key", BASE_URL)
 
     return build
 
 
 async def complete(client: RouterAiLlmClient) -> str:
-    return await client.complete(MESSAGES, SCHEMA_NAME, SCHEMA)
+    return await client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=MODEL)
 
 
 async def test_first_attempt_asks_for_a_json_schema(build_client: BuildClient) -> None:
@@ -246,7 +246,7 @@ async def test_missing_api_key_is_reported_before_any_request(monkeypatch: pytes
         raise AssertionError("Без ключа клиент RouterAI создаваться не должен")
 
     monkeypatch.setattr(llm_client_module, "AsyncOpenAI", forbidden_openai)
-    client = RouterAiLlmClient(None, BASE_URL, MODEL)
+    client = RouterAiLlmClient(None, BASE_URL)
 
     with pytest.raises(GenerationNotConfiguredError):
         await complete(client)
@@ -284,12 +284,132 @@ async def test_concurrent_completions_converge_on_the_response_format_without_ra
         )
 
     monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
-    client = RouterAiLlmClient("test-key", BASE_URL, MODEL)
+    client = RouterAiLlmClient("test-key", BASE_URL)
 
     results = await asyncio.gather(*(complete(client) for _ in range(concurrency)))
     await client.aclose()
 
     assert results == [ANSWER] * concurrency
-    assert client._mode == "json_object"
+    assert client._modes[MODEL] == "json_object"
     assert gateway.modes.count("json_schema") == concurrency
     assert gateway.modes.count("json_object") == concurrency
+
+
+async def test_concurrent_completions_on_different_models_keep_their_modes_isolated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    concurrency = 4
+    rejected_by_model: dict[str, set[str]] = {
+        "vendor/strict": set(),
+        "vendor/no-schema": {"json_schema"},
+        "vendor/no-json": {"json_schema", "json_object"},
+    }
+    barriers = {model: asyncio.Barrier(concurrency) for model in rejected_by_model}
+
+    class PerModelGateway:
+        def __init__(self) -> None:
+            self.modes: dict[str, list[str]] = {model: [] for model in rejected_by_model}
+
+        async def __call__(self, request: httpx.Request) -> httpx.Response:
+            payload: dict[str, Any] = json.loads(request.content)
+            model = str(payload["model"])
+            response_format = payload.get("response_format")
+            mode = NO_FORMAT if response_format is None else str(response_format["type"])
+            self.modes[model].append(mode)
+            await barriers[model].wait()
+            if mode in rejected_by_model[model]:
+                return httpx.Response(400, json={"error": {"message": f"response_format {mode} is not supported"}})
+            return httpx.Response(200, json=completion_body(ANSWER))
+
+    gateway = PerModelGateway()
+
+    def make_openai(*, api_key: str, base_url: str) -> AsyncOpenAI:
+        return AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            max_retries=0,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(gateway)),
+        )
+
+    monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
+    client = RouterAiLlmClient("test-key", BASE_URL)
+
+    results = await asyncio.gather(
+        *(
+            client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=model)
+            for model in rejected_by_model
+            for _ in range(concurrency)
+        )
+    )
+    await client.aclose()
+
+    assert results == [ANSWER] * (len(rejected_by_model) * concurrency)
+    assert client._modes == {"vendor/no-schema": "json_object", "vendor/no-json": "text"}
+    assert gateway.modes["vendor/strict"] == ["json_schema"] * concurrency
+    assert gateway.modes["vendor/no-schema"] == ["json_schema"] * concurrency + ["json_object"] * concurrency
+    assert gateway.modes["vendor/no-json"] == (
+        ["json_schema"] * concurrency + ["json_object"] * concurrency + [NO_FORMAT] * concurrency
+    )
+
+
+async def test_a_stale_rejection_does_not_rewind_a_model_already_downgraded_further(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stale_model = "vendor/no-json"
+    other_model = "vendor/strict"
+    followers = 3
+    rejected = {"json_schema", "json_object"}
+    barrier = asyncio.Barrier(followers)
+    text_reached = asyncio.Event()
+
+    class StragglerGateway:
+        def __init__(self) -> None:
+            self.modes: dict[str, list[str]] = {stale_model: [], other_model: []}
+            self._straggler_seen = False
+
+        async def __call__(self, request: httpx.Request) -> httpx.Response:
+            payload: dict[str, Any] = json.loads(request.content)
+            model = str(payload["model"])
+            response_format = payload.get("response_format")
+            mode = NO_FORMAT if response_format is None else str(response_format["type"])
+            self.modes[model].append(mode)
+
+            if model == other_model:
+                return httpx.Response(200, json=completion_body(ANSWER))
+
+            if not self._straggler_seen:
+                self._straggler_seen = True
+                await text_reached.wait()
+            elif not text_reached.is_set():
+                await barrier.wait()
+
+            if mode in rejected:
+                return httpx.Response(400, json={"error": {"message": f"response_format {mode} is not supported"}})
+            text_reached.set()
+            return httpx.Response(200, json=completion_body(ANSWER))
+
+    gateway = StragglerGateway()
+
+    def make_openai(*, api_key: str, base_url: str) -> AsyncOpenAI:
+        return AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            max_retries=0,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(gateway)),
+        )
+
+    monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
+    client = RouterAiLlmClient("test-key", BASE_URL)
+
+    results = await asyncio.gather(
+        *(client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=stale_model) for _ in range(followers + 1)),
+        *(client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=other_model) for _ in range(2)),
+    )
+    await client.aclose()
+
+    assert results == [ANSWER] * (followers + 3)
+    assert client._modes == {stale_model: "text"}
+    assert gateway.modes[other_model] == ["json_schema", "json_schema"]
+    assert gateway.modes[stale_model].count("json_schema") == followers + 1
+    assert gateway.modes[stale_model].count("json_object") == followers
+    assert gateway.modes[stale_model].count(NO_FORMAT) == followers + 1

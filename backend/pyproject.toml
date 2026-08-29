@@ -13,6 +13,7 @@ dependencies = [
     "redis>=5.2",
     "arq>=0.26",
     "openai>=3.1",
+    "httpx>=0.27",
 ]
 
 [dependency-groups]
@@ -139,6 +140,7 @@ source_modules = [
     "src.codegen.service",
     "src.generation.service",
     "src.generation.llm_client",
+    "src.generation.model_catalog",
     "src.generation.prompt",
     "src.generation.structured_output",
     "src.tasks.service",

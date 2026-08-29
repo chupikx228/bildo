@@ -35,40 +35,53 @@ class ChatMessage(TypedDict):
 
 
 class LlmClient(Protocol):
-    async def complete(self, messages: Sequence[ChatMessage], schema_name: str, schema: JsonSchema) -> str: ...
+    async def complete(
+        self,
+        messages: Sequence[ChatMessage],
+        schema_name: str,
+        schema: JsonSchema,
+        *,
+        model: str,
+    ) -> str: ...
 
     async def aclose(self) -> None: ...
 
 
 class RouterAiLlmClient:
-    def __init__(self, api_key: str | None, base_url: str, model: str) -> None:
+    def __init__(self, api_key: str | None, base_url: str) -> None:
         self._api_key = api_key
         self._base_url = base_url
-        self._model = model
         self._client: AsyncOpenAI | None = None
-        self._mode: ResponseFormatMode = "json_schema"
+        self._modes: dict[str, ResponseFormatMode] = {}
 
-    async def complete(self, messages: Sequence[ChatMessage], schema_name: str, schema: JsonSchema) -> str:
+    async def complete(
+        self,
+        messages: Sequence[ChatMessage],
+        schema_name: str,
+        schema: JsonSchema,
+        *,
+        model: str,
+    ) -> str:
         client = self._ensure_client()
         payload = [_to_message_param(message) for message in messages]
 
         while True:
-            mode = self._mode
+            mode = self._modes.get(model, "json_schema")
             try:
                 completion = await client.chat.completions.create(
-                    model=self._model,
+                    model=model,
                     messages=payload,
                     response_format=_response_format(mode, schema_name, schema),
                 )
             except (BadRequestError, UnprocessableEntityError) as error:
-                self._downgrade_response_format(mode, str(error))
+                self._downgrade_response_format(model, mode, str(error))
                 continue
             except APIError as error:
                 raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
 
             provider_error = _extract_provider_error(completion)
             if provider_error is not None:
-                self._downgrade_response_format(mode, provider_error)
+                self._downgrade_response_format(model, mode, provider_error)
                 continue
 
             return _extract_content(completion)
@@ -83,11 +96,11 @@ class RouterAiLlmClient:
             raise GenerationNotConfiguredError
         if self._client is None:
             self._client = AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
-            logger.info("RouterAI client ready: base_url=%s model=%s", self._base_url, self._model)
+            logger.info("RouterAI client ready: base_url=%s", self._base_url)
         return self._client
 
-    def _downgrade_response_format(self, observed_mode: ResponseFormatMode, detail: str) -> None:
-        if self._mode != observed_mode:
+    def _downgrade_response_format(self, model: str, observed_mode: ResponseFormatMode, detail: str) -> None:
+        if self._modes.get(model, "json_schema") != observed_mode:
             return
         downgraded = RESPONSE_FORMAT_DOWNGRADE[observed_mode]
         if downgraded is None:
@@ -95,11 +108,11 @@ class RouterAiLlmClient:
         logger.warning(
             "RouterAI rejected response_format=%s for model %s, falling back to %s: %s",
             observed_mode,
-            self._model,
+            model,
             downgraded,
             detail,
         )
-        self._mode = downgraded
+        self._modes[model] = downgraded
 
 
 def _response_format(mode: ResponseFormatMode, schema_name: str, schema: JsonSchema) -> ResponseFormat | Omit:

@@ -10,11 +10,17 @@ import pytest
 from src.apps.dependencies import get_app_service
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
+from src.config import settings
+from src.generation.model_catalog import ModelInfo
 from src.main import app
 from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
 from tests.apps.in_memory_repository import InMemoryAppRepository
+from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
 from tests.in_memory_task_queue import InMemoryTaskQueue
 from tests.in_memory_transaction import InMemoryTransaction
+
+VALID_MODEL = "openai/gpt-5"
+UNKNOWN_MODEL = "bogus/model"
 
 
 def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, object]:
@@ -55,11 +61,19 @@ def task_queue() -> InMemoryTaskQueue:
 
 
 @pytest.fixture
+def catalog() -> InMemoryModelCatalog:
+    return InMemoryModelCatalog([ModelInfo(id=VALID_MODEL, name="OpenAI: GPT-5", pro=True)])
+
+
+@pytest.fixture
 async def client(
     repository: InMemoryAppRepository,
     task_queue: InMemoryTaskQueue,
+    catalog: InMemoryModelCatalog,
 ) -> AsyncIterator[httpx.AsyncClient]:
-    app.dependency_overrides[get_app_service] = lambda: AppService(repository, task_queue, InMemoryTransaction())
+    app.dependency_overrides[get_app_service] = lambda: AppService(
+        repository, task_queue, InMemoryTransaction(), catalog
+    )
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
         yield async_client
@@ -100,7 +114,12 @@ async def test_create_app_enqueues_generation_job(client: httpx.AsyncClient, tas
     job = task_queue.jobs[0]
     assert job.job_name == GENERATE_APP_DOCUMENT_JOB
     assert job.job_id == app_id
-    assert job.kwargs == {"app_id": app_id, "prompt": "a habit tracker", "name": None}
+    assert job.kwargs == {
+        "app_id": app_id,
+        "prompt": "a habit tracker",
+        "name": None,
+        "model": settings.routerai_model,
+    }
 
 
 async def test_created_app_is_pending_until_worker_runs(client: httpx.AsyncClient) -> None:
@@ -303,3 +322,49 @@ async def test_app_summary_omits_unset_slug(client: httpx.AsyncClient) -> None:
     summary = json.loads(response.text)["apps"][0]
     assert find_null_paths(summary) == []
     assert "slug" not in summary
+
+
+async def test_create_app_with_an_explicit_model_stores_it(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+) -> None:
+    response = await client.post("/api/apps", json={"prompt": "a habit tracker", "model": VALID_MODEL})
+
+    assert response.status_code == 201
+    app_id = response.json()["id"]
+    stored = await repository.get(UUID(app_id))
+    assert stored is not None
+    assert stored.model == VALID_MODEL
+    assert task_queue.jobs[0].kwargs["model"] == VALID_MODEL
+
+
+@pytest.mark.parametrize("model_field", [{}, {"model": None}, {"model": ""}, {"model": "auto"}])
+async def test_create_app_without_a_chosen_model_stores_the_default(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+    model_field: dict[str, object],
+) -> None:
+    response = await client.post("/api/apps", json={"prompt": "a habit tracker", **model_field})
+
+    assert response.status_code == 201
+    app_id = response.json()["id"]
+    stored = await repository.get(UUID(app_id))
+    assert stored is not None
+    assert stored.model == settings.routerai_model
+    assert task_queue.jobs[0].kwargs["model"] == settings.routerai_model
+
+
+async def test_create_app_rejects_a_model_missing_from_the_catalog(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+) -> None:
+    response = await client.post("/api/apps", json={"prompt": "a habit tracker", "model": UNKNOWN_MODEL})
+
+    assert response.status_code == 422
+    assert response.json() == {"error": f"Модель «{UNKNOWN_MODEL}» недоступна в каталоге RouterAI"}
+    assert repository.creates == 0
+    assert await repository.list_all() == []
+    assert task_queue.jobs == []

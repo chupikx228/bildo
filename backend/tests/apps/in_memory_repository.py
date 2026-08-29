@@ -8,6 +8,7 @@ from src.apps.schemas import AppDocument, GenerationStatus
 class InMemoryAppRepository:
     def __init__(self) -> None:
         self._apps: dict[UUID, App] = {}
+        self.creates = 0
 
     async def list_all(self) -> list[App]:
         return sorted(self._apps.values(), key=lambda app: app.updated_at, reverse=True)
@@ -21,7 +22,9 @@ class InMemoryAppRepository:
         prompt: str | None,
         document: AppDocument,
         generation_status: GenerationStatus,
+        model: str | None,
     ) -> App:
+        self.creates += 1
         now = datetime.now(UTC)
         app = App(
             id=UUID(document.id),
@@ -29,6 +32,7 @@ class InMemoryAppRepository:
             prompt=prompt,
             document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
             generation_status=generation_status,
+            model=model,
             created_at=now,
             updated_at=now,
         )

@@ -12,3 +12,8 @@ class GenerationError(DomainError):
 class GenerationNotConfiguredError(GenerationError):
     def __init__(self) -> None:
         super().__init__("Генерация недоступна: не задан ключ RouterAI")
+
+
+class ModelCatalogUnavailable(DomainError):  # noqa: N818
+    status_code = 502
+    message = "Каталог моделей RouterAI недоступен"

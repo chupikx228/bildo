@@ -52,6 +52,18 @@ export const ICON_REGISTRY = {
     brandColor: "#101014",
     body: <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M5 5l14 14M19 6l-6.5 6.5" />,
   },
+  "model-generic": {
+    viewBox: "0 0 24 24",
+    body: (
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+        d="M12 3.2l7 3.9v9.8l-7 3.9-7-3.9V7.1l7-3.9zM5 7.1l7 3.9 7-3.9M12 11v9.8"
+      />
+    ),
+  },
   "chevron-down": {
     viewBox: "0 0 16 16",
     body: (

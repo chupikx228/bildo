@@ -81,6 +81,15 @@ export async function installApiMocks(page: Page, options: MockOptions = {}): Pr
         await json(route, 201, { id: NEW_APP_ID });
         return;
       }
+      if (method === "GET" && path === "/models") {
+        await json(route, 200, {
+          models: [
+            { id: "openai/gpt-5", name: "OpenAI: GPT-5", pro: true },
+            { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash", pro: false },
+          ],
+        });
+        return;
+      }
       if (method === "GET" && path === "/apps") {
         await json(route, 200, { apps: [...apps.values()] });
         return;

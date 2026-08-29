@@ -1,3 +1,4 @@
+import type { ModelInfo } from "@bildo/api";
 import type { IconName } from "@/shared/ui";
 
 export interface Model {
@@ -7,16 +8,27 @@ export interface Model {
   pro?: boolean;
 }
 
-export const MODELS = [
-  { id: "auto", name: "Auto", icon: "auto" },
-  { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", icon: "deepseek" },
-  { id: "gpt-5.6-terra", name: "OpenAI GPT-5.6 Terra", icon: "openai" },
-  { id: "claude-opus-5", name: "Claude Opus 5", icon: "claude", pro: true },
-  { id: "claude-fable-5", name: "Claude Fable 5", icon: "claude", pro: true },
-  { id: "gpt-5.6-sol", name: "OpenAI GPT-5.6 Sol", icon: "openai", pro: true },
-  { id: "grok-4.6", name: "Grok 4.6", icon: "grok", pro: true },
-  { id: "claude-sonnet-5", name: "Claude Sonnet 5", icon: "claude", pro: true },
-] as const satisfies readonly Model[];
+export type ModelId = string;
 
-export type ModelId = (typeof MODELS)[number]["id"];
 export const DEFAULT_MODEL_ID: ModelId = "auto";
+
+const AUTO_MODEL: Model = { id: DEFAULT_MODEL_ID, name: "Auto", icon: "auto" };
+
+const PROVIDER_ICONS: Record<string, IconName> = {
+  anthropic: "claude",
+  deepseek: "deepseek",
+  openai: "openai",
+  "x-ai": "grok",
+};
+
+export function modelIcon(id: string): IconName {
+  return PROVIDER_ICONS[id.split("/")[0] ?? ""] ?? "model-generic";
+}
+
+export function toModels(catalog: readonly ModelInfo[] | undefined): Model[] {
+  if (!catalog) return [AUTO_MODEL];
+  return [
+    AUTO_MODEL,
+    ...catalog.map((info) => ({ id: info.id, name: info.name, icon: modelIcon(info.id), pro: info.pro })),
+  ];
+}
