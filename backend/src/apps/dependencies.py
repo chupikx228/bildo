@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.apps.repository import SqlAlchemyAppRepository
 from src.apps.service import AppService
 from src.dependencies import get_session
+from src.generation.dependencies import ModelCatalogDep
 from src.queue.dependencies import TaskQueueDep
 from src.transaction.dependencies import TransactionDep
 
@@ -14,8 +15,9 @@ def get_app_service(
     session: Annotated[AsyncSession, Depends(get_session)],
     task_queue: TaskQueueDep,
     transaction: TransactionDep,
+    model_catalog: ModelCatalogDep,
 ) -> AppService:
-    return AppService(SqlAlchemyAppRepository(session), task_queue, transaction)
+    return AppService(SqlAlchemyAppRepository(session), task_queue, transaction, model_catalog)
 
 
 AppServiceDep = Annotated[AppService, Depends(get_app_service)]

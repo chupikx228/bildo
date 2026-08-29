@@ -12,10 +12,12 @@ from src.chat.router import router as chat_router
 from src.codegen.router import router as codegen_router
 from src.config import settings
 from src.exceptions import DomainError
+from src.generation.dependencies import get_model_catalog
+from src.generation.router import router as models_router
 from src.queue.arq_queue import create_arq_pool
 from src.tasks.router import router as tasks_router
 
-routers: list[APIRouter] = [apps_router, chat_router, codegen_router, tasks_router]
+routers: list[APIRouter] = [apps_router, chat_router, codegen_router, models_router, tasks_router]
 
 VALIDATION_MESSAGES: dict[str, str] = {
     "missing": "обязательное поле",
@@ -53,6 +55,7 @@ CORS_HEADERS = ["Content-Type"]
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.arq_redis = await create_arq_pool()
+    await get_model_catalog().ensure_fresh()
     try:
         yield
     finally:

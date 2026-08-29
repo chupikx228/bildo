@@ -56,7 +56,7 @@ def repository(session: AsyncSession) -> SqlAlchemyAppRepository:
 async def test_create_persists_app(repository: SqlAlchemyAppRepository) -> None:
     document = build_document()
 
-    app = await repository.create(document.name, document.prompt, document, "pending")
+    app = await repository.create(document.name, document.prompt, document, "pending", None)
 
     assert app.id == UUID(document.id)
     assert app.name == document.name
@@ -71,7 +71,7 @@ async def test_get_returns_none_when_not_found(repository: SqlAlchemyAppReposito
 
 async def test_get_returns_created_app(repository: SqlAlchemyAppRepository) -> None:
     document = build_document()
-    created = await repository.create(document.name, document.prompt, document, "ready")
+    created = await repository.create(document.name, document.prompt, document, "ready", None)
 
     fetched = await repository.get(created.id)
 
@@ -84,8 +84,8 @@ async def test_list_all_orders_by_updated_at_desc(
     repository: SqlAlchemyAppRepository,
     session: AsyncSession,
 ) -> None:
-    older = await repository.create("Older", None, build_document(), "ready")
-    newer = await repository.create("Newer", None, build_document(), "ready")
+    older = await repository.create("Older", None, build_document(), "ready", None)
+    newer = await repository.create("Newer", None, build_document(), "ready", None)
     older.updated_at = datetime(2020, 1, 1)
     newer.updated_at = datetime(2024, 1, 1)
     await session.flush()
@@ -97,7 +97,7 @@ async def test_list_all_orders_by_updated_at_desc(
 
 async def test_update_document_updates_name_slug_and_document(repository: SqlAlchemyAppRepository) -> None:
     document = build_document()
-    app = await repository.create(document.name, document.prompt, document, "ready")
+    app = await repository.create(document.name, document.prompt, document, "ready", None)
     updated_document = document.model_copy(update={"name": "Renamed", "slug": "renamed-slug"})
 
     updated = await repository.update_document(app, updated_document)
@@ -114,7 +114,7 @@ async def test_update_document_updates_name_slug_and_document(repository: SqlAlc
 
 async def test_set_generation_status_updates_status_and_error(repository: SqlAlchemyAppRepository) -> None:
     document = build_document()
-    app = await repository.create(document.name, document.prompt, document, "pending")
+    app = await repository.create(document.name, document.prompt, document, "pending", None)
 
     ready = await repository.set_generation_status(app, "ready", None)
     assert ready.generation_status == "ready"
@@ -127,7 +127,7 @@ async def test_set_generation_status_updates_status_and_error(repository: SqlAlc
 
 async def test_delete_removes_app(repository: SqlAlchemyAppRepository, session: AsyncSession) -> None:
     document = build_document()
-    app = await repository.create(document.name, document.prompt, document, "ready")
+    app = await repository.create(document.name, document.prompt, document, "ready", None)
 
     deleted = await repository.delete(app.id)
     await session.flush()
@@ -147,7 +147,7 @@ async def test_jsonb_round_trip_preserves_full_document(
 
     async with db_session_factory() as write_session:
         write_repository = SqlAlchemyAppRepository(write_session)
-        await write_repository.create(document.name, document.prompt, document, "ready")
+        await write_repository.create(document.name, document.prompt, document, "ready", None)
         await write_session.commit()
 
     async with db_session_factory() as read_session:

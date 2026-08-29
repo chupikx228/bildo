@@ -3,6 +3,7 @@ from uuid import UUID
 
 from arq.connections import ArqRedis
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.repository import SqlAlchemyAppRepository
 from src.apps.schemas import AppDocument
@@ -16,6 +17,7 @@ from src.chat.service import ChatService
 from src.codegen.service import build_zip, generate_files
 from src.config import settings
 from src.database import async_session_factory
+from src.generation.dependencies import get_model_catalog
 from src.generation.llm_client import LlmClient
 from src.generation.service import generate_document
 from src.generation.structured_output import generate_structured
@@ -23,27 +25,24 @@ from src.queue.arq_queue import ArqTaskQueue
 from src.transaction.session_transaction import SessionTransaction
 
 
-async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, name: str | None) -> None:
+async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, name: str | None, model: str) -> None:
     redis: ArqRedis = ctx["redis"]
     llm_client: LlmClient = ctx["llm_client"]
     try:
         async with async_session_factory() as session:
-            service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis), SessionTransaction(session))
+            service = _app_service(session, redis)
             document = await generate_document(
                 prompt,
                 name,
                 client=llm_client,
+                model=model,
                 max_attempts=settings.routerai_max_retries,
             )
             await service.mark_generated(UUID(app_id), document)
             await session.commit()
     except Exception as error:
         async with async_session_factory() as failure_session:
-            failure_service = AppService(
-                SqlAlchemyAppRepository(failure_session),
-                ArqTaskQueue(redis),
-                SessionTransaction(failure_session),
-            )
+            failure_service = _app_service(failure_session, redis)
             await failure_service.mark_generation_failed(UUID(app_id), f"Ошибка генерации приложения: {error}")
             await failure_session.commit()
         raise
@@ -52,7 +51,7 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
 async def build_export_zip(ctx: dict[Any, Any], app_id: str) -> bytes:
     redis: ArqRedis = ctx["redis"]
     async with async_session_factory() as session:
-        service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis), SessionTransaction(session))
+        service = _app_service(session, redis)
         app = await service.get_app(UUID(app_id))
         document = AppDocument.model_validate(app.document)
     return build_zip(generate_files(document))
@@ -64,7 +63,12 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
     answered_message_id = UUID(message_id)
     async with async_session_factory() as session:
         transaction = SessionTransaction(session)
-        app_service = AppService(SqlAlchemyAppRepository(session), ArqTaskQueue(redis), transaction)
+        app_service = AppService(
+            SqlAlchemyAppRepository(session),
+            ArqTaskQueue(redis),
+            transaction,
+            get_model_catalog(),
+        )
         chat_service = ChatService(SqlAlchemyChatRepository(session), app_service, transaction)
         if await chat_service.has_reply(answered_message_id):
             return
@@ -74,6 +78,7 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
             client=llm_client,
             schema_name=CHAT_SCHEMA_NAME,
             schema=CHAT_RESPONSE_SCHEMA,
+            model=settings.routerai_model,
             target_model=ChatTurnResponse,
             max_attempts=settings.routerai_max_retries,
             subject="ответ ассистента",
@@ -91,3 +96,12 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
             if not is_duplicate_reply_violation(error):
                 raise
             await session.rollback()
+
+
+def _app_service(session: AsyncSession, redis: ArqRedis) -> AppService:
+    return AppService(
+        SqlAlchemyAppRepository(session),
+        ArqTaskQueue(redis),
+        SessionTransaction(session),
+        get_model_catalog(),
+    )

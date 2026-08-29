@@ -9,6 +9,7 @@ import {
   toAttachments,
   type Attachment,
 } from "@/shared/attachments";
+import { resolveErrorMessage } from "@/shared/api";
 import { ROUTES } from "@/shared/config";
 import { useOutsideClick } from "@/shared/lib";
 import { DEFAULT_MODEL_ID, type ModelId } from "../model/models";
@@ -54,10 +55,10 @@ export function CreateAppFlow() {
     if (override) setPrompt(text);
     setError(null);
     try {
-      const result = await createApp.mutateAsync({ prompt: text });
+      const result = await createApp.mutateAsync({ prompt: text, model: modelId });
       await navigate(ROUTES.editor(result.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось создать приложение");
+      setError(resolveErrorMessage(err, "Не удалось создать приложение"));
     }
   };
 

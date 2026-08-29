@@ -5,10 +5,14 @@ import {
   appDetailSchema,
   appDocumentSchema,
   appSummarySchema,
+  createAppRequestSchema,
+  modelInfoSchema,
   type AppDetail,
   type AppDocument,
   type AppSummary,
+  type CreateAppRequest,
   type GenerationStatus,
+  type ModelInfo,
 } from "./model";
 
 const createAppResponseSchema = z.object({ id: z.string() });
@@ -18,6 +22,25 @@ export const appsKeys = {
   list: () => [...appsKeys.all, "list"] as const,
   detail: (id: string) => [...appsKeys.all, "detail", id] as const,
 };
+
+export const modelsKeys = {
+  all: ["models"] as const,
+  list: () => [...modelsKeys.all, "list"] as const,
+};
+
+const MODELS_STALE_TIME = 60 * 60 * 1000;
+
+export function useModels() {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: modelsKeys.list(),
+    queryFn: async () => {
+      const data = await client.get<{ models: ModelInfo[] }>("/models");
+      return modelInfoSchema.array().parse(data.models);
+    },
+    staleTime: MODELS_STALE_TIME,
+  });
+}
 
 export function useApps() {
   const client = useApiClient();
@@ -58,8 +81,8 @@ export function useCreateApp() {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { prompt: string; name?: string }) => {
-      const data = await client.post<unknown>("/apps", input);
+    mutationFn: async (input: CreateAppRequest) => {
+      const data = await client.post<unknown>("/apps", createAppRequestSchema.parse(input));
       return createAppResponseSchema.parse(data);
     },
     onSuccess: () => {

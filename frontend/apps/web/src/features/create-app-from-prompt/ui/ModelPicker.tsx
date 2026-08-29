@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useModels } from "@bildo/api";
 import { useOutsideClick } from "@/shared/lib";
-import { Icon } from "@/shared/ui";
-import { MODELS, type ModelId } from "../model/models";
+import { Icon, QueryState } from "@/shared/ui";
+import { toModels, type ModelId } from "../model/models";
 import { ModelRow } from "./ModelRow";
 
 const POPOVER =
@@ -10,6 +11,7 @@ const POPOVER =
 export function ModelPicker({ value, onChange }: { value: ModelId; onChange: (id: ModelId) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useOutsideClick<HTMLDivElement>(open, () => setOpen(false));
+  const { data, isLoading, isError, error } = useModels();
 
   return (
     <div className="relative" ref={ref}>
@@ -34,17 +36,24 @@ export function ModelPicker({ value, onChange }: { value: ModelId; onChange: (id
 
       {open && (
         <div className={POPOVER} role="listbox">
-          {MODELS.map((model) => (
-            <ModelRow
-              key={model.id}
-              model={model}
-              selected={model.id === value}
-              onClick={() => {
-                onChange(model.id);
-                setOpen(false);
-              }}
-            />
-          ))}
+          <QueryState
+            isLoading={isLoading}
+            isError={isError}
+            error={error}
+            errorFallback="Не удалось загрузить список моделей"
+          >
+            {toModels(data).map((model) => (
+              <ModelRow
+                key={model.id}
+                model={model}
+                selected={model.id === value}
+                onClick={() => {
+                  onChange(model.id);
+                  setOpen(false);
+                }}
+              />
+            ))}
+          </QueryState>
         </div>
       )}
     </div>

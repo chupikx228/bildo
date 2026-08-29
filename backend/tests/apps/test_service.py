@@ -3,13 +3,21 @@ from uuid import uuid4
 
 import pytest
 
-from src.apps.exceptions import AppGenerationInProgress, AppNotFound
+from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
+from src.config import settings
+from src.generation.model_catalog import CURATED_MODELS
+from src.queue.jobs import GENERATE_APP_DOCUMENT_JOB
 from tests.apps.in_memory_repository import InMemoryAppRepository
+from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
 from tests.generation.template_fixtures import build_template_document
 from tests.in_memory_task_queue import InMemoryTaskQueue
 from tests.in_memory_transaction import FailingTransaction, InMemoryTransaction
+
+VALID_MODEL = "anthropic/claude-opus-5"
+UNKNOWN_MODEL = "bogus/model"
+UNCURATED_MODEL = "openai/gpt-5.6-luna"
 
 
 def build_document(app_id: str) -> AppDocument:
@@ -59,12 +67,18 @@ def transaction(events: list[str]) -> InMemoryTransaction:
 
 
 @pytest.fixture
+def catalog() -> InMemoryModelCatalog:
+    return InMemoryModelCatalog(list(CURATED_MODELS))
+
+
+@pytest.fixture
 def service(
     repository: InMemoryAppRepository,
     task_queue: InMemoryTaskQueue,
     transaction: InMemoryTransaction,
+    catalog: InMemoryModelCatalog,
 ) -> AppService:
-    return AppService(repository, task_queue, transaction)
+    return AppService(repository, task_queue, transaction, catalog)
 
 
 async def test_list_apps_is_empty_on_start(service: AppService) -> None:
@@ -97,7 +111,7 @@ async def test_create_from_prompt_does_not_enqueue_generation_when_the_commit_fa
     task_queue: InMemoryTaskQueue,
     events: list[str],
 ) -> None:
-    service = AppService(repository, task_queue, FailingTransaction(events))
+    service = AppService(repository, task_queue, FailingTransaction(events), InMemoryModelCatalog())
 
     with pytest.raises(RuntimeError):
         await service.create_from_prompt("a habit tracker", None)
@@ -200,3 +214,74 @@ async def test_list_apps_sorts_by_updated_at_desc(service: AppService, repositor
     summaries = await service.list_apps()
 
     assert [summary.id for summary in summaries] == [str(second_id), str(third_id), str(first_id)]
+
+
+@pytest.mark.parametrize("model", [None, "", "   ", "auto"])
+async def test_create_from_prompt_falls_back_to_the_default_model(
+    service: AppService,
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+    catalog: InMemoryModelCatalog,
+    model: str | None,
+) -> None:
+    app_id = await service.create_from_prompt("a habit tracker", None, model)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.model == settings.routerai_model
+    assert task_queue.jobs[0].kwargs["model"] == settings.routerai_model
+    assert catalog.refreshes == 0
+
+
+async def test_create_from_prompt_stores_the_resolved_model_not_the_auto_placeholder(
+    service: AppService,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await service.create_from_prompt("a habit tracker", None, "auto")
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.model not in {"auto", "", None}
+
+
+async def test_create_from_prompt_keeps_a_model_present_in_the_catalog(
+    service: AppService,
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+    catalog: InMemoryModelCatalog,
+) -> None:
+    app_id = await service.create_from_prompt("a habit tracker", None, VALID_MODEL)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.model == VALID_MODEL
+    assert catalog.refreshes == 1
+
+    job = task_queue.jobs[0]
+    assert job.job_name == GENERATE_APP_DOCUMENT_JOB
+    assert job.kwargs == {
+        "app_id": str(app_id),
+        "prompt": "a habit tracker",
+        "name": None,
+        "model": VALID_MODEL,
+    }
+
+
+@pytest.mark.parametrize("model", [UNKNOWN_MODEL, UNCURATED_MODEL], ids=["unknown", "outside-the-curated-list"])
+async def test_create_from_prompt_rejects_a_model_outside_the_curated_list(
+    service: AppService,
+    repository: InMemoryAppRepository,
+    task_queue: InMemoryTaskQueue,
+    transaction: InMemoryTransaction,
+    events: list[str],
+    model: str,
+) -> None:
+    with pytest.raises(InvalidModel) as raised:
+        await service.create_from_prompt("a habit tracker", None, model)
+
+    assert raised.value.message == f"Модель «{model}» недоступна"
+    assert repository.creates == 0
+    assert await repository.list_all() == []
+    assert task_queue.jobs == []
+    assert transaction.commits == 0
+    assert events == []

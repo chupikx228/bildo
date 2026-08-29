@@ -19,6 +19,7 @@ class AppRepository(Protocol):
         prompt: str | None,
         document: AppDocument,
         generation_status: GenerationStatus,
+        model: str | None,
     ) -> App: ...
 
     async def update_document(self, app: App, document: AppDocument) -> App: ...
@@ -51,6 +52,7 @@ class SqlAlchemyAppRepository:
         prompt: str | None,
         document: AppDocument,
         generation_status: GenerationStatus,
+        model: str | None,
     ) -> App:
         app = App(
             id=UUID(document.id),
@@ -58,6 +60,7 @@ class SqlAlchemyAppRepository:
             prompt=prompt,
             document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
             generation_status=generation_status,
+            model=model,
         )
         self._session.add(app)
         await self._session.flush()
