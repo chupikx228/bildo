@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_APP_THEME, type AppDocument } from "@bildo/api";
+import { codegenExpoProject } from "@/entities/app-document";
 import { chatDiff } from "./chatDiff";
 
 function doc(): AppDocument {
@@ -31,6 +32,19 @@ describe("chatDiff", () => {
     const result = chatDiff(current, proposed);
     expect(result.files.some((f) => f.path === "app/profile.tsx")).toBe(true);
     expect(result.diff.some((d) => d.tone === "add")).toBe(true);
+  });
+
+  it("does not count the trailing newline as an extra line", () => {
+    const proposed: AppDocument = {
+      ...doc(),
+      navigation: { type: "stack", roots: ["s1", "s2"] },
+      screens: [...doc().screens, { id: "s2", name: "Profile", route: "profile", root: { id: "root2", type: "View" } }],
+    };
+    const source = codegenExpoProject(proposed)["app/profile.tsx"]!;
+    expect(source.endsWith("\n")).toBe(true);
+
+    const added = chatDiff(doc(), proposed).files.find((f) => f.path === "app/profile.tsx");
+    expect(added?.stat).toBe(`+${source.split("\n").length - 1}`);
   });
 
   it("reports a modified file when the theme changes", () => {

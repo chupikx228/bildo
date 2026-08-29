@@ -8,7 +8,8 @@ export interface ChatDiff {
 }
 
 function lineCount(source: string): number {
-  return source.split("\n").length;
+  if (source === "") return 0;
+  return source.split("\n").length - (source.endsWith("\n") ? 1 : 0);
 }
 
 export function chatDiff(current: AppDocument, proposed: AppDocument): ChatDiff {
