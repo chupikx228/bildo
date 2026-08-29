@@ -120,10 +120,12 @@ export function AiInterview({
   onSubmit,
   onClose,
   busy,
+  error,
 }: {
   onSubmit: (prompt: string) => void;
   onClose: () => void;
   busy: boolean;
+  error?: string | null;
 }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<InterviewAnswers>(EMPTY);
@@ -307,6 +309,8 @@ export function AiInterview({
               <span className="[grid-area:1/1]">{busy ? "Собираем…" : "Создать приложение"}</span>
             </button>
           </div>
+
+          {error && <p className="mt-3 text-[13px] text-danger">{error}</p>}
         </div>
       )}
     </div>

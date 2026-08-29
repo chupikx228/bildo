@@ -78,3 +78,30 @@ test("a rejected model from the create request is shown to the user", async ({ p
   await expect(page.getByText("Модель «openai/gpt-5» недоступна в каталоге RouterAI")).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
 });
+
+test("a create error is shown inside the AI-interview flow, not swallowed", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Не знаете, с чего начать/ }).click();
+
+  await page.getByRole("button", { name: "Трекер привычек" }).click();
+  await page.getByRole("button", { name: "Для себя" }).click();
+  await page.getByRole("button", { name: "Главная" }).click();
+  await page.getByRole("button", { name: "Дальше" }).click();
+  await page.getByRole("button", { name: "Светлое и воздушное" }).click();
+  await page.getByRole("button", { name: "Собрать бриф" }).click();
+
+  await page.route(
+    (url) => url.pathname === "/api/apps",
+    (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Модель «openai/gpt-5» недоступна в каталоге RouterAI" }),
+      }),
+  );
+
+  await page.getByRole("button", { name: "Создать приложение" }).click();
+
+  await expect(page.getByText("Модель «openai/gpt-5» недоступна в каталоге RouterAI")).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+});
