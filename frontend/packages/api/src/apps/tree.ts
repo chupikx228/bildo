@@ -1,6 +1,12 @@
 import { current, isDraft, type Draft } from "immer";
 import { nanoid } from "nanoid";
-import type { AppNode } from "./model";
+import type { AppNode, AppNodeLayout, AppNodeProps, AppNodeStyle } from "./model";
+
+export type AppNodePatch = Partial<Omit<AppNode, "props" | "style" | "layout">> & {
+  props?: Partial<AppNodeProps>;
+  style?: Partial<AppNodeStyle>;
+  layout?: Partial<AppNodeLayout>;
+};
 
 function plainClone<T>(value: T): T {
   const plain = isDraft(value) ? current(value as Draft<T>) : value;
@@ -35,14 +41,20 @@ export function findParentNode(root: AppNode, id: string): AppNode | null {
   return null;
 }
 
-export function updateNodeById(root: AppNode, id: string, patch: Partial<AppNode>): AppNode {
+function mergeBag<T extends object>(base: T | undefined, patch: Partial<T> | undefined): T | undefined {
+  if (!patch) return base;
+  if (!base) return patch as T;
+  return { ...base, ...patch };
+}
+
+export function updateNodeById(root: AppNode, id: string, patch: AppNodePatch): AppNode {
   if (root.id === id) {
     return {
       ...root,
       ...patch,
-      props: patch.props ? { ...root.props, ...patch.props } : root.props,
-      style: patch.style ? { ...root.style, ...patch.style } : root.style,
-      layout: patch.layout ? { ...root.layout, ...patch.layout } : root.layout,
+      props: mergeBag(root.props, patch.props),
+      style: mergeBag(root.style, patch.style),
+      layout: mergeBag(root.layout, patch.layout),
     };
   }
   if (!root.children?.length) return root;
