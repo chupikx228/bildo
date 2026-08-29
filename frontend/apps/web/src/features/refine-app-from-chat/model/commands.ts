@@ -68,7 +68,7 @@ export function parseRefineMessage(message: string): AppPatch[] {
   }
 
   const renameApp =
-    /(?:назван|переимен|назови|имя)\s*(?:приложен\w*)?\s*[:=]?\s*[«"](.+?)[»"]/i.exec(text) ??
+    /(?:назван|переимен|назови|имя)\s*(?:приложен[а-яё]*)?\s*[:=]?\s*[«"](.+?)[»"]/i.exec(text) ??
     /(?:назван|переимен|назови)\s+(\S.{1,40})$/i.exec(text);
   if (renameApp?.[1] && !/экран/i.test(renameApp[0])) {
     patches.push({ op: "renameApp", name: renameApp[1].trim() });

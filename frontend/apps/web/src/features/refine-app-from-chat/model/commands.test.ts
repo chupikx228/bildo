@@ -96,6 +96,12 @@ describe("parseRefineMessage — content", () => {
     expect(parseRefineMessage("назови «FitApp»")).toContainEqual({ op: "renameApp", name: "FitApp" });
     expect(parseRefineMessage("назови FitApp")).toContainEqual({ op: "renameApp", name: "FitApp" });
   });
+
+  it("renames the app across the Russian forms of «приложение»", () => {
+    expect(parseRefineMessage("назови приложение «FitApp»")).toContainEqual({ op: "renameApp", name: "FitApp" });
+    expect(parseRefineMessage("назови приложения «FitApp»")).toContainEqual({ op: "renameApp", name: "FitApp" });
+    expect(parseRefineMessage("назови приложение: «FitApp»")).toContainEqual({ op: "renameApp", name: "FitApp" });
+  });
 });
 
 describe("parseRefineMessage — misses and combinations", () => {
