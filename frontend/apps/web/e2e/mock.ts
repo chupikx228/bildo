@@ -58,6 +58,19 @@ function readyDetail(id: string, name = "Demo App") {
   return { id, name, document: makeDocument(id, name), generationStatus: "ready", generationError: null };
 }
 
+interface ChatMessageFixture {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  proposedDocument: ReturnType<typeof makeDocument> | null;
+  accepted: boolean | null;
+  createdAt: string;
+}
+
+function makeChatMessage(id: string, role: "user" | "assistant", content: string): ChatMessageFixture {
+  return { id, role, content, proposedDocument: null, accepted: null, createdAt: "2026-01-01T00:00:00.000Z" };
+}
+
 interface MockOptions {
   apps?: AppSummaryFixture[];
 }
@@ -65,6 +78,15 @@ interface MockOptions {
 export async function installApiMocks(page: Page, options: MockOptions = {}): Promise<void> {
   const apps = new Map<string, AppSummaryFixture>();
   for (const app of options.apps ?? []) apps.set(app.id, app);
+
+  const chats = new Map<string, ChatMessageFixture[]>();
+  const getChat = (id: string) => {
+    const existing = chats.get(id);
+    if (existing) return existing;
+    const fresh: ChatMessageFixture[] = [];
+    chats.set(id, fresh);
+    return fresh;
+  };
 
   const json = (route: Route, status: number, body: unknown) =>
     route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -76,6 +98,42 @@ export async function installApiMocks(page: Page, options: MockOptions = {}): Pr
       const method = request.method();
       const path = new URL(request.url()).pathname.replace(/^\/api/, "");
       const idMatch = /^\/apps\/([^/]+)$/.exec(path);
+      const chatMatch = /^\/apps\/([^/]+)\/chat\/messages$/.exec(path);
+      const decisionMatch = /^\/apps\/([^/]+)\/chat\/messages\/([^/]+)\/decision$/.exec(path);
+      const taskMatch = /^\/tasks\/([^/]+)$/.exec(path);
+
+      if (method === "GET" && chatMatch) {
+        await json(route, 200, { messages: getChat(chatMatch[1]!) });
+        return;
+      }
+      if (method === "POST" && chatMatch) {
+        const appId = chatMatch[1]!;
+        const content = (request.postDataJSON() as { content: string }).content;
+        const chat = getChat(appId);
+        chat.push(makeChatMessage(`${appId}-u${chat.length}`, "user", content));
+        chat.push({
+          ...makeChatMessage(`${appId}-a${chat.length}`, "assistant", "Готово — предлагаю переименовать приложение."),
+          proposedDocument: makeDocument(appId, "Renamed"),
+        });
+        await json(route, 202, { taskId: `task-${chat.length}` });
+        return;
+      }
+      if (method === "POST" && decisionMatch) {
+        const chat = getChat(decisionMatch[1]!);
+        const accepted = (request.postDataJSON() as { accepted: boolean }).accepted;
+        const message = chat.find((m) => m.id === decisionMatch[2]!);
+        if (!message) {
+          await json(route, 404, { error: "Сообщение не найдено" });
+          return;
+        }
+        message.accepted = accepted;
+        await json(route, 200, { ok: true, message });
+        return;
+      }
+      if (method === "GET" && taskMatch) {
+        await json(route, 200, { id: taskMatch[1]!, status: "complete", result: null, error: null });
+        return;
+      }
 
       if (method === "POST" && path === "/apps") {
         await json(route, 201, { id: NEW_APP_ID });
