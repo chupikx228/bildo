@@ -56,6 +56,13 @@ describe("updateNodeById", () => {
     expect(a.layout).toEqual({ x: 10, y: 20, width: 100, height: 30 });
   });
 
+  it("shallow-merges a partial layout patch and leaves unpatched fields intact", () => {
+    const updated = updateNodeById(tree(), "a", { layout: { x: 99 } });
+    const a = findAppNode(updated, "a")!;
+    expect(a.layout).toEqual({ x: 99, y: 20, width: 100, height: 30 });
+    expect(a.props).toEqual({ text: "A" });
+  });
+
   it("updates a deeply nested node and leaves siblings untouched", () => {
     const updated = updateNodeById(tree(), "b1", { name: "Renamed" });
     expect(findAppNode(updated, "b1")?.name).toBe("Renamed");
