@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import io
+import logging
 import zipfile
 from collections.abc import AsyncIterator
 from uuid import UUID, uuid4
@@ -9,6 +10,7 @@ import pytest
 from arq.connections import ArqRedis, RedisSettings, create_pool
 from arq.constants import result_key_prefix
 from arq.worker import Worker
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.apps.repository import SqlAlchemyAppRepository
@@ -77,7 +79,7 @@ async def seed_ready_app(db_session_factory: async_sessionmaker[AsyncSession]) -
     return app_id
 
 
-async def test_export_returns_the_archive_and_does_not_retain_it_in_redis(
+async def test_export_returns_the_archive_and_drops_the_result_immediately(
     db_session_factory: async_sessionmaker[AsyncSession],
     client_pool: ArqRedis,
     running_worker: None,
@@ -97,8 +99,60 @@ async def test_export_returns_the_archive_and_does_not_retain_it_in_redis(
     assert "package.json" in names
     assert "app/_layout.tsx" in names
 
+    assert await client_pool.exists(result_key_prefix + job_id) == 0
+
+
+async def test_result_left_behind_by_a_failed_cleanup_still_expires_by_ttl(
+    db_session_factory: async_sessionmaker[AsyncSession],
+    client_pool: ArqRedis,
+    running_worker: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _never_discards(self: ArqTaskQueue, job_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(ArqTaskQueue, "_discard_result", _never_discards)
+
+    app_id = await seed_ready_app(db_session_factory)
+    job_id = str(uuid4())
+
+    await ArqTaskQueue(client_pool).enqueue_and_wait(
+        BUILD_EXPORT_ZIP_JOB,
+        job_id,
+        EXPORT_TIMEOUT_SECONDS,
+        app_id=str(app_id),
+    )
+
+    assert await client_pool.exists(result_key_prefix + job_id) == 1
     retention_ms = await client_pool.pttl(result_key_prefix + job_id)
     assert 0 < retention_ms <= EXPORT_RESULT_TTL_SECONDS * 1000
 
-    await asyncio.sleep(EXPORT_RESULT_TTL_SECONDS + 1)
-    assert await client_pool.exists(result_key_prefix + job_id) == 0
+
+async def test_export_survives_a_failing_cleanup_and_logs_a_warning(
+    db_session_factory: async_sessionmaker[AsyncSession],
+    client_pool: ArqRedis,
+    running_worker: None,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def _fails_to_discard(self: ArqTaskQueue, job_id: str) -> None:
+        raise RedisError("UNLINK failed")
+
+    monkeypatch.setattr(ArqTaskQueue, "_discard_result", _fails_to_discard)
+
+    app_id = await seed_ready_app(db_session_factory)
+    job_id = str(uuid4())
+
+    with caplog.at_level(logging.WARNING, logger="src.queue.arq_queue"):
+        archive = await ArqTaskQueue(client_pool).enqueue_and_wait(
+            BUILD_EXPORT_ZIP_JOB,
+            job_id,
+            EXPORT_TIMEOUT_SECONDS,
+            app_id=str(app_id),
+        )
+
+    assert isinstance(archive, bytes)
+    assert "package.json" in set(zipfile.ZipFile(io.BytesIO(archive)).namelist())
+
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert any(job_id in record.getMessage() and "UNLINK failed" in record.getMessage() for record in warnings)
