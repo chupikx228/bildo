@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from arq.connections import ArqRedis, RedisSettings, create_pool
@@ -6,6 +7,8 @@ from arq.jobs import JobStatus as ArqJobStatus
 
 from src.config import settings
 from src.queue.base import JobStatus, JobStatusInfo
+
+logger = logging.getLogger(__name__)
 
 RESULT_POLL_DELAY_SECONDS = 0.1
 
@@ -51,7 +54,10 @@ class ArqJobStatusReader:
     async def read(self, job_id: str) -> JobStatusInfo:
         job = Job(job_id, self._redis)
         arq_status = await job.status()
-        status = STATUS_BY_ARQ_JOB_STATUS[arq_status]
+        status = STATUS_BY_ARQ_JOB_STATUS.get(arq_status)
+        if status is None:
+            logger.warning("Unknown Arq job status %r for job %s, reporting it as not_found", arq_status, job_id)
+            status = "not_found"
         if arq_status is not ArqJobStatus.complete:
             return JobStatusInfo(status=status)
 
