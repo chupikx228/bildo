@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useModels } from "@bildo/api";
 import { useOutsideClick } from "@/shared/lib";
 import { Icon, QueryState } from "@/shared/ui";
-import { toModels, type ModelId } from "../model/models";
+import { DEFAULT_MODEL_ID, toModels, type ModelId } from "../model/models";
 import { ModelRow } from "./ModelRow";
 
 const POPOVER =
@@ -12,6 +12,10 @@ export function ModelPicker({ value, onChange }: { value: ModelId; onChange: (id
   const [open, setOpen] = useState(false);
   const ref = useOutsideClick<HTMLDivElement>(open, () => setOpen(false));
   const { data, isLoading, isError, error } = useModels();
+
+  const models = toModels(data);
+  const selected = models.find((m) => m.id === value);
+  const showSelected = selected !== undefined && selected.id !== DEFAULT_MODEL_ID;
 
   return (
     <div className="relative" ref={ref}>
@@ -26,7 +30,14 @@ export function ModelPicker({ value, onChange }: { value: ModelId; onChange: (id
             : "border-line-strong bg-panel text-muted hover:border-accent-line hover:bg-accent-wash hover:text-accent-strong"
         }`}
       >
-        <span>Выбрать модель</span>
+        {showSelected ? (
+          <>
+            <Icon name={selected.icon} size={15} />
+            <span className="max-w-[150px] truncate">{selected.name}</span>
+          </>
+        ) : (
+          <span>Выбрать модель</span>
+        )}
         <Icon
           name="chevron-down"
           size={13}
@@ -42,7 +53,7 @@ export function ModelPicker({ value, onChange }: { value: ModelId; onChange: (id
             error={error}
             errorFallback="Не удалось загрузить список моделей"
           >
-            {toModels(data).map((model) => (
+            {models.map((model) => (
               <ModelRow
                 key={model.id}
                 model={model}
