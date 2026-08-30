@@ -1,99 +1,89 @@
 import { useEffect, useRef, useState } from "react";
-import { refineAppFromMessage } from "@/features/refine-app-from-chat";
+import { useChatDecision, useChatMessages, useSendChatMessage, useTaskStatus } from "@bildo/api";
+import { useAppDocumentStore } from "@/entities/app-document";
 import type { Attachment } from "@/shared/attachments";
-import { assetProposal, plan, shortHash, typingDelayMs, uid, type Proposal, type Turn } from "./planner";
+import { mapMessages } from "./messages";
+import { uid, type Proposal, type Turn } from "./planner";
 
-export function useAssistantThread() {
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [busy, setBusy] = useState(false);
+const MIN_CONTENT = 3;
+const RUNNING = new Set(["deferred", "queued", "in_progress"]);
+
+interface LocalNote {
+  id: string;
+  text: string;
+}
+
+export function useAssistantThread(appId: string) {
+  const messagesQuery = useChatMessages(appId);
+  const sendMutation = useSendChatMessage(appId);
+  const decisionMutation = useChatDecision(appId);
+
+  const document = useAppDocumentStore((s) => s.document);
+  const applyDocument = useAppDocumentStore((s) => s.applyDocument);
+
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<LocalNote[]>([]);
+  const taskQuery = useTaskStatus(activeTaskId);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const timers = useRef<number[]>([]);
 
-  function after(ms: number, fn: () => void) {
-    const id = window.setTimeout(fn, ms);
-    timers.current.push(id);
+  const task = taskQuery.data;
+  const running = task ? RUNNING.has(task.status) : activeTaskId !== null;
+  const busy = sendMutation.isPending || running;
+
+  const refetchMessages = messagesQuery.refetch;
+  const terminal = task ? task.status === "complete" || task.status === "not_found" : false;
+
+  useEffect(() => {
+    if (activeTaskId && terminal) void refetchMessages();
+  }, [activeTaskId, terminal, refetchMessages]);
+
+  const messages = messagesQuery.data ?? [];
+  const turns: Turn[] = mapMessages(messages, document);
+  for (const note of notes) {
+    turns.push({ id: note.id, role: "note", text: note.text });
   }
-
-  useEffect(() => {
-    const pending = timers.current;
-    return () => pending.forEach(clearTimeout);
-  }, []);
-
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      setTurns([
-        {
-          id: uid("ai"),
-          role: "ai",
-          text: "Осмотрел экраны. Есть одна идея, которая заметно поднимет первый экран.",
-          proposal: assetProposal(),
-        },
-      ]);
-    }, 900);
-    timers.current.push(id);
-    return () => window.clearTimeout(id);
-  }, []);
+  if (task?.status === "complete" && task.error) {
+    turns.push({ id: `task-error-${task.id}`, role: "note", text: task.error });
+  }
+  if (busy) {
+    turns.push({ id: "typing", role: "typing" });
+  }
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [turns]);
+  }, [turns.length]);
 
-  function send(raw: string, files: Attachment[]) {
+  function send(raw: string, _files: Attachment[]) {
     const text = raw.trim();
-    if ((!text && files.length === 0) || busy) return;
-    setBusy(true);
-
-    const typingId = uid("typing");
-    setTurns((prev) => [
-      ...prev,
-      { id: uid("user"), role: "user", text, attachments: files },
-      { id: typingId, role: "typing" },
-    ]);
-
-    after(typingDelayMs(), () => {
-      const { reply, proposal } = plan(text || files.map((f) => f.name).join(" "));
-      setTurns((prev) => [
-        ...prev.filter((t) => t.id !== typingId),
-        { id: uid("ai"), role: "ai", text: reply, proposal },
-      ]);
-      setBusy(false);
+    if (text.length < MIN_CONTENT || busy) return;
+    sendMutation.mutate(text, {
+      onSuccess: (res) => {
+        setActiveTaskId(res.taskId);
+        void refetchMessages();
+      },
+      onError: (err) => {
+        setNotes((prev) => [
+          ...prev,
+          { id: uid("note"), text: err instanceof Error ? err.message : "Не удалось отправить" },
+        ]);
+      },
     });
   }
 
-  function resolve(turnId: string, proposal: Proposal, accept: boolean) {
-    setTurns((prev) => prev.map((t) => (t.id === turnId && t.role === "ai" ? { ...t, proposal: undefined } : t)));
-
-    if (!accept) {
-      setTurns((prev) => [...prev, { id: uid("note"), role: "note", text: "Отклонено — ничего не изменилось." }]);
-      return;
-    }
-
-    if (proposal.command) {
-      const result = refineAppFromMessage(proposal.command);
-      if (!result.ok) {
-        setTurns((prev) => [
-          ...prev,
-          { id: uid("note"), role: "note", text: result.errors[0] ?? "Не удалось применить" },
-        ]);
-        return;
-      }
-    }
-
-    setTurns((prev) => [
-      ...prev,
-      {
-        id: uid("commit"),
-        role: "commit",
-        commit: { hash: shortHash(), title: proposal.commitTitle, files: proposal.files, diff: proposal.diff },
-      },
-    ]);
+  function resolve(turnId: string, _proposal: Proposal, accept: boolean) {
+    const message = messages.find((m) => m.id === turnId);
+    const proposed = message?.role === "assistant" ? message.proposedDocument : null;
+    if (!proposed) return;
+    if (accept) applyDocument(proposed);
+    decisionMutation.mutate({ messageId: turnId, accepted: accept });
   }
 
-  const pendingCount = turns.filter((t) => t.role === "ai" && t.proposal).length;
+  const pendingCount = messages.filter(
+    (m) => m.role === "assistant" && m.proposedDocument !== null && m.accepted === null,
+  ).length;
   const hasTranscript = turns.length > 0;
-  const clear = () => setTurns([]);
 
-  return { turns, busy, pendingCount, hasTranscript, scrollRef, send, resolve, clear };
+  return { turns, busy, pendingCount, hasTranscript, scrollRef, send, resolve };
 }
