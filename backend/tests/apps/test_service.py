@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel, StaleRevision
+from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel, StaleRevisionError
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
 from src.config import settings
@@ -146,6 +146,8 @@ async def test_mark_generated_replaces_placeholder_document(
     assert app is not None
     stored = AppDocument.model_validate(app.document)
     assert app.generation_status == "ready"
+    assert app.revision == 2
+    assert stored.revision == 2
     assert app.name == generated.name
     assert stored.name == generated.name
     assert [screen.id for screen in stored.screens] == [screen.id for screen in generated.screens]
@@ -175,7 +177,7 @@ async def test_save_document_is_allowed_once_generation_finished(
     app_id = await service.create_from_prompt("трекер привычек", None)
     await service.mark_generated(app_id, build_template_document("трекер привычек", None))
 
-    saved = await service.save_document(app_id, build_document(str(app_id)))
+    saved = await service.save_document(app_id, build_document(str(app_id), revision=2))
 
     assert saved.name == "Renamed app"
     app = await repository.get(app_id)
@@ -202,13 +204,13 @@ async def test_save_document_returns_the_document_with_the_next_revision(
     app_id = await service.create_from_prompt("трекер привычек", None)
     await service.mark_generated(app_id, build_template_document("трекер привычек", None))
 
-    saved = await service.save_document(app_id, build_document(str(app_id), revision=1))
+    saved = await service.save_document(app_id, build_document(str(app_id), revision=2))
 
-    assert saved.revision == 2
+    assert saved.revision == 3
     app = await repository.get(app_id)
     assert app is not None
-    assert app.revision == 2
-    assert AppDocument.model_validate(app.document).revision == 2
+    assert app.revision == 3
+    assert AppDocument.model_validate(app.document).revision == 3
 
 
 async def test_save_document_rejects_a_stale_revision_and_keeps_the_stored_document(
@@ -217,17 +219,17 @@ async def test_save_document_rejects_a_stale_revision_and_keeps_the_stored_docum
 ) -> None:
     app_id = await service.create_from_prompt("трекер привычек", None)
     await service.mark_generated(app_id, build_template_document("трекер привычек", None))
-    await service.save_document(app_id, build_document(str(app_id), name="Первое сохранение", revision=1))
+    await service.save_document(app_id, build_document(str(app_id), name="Первое сохранение", revision=2))
 
-    with pytest.raises(StaleRevision):
-        await service.save_document(app_id, build_document(str(app_id), name="Устаревшее", revision=1))
+    with pytest.raises(StaleRevisionError):
+        await service.save_document(app_id, build_document(str(app_id), name="Устаревшее", revision=2))
 
     app = await repository.get(app_id)
     assert app is not None
-    assert app.revision == 2
+    assert app.revision == 3
     stored = AppDocument.model_validate(app.document)
     assert stored.name == "Первое сохранение"
-    assert stored.revision == 2
+    assert stored.revision == 3
 
 
 async def test_save_document_reports_the_pending_generation_before_the_stale_revision(

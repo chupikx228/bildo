@@ -15,7 +15,7 @@ class AppGenerationInProgress(ConflictError):  # noqa: N818
         super().__init__(str(app_id))
 
 
-class StaleRevision(DomainError):  # noqa: N818
+class StaleRevisionError(DomainError):
     status_code = 412
 
     def __init__(self, app_id: UUID) -> None:

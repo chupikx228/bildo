@@ -42,7 +42,7 @@ requires_docker = pytest.mark.skipif(not _docker_available(), reason="Docker is 
 
 def upgrade_to(database_url: str, revision: str) -> None:
     env = {**os.environ, "DATABASE_URL": database_url}
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", revision],
         cwd=BACKEND_ROOT,
         env=env,
@@ -85,17 +85,7 @@ def database_url(postgres_container: PostgresContainer) -> str:
 
 @pytest.fixture(scope="session")
 def _migrated_database(database_url: str) -> None:
-    env = {**os.environ, "DATABASE_URL": database_url}
-    result = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],
-        cwd=BACKEND_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        pytest.fail(f"alembic upgrade head failed:\n--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}")
+    upgrade_to(database_url, "head")
 
 
 @pytest_asyncio.fixture

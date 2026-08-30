@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel, StaleRevision
+from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel, StaleRevisionError
 from src.apps.models import App
 from src.apps.repository import AppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppSummary, AppThemeTokens
@@ -105,7 +105,7 @@ class AppService:
                 "id": str(app_id),
                 "slug": existing.slug,
                 "prompt": existing.prompt,
-                "revision": app.revision,
+                "revision": app.revision + 1,
                 "created_at": existing.created_at,
                 "updated_at": datetime.now(UTC).isoformat(),
             }
@@ -126,7 +126,7 @@ class AppService:
         if current.generation_status == "pending":
             raise AppGenerationInProgress(app_id)
         if document.revision != current.revision:
-            raise StaleRevision(app_id)
+            raise StaleRevisionError(app_id)
         saved = document.model_copy(update={"revision": current.revision + 1})
         app = await self._repository.update_document(current, saved)
         return AppDocument.model_validate(app.document)

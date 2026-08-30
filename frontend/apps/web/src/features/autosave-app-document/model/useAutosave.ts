@@ -13,7 +13,7 @@ export function useAutosave(appId: string) {
   const timerRef = useRef<number | null>(null);
   const latestRef = useRef<AppDocument | null>(null);
   const seenRef = useRef<AppDocument | null>(null);
-  const inFlightRef = useRef<Promise<unknown> | null>(null);
+  const chainRef = useRef<Promise<boolean> | null>(null);
 
   const saveRef = useRef(saveApp.mutateAsync);
   const statusRef = useRef(setSaveStatus);
@@ -26,13 +26,17 @@ export function useAutosave(appId: string) {
     revisionRef.current = setRevision;
   });
 
-  async function persist(doc: AppDocument) {
+  async function send(fallback: AppDocument): Promise<boolean> {
+    const sent = useAppDocumentStore.getState().document ?? fallback;
     statusRef.current("saving");
     try {
-      const run = saveRef.current({ ...doc, id: appId });
-      inFlightRef.current = run;
-      const saved = await run;
+      const saved = await saveRef.current({ ...sent, id: appId });
+      const current = useAppDocumentStore.getState().document;
       revisionRef.current(saved.revision);
+      if (current !== sent) {
+        statusRef.current("dirty");
+        return true;
+      }
       seenRef.current = useAppDocumentStore.getState().document;
       statusRef.current("saved");
       return true;
@@ -43,9 +47,17 @@ export function useAutosave(appId: string) {
       }
       statusRef.current("error", "Не удалось сохранить");
       return false;
-    } finally {
-      inFlightRef.current = null;
     }
+  }
+
+  function persist(doc: AppDocument): Promise<boolean> {
+    const previous = chainRef.current;
+    const run = previous ? previous.then(() => send(doc)) : send(doc);
+    chainRef.current = run;
+    void run.finally(() => {
+      if (chainRef.current === run) chainRef.current = null;
+    });
+    return run;
   }
 
   useEffect(() => {
@@ -74,7 +86,7 @@ export function useAutosave(appId: string) {
     }
     const doc = latestRef.current;
     if (!doc) {
-      await inFlightRef.current;
+      await chainRef.current;
       return true;
     }
     return persist(doc);
