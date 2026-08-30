@@ -1,5 +1,6 @@
 import inspect
 import json
+import logging
 from types import TracebackType
 from typing import Any, Self
 from uuid import UUID
@@ -25,6 +26,7 @@ from tests.in_memory_task_queue import InMemoryTaskQueue
 from tests.in_memory_transaction import InMemoryTransaction
 
 MODEL = "test/model"
+INTERNAL_FAILURE_DETAIL = "connection refused to internal-host:5432"
 PROMPT = "трекер привычек и серии дней"
 
 
@@ -200,11 +202,94 @@ async def test_generate_app_document_marks_app_failed(
     app = await repository.get(app_id)
     assert app is not None
     assert app.generation_status == "failed"
-    assert app.generation_error
-    assert "генерация недоступна" in app.generation_error
+    assert app.generation_error == worker_tasks.GENERATION_FAILURE_MESSAGE
     assert len(sessions) == 2
     assert sessions[0].commits == 0
     assert sessions[1].commits == 1
+
+
+async def test_generate_app_document_hides_details_of_a_non_domain_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+) -> None:
+    async def broken_generation(prompt: str, name: str | None, **kwargs: Any) -> AppDocument:
+        raise RuntimeError(INTERNAL_FAILURE_DETAIL)
+
+    monkeypatch.setattr(worker_tasks, "generate_document", broken_generation)
+    app_id = await create_pending_app(repository)
+
+    with pytest.raises(RuntimeError):
+        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.generation_error == worker_tasks.GENERATION_FAILURE_MESSAGE
+    for fragment in ("connection refused", "internal-host", "5432", "RuntimeError"):
+        assert fragment not in app.generation_error
+
+
+async def test_generate_app_document_hides_details_of_a_bare_key_error(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+) -> None:
+    async def broken_generation(prompt: str, name: str | None, **kwargs: Any) -> AppDocument:
+        raise KeyError("colorPrimary")
+
+    monkeypatch.setattr(worker_tasks, "generate_document", broken_generation)
+    app_id = await create_pending_app(repository)
+
+    with pytest.raises(KeyError):
+        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.generation_error == worker_tasks.GENERATION_FAILURE_MESSAGE
+    assert "colorPrimary" not in app.generation_error
+
+
+async def test_generate_app_document_logs_the_real_cause_of_a_non_domain_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    repository: InMemoryAppRepository,
+) -> None:
+    async def broken_generation(prompt: str, name: str | None, **kwargs: Any) -> AppDocument:
+        raise RuntimeError(INTERNAL_FAILURE_DETAIL)
+
+    monkeypatch.setattr(worker_tasks, "generate_document", broken_generation)
+    app_id = await create_pending_app(repository)
+
+    with caplog.at_level(logging.ERROR, logger=worker_tasks.__name__), pytest.raises(RuntimeError):
+        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
+
+    record = next(record for record in caplog.records if record.name == worker_tasks.__name__)
+    assert record.levelno == logging.ERROR
+    assert str(app_id) in record.getMessage()
+    assert record.exc_info is not None
+    assert isinstance(record.exc_info[1], RuntimeError)
+    assert str(record.exc_info[1]) == INTERNAL_FAILURE_DETAIL
+    assert INTERNAL_FAILURE_DETAIL in caplog.text
+    assert "Traceback" in caplog.text
+
+
+async def test_generate_app_document_keeps_the_domain_failure_message(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    repository: InMemoryAppRepository,
+) -> None:
+    async def broken_generation(prompt: str, name: str | None, **kwargs: Any) -> AppDocument:
+        raise GenerationError("RouterAI вернул пустой ответ")
+
+    monkeypatch.setattr(worker_tasks, "generate_document", broken_generation)
+    app_id = await create_pending_app(repository)
+
+    with caplog.at_level(logging.ERROR, logger=worker_tasks.__name__), pytest.raises(GenerationError):
+        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.generation_status == "failed"
+    assert app.generation_error == "Ошибка генерации приложения: RouterAI вернул пустой ответ"
+    assert caplog.records == []
 
 
 async def test_generate_app_document_keeps_placeholder_document_on_failure(
