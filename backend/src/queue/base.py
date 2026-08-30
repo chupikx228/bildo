@@ -14,7 +14,7 @@ class TaskQueue(Protocol):
 class JobStatusInfo:
     status: JobStatus
     result: object | None = None
-    error: str | None = None
+    failure: BaseException | None = None
 
 
 class JobStatusReader(Protocol):

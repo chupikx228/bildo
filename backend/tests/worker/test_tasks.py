@@ -15,7 +15,9 @@ from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService
 from src.config import settings
 from src.generation.exceptions import GenerationError, GenerationNotConfiguredError
+from src.queue.base import JobStatusInfo
 from src.queue.jobs import CHAT_TURN_JOB
+from src.tasks.service import TASK_FAILURE_MESSAGE, TaskService
 from src.worker import tasks as worker_tasks
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.chat.in_memory_repository import InMemoryChatRepository, integrity_error
@@ -24,6 +26,7 @@ from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
 from tests.generation.template_fixtures import build_template_document
 from tests.in_memory_task_queue import InMemoryTaskQueue
 from tests.in_memory_transaction import InMemoryTransaction
+from tests.tasks.fake_job import FakeJobStatusReader
 
 MODEL = "test/model"
 INTERNAL_FAILURE_DETAIL = "connection refused to internal-host:5432"
@@ -760,3 +763,49 @@ async def test_chat_turn_ignores_messages_added_after_the_turn_was_enqueued(
 
     llm_client: FakeLlmClient = ctx["llm_client"]
     assert [message["content"] for message in llm_client.calls[0][1:]] == ["первое", "второе"]
+
+
+async def test_chat_turn_failure_details_do_not_reach_the_task_status(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
+
+    with pytest.raises(RuntimeError) as failure:
+        await worker_tasks.chat_turn(
+            context([RuntimeError(INTERNAL_FAILURE_DETAIL)]),
+            str(app_id),
+            str(user_message.id),
+        )
+
+    assert INTERNAL_FAILURE_DETAIL in str(failure.value)
+    task_id = str(user_message.id)
+    states = {task_id: JobStatusInfo(status="complete", failure=failure.value)}
+    status = await TaskService(FakeJobStatusReader(states)).get_status(task_id)
+
+    assert status.status == "complete"
+    assert status.error == TASK_FAILURE_MESSAGE
+    for fragment in ("connection refused", "internal-host", "5432"):
+        assert fragment not in status.error
+
+
+async def test_chat_turn_domain_failure_still_reaches_the_task_status(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
+
+    with pytest.raises(GenerationNotConfiguredError) as failure:
+        await worker_tasks.chat_turn(
+            context([GenerationNotConfiguredError()]),
+            str(app_id),
+            str(user_message.id),
+        )
+
+    task_id = str(user_message.id)
+    states = {task_id: JobStatusInfo(status="complete", failure=failure.value)}
+    status = await TaskService(FakeJobStatusReader(states)).get_status(task_id)
+
+    assert status.error == "Генерация недоступна: не задан ключ RouterAI"
