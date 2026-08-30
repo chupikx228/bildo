@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel
+from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel, StaleRevision
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
 from src.apps.service import AppService
 from src.config import settings
@@ -20,11 +20,11 @@ UNKNOWN_MODEL = "bogus/model"
 UNCURATED_MODEL = "openai/gpt-5.6-luna"
 
 
-def build_document(app_id: str) -> AppDocument:
+def build_document(app_id: str, name: str = "Renamed app", revision: int = 1) -> AppDocument:
     now = datetime.now(UTC).isoformat()
     return AppDocument(
         id=app_id,
-        name="Renamed app",
+        name=name,
         prompt="a habit tracker",
         theme=AppThemeTokens(
             color_bg="#FBFBFC",
@@ -41,6 +41,7 @@ def build_document(app_id: str) -> AppDocument:
         navigation=AppNavigation(type="tabs", roots=[]),
         screens=[],
         state={},
+        revision=revision,
         created_at=now,
         updated_at=now,
     )
@@ -180,6 +181,68 @@ async def test_save_document_is_allowed_once_generation_finished(
     app = await repository.get(app_id)
     assert app is not None
     assert app.name == "Renamed app"
+
+
+async def test_create_from_prompt_starts_the_document_at_revision_one(
+    service: AppService,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await service.create_from_prompt("трекер привычек", None)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.revision == 1
+    assert AppDocument.model_validate(app.document).revision == 1
+
+
+async def test_save_document_returns_the_document_with_the_next_revision(
+    service: AppService,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await service.create_from_prompt("трекер привычек", None)
+    await service.mark_generated(app_id, build_template_document("трекер привычек", None))
+
+    saved = await service.save_document(app_id, build_document(str(app_id), revision=1))
+
+    assert saved.revision == 2
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.revision == 2
+    assert AppDocument.model_validate(app.document).revision == 2
+
+
+async def test_save_document_rejects_a_stale_revision_and_keeps_the_stored_document(
+    service: AppService,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await service.create_from_prompt("трекер привычек", None)
+    await service.mark_generated(app_id, build_template_document("трекер привычек", None))
+    await service.save_document(app_id, build_document(str(app_id), name="Первое сохранение", revision=1))
+
+    with pytest.raises(StaleRevision):
+        await service.save_document(app_id, build_document(str(app_id), name="Устаревшее", revision=1))
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.revision == 2
+    stored = AppDocument.model_validate(app.document)
+    assert stored.name == "Первое сохранение"
+    assert stored.revision == 2
+
+
+async def test_save_document_reports_the_pending_generation_before_the_stale_revision(
+    service: AppService,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await service.create_from_prompt("трекер привычек", None)
+
+    with pytest.raises(AppGenerationInProgress):
+        await service.save_document(app_id, build_document(str(app_id), name="Устаревшее", revision=999))
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.revision == 1
+    assert AppDocument.model_validate(app.document).name == "New app"
 
 
 async def test_delete_raises_not_found_for_unknown_id(service: AppService) -> None:

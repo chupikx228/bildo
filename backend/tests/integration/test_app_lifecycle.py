@@ -34,7 +34,7 @@ THEME = AppThemeTokens(
 )
 
 
-def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, object]:
+def build_document_payload(app_id: str, name: str = "Renamed app", revision: int = 1) -> dict[str, object]:
     now = datetime.now(UTC).isoformat()
     document = AppDocument(
         id=app_id,
@@ -44,6 +44,7 @@ def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, 
         navigation=AppNavigation(type="tabs", roots=[]),
         screens=[],
         state={},
+        revision=revision,
         created_at=now,
         updated_at=now,
     )

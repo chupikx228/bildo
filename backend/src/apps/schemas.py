@@ -165,6 +165,7 @@ class AppDocument(OmitNoneModel):
     navigation: AppNavigation
     screens: list[AppScreen]
     state: dict[str, AppStateValue] | None = None
+    revision: int
     created_at: str
     updated_at: str
 

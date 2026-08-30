@@ -32,6 +32,7 @@ function makeDoc(): AppDocument {
         },
       },
     ],
+    revision: 1,
     createdAt: now,
     updatedAt: now,
   };
@@ -64,6 +65,37 @@ describe("setDocument (document + selection + history reset)", () => {
     expect(s().past.length).toBe(1);
     s().setDocument(makeDoc());
     expect(s().past).toEqual([]);
+  });
+});
+
+describe("setRevision (optimistic locking)", () => {
+  it("stores the revision returned by the server", () => {
+    expect(s().document?.revision).toBe(1);
+    s().setRevision(2);
+    expect(s().document?.revision).toBe(2);
+  });
+
+  it("keeps local unsaved edits made while the save was in flight", () => {
+    s().renameApp("Edited while saving");
+    const before = s().document!;
+    s().setRevision(7);
+    const after = s().document!;
+    expect(after.name).toBe("Edited while saving");
+    expect(after.screens).toEqual(before.screens);
+    expect(after.updatedAt).toBe(before.updatedAt);
+  });
+
+  it("does not push a history entry", () => {
+    const past = s().past.length;
+    s().setRevision(3);
+    expect(s().past.length).toBe(past);
+    expect(s().future).toEqual([]);
+  });
+
+  it("is a no-op without a document", () => {
+    useAppDocumentStore.setState({ document: null });
+    s().setRevision(5);
+    expect(s().document).toBeNull();
   });
 });
 

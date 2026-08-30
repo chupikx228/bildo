@@ -7,6 +7,7 @@ const AUTOSAVE_MS = 1200;
 export function useAutosave(appId: string) {
   const document = useAppDocumentStore((s) => s.document);
   const setSaveStatus = useAppDocumentStore((s) => s.setSaveStatus);
+  const setRevision = useAppDocumentStore((s) => s.setRevision);
   const saveApp = useSaveApp(appId);
 
   const timerRef = useRef<number | null>(null);
@@ -16,11 +17,13 @@ export function useAutosave(appId: string) {
 
   const saveRef = useRef(saveApp.mutateAsync);
   const statusRef = useRef(setSaveStatus);
+  const revisionRef = useRef(setRevision);
 
   useEffect(() => {
     latestRef.current = document;
     saveRef.current = saveApp.mutateAsync;
     statusRef.current = setSaveStatus;
+    revisionRef.current = setRevision;
   });
 
   async function persist(doc: AppDocument) {
@@ -28,7 +31,9 @@ export function useAutosave(appId: string) {
     try {
       const run = saveRef.current({ ...doc, id: appId });
       inFlightRef.current = run;
-      await run;
+      const saved = await run;
+      revisionRef.current(saved.revision);
+      seenRef.current = useAppDocumentStore.getState().document;
       statusRef.current("saved");
       return true;
     } catch (err) {

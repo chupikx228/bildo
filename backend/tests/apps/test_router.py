@@ -24,7 +24,7 @@ UNKNOWN_MODEL = "bogus/model"
 UNCURATED_MODEL = "openai/gpt-5.6-luna"
 
 
-def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, object]:
+def build_document_payload(app_id: str, name: str = "Renamed app", revision: int = 1) -> dict[str, object]:
     now = datetime.now(UTC).isoformat()
     document = AppDocument(
         id=app_id,
@@ -45,6 +45,7 @@ def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, 
         navigation=AppNavigation(type="tabs", roots=[]),
         screens=[],
         state={},
+        revision=revision,
         created_at=now,
         updated_at=now,
     )
@@ -221,6 +222,62 @@ async def test_save_app_while_generation_is_pending_returns_409(client: httpx.As
     assert response.json()["error"] == "Приложение ещё генерируется, сохранение недоступно"
 
     get_response = await client.get(f"/api/apps/{app_id}")
+    assert get_response.json()["document"]["name"] == "New app"
+
+
+async def test_save_app_returns_the_next_revision(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_generated_app(client, repository)
+
+    response = await client.put(f"/api/apps/{app_id}", json=build_document_payload(app_id, revision=1))
+
+    assert response.status_code == 200
+    assert response.json()["document"]["revision"] == 2
+
+    get_response = await client.get(f"/api/apps/{app_id}")
+    assert get_response.json()["document"]["revision"] == 2
+
+
+async def test_save_app_with_a_stale_revision_returns_412(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_generated_app(client, repository)
+    first = await client.put(f"/api/apps/{app_id}", json=build_document_payload(app_id, "Первое сохранение"))
+    assert first.status_code == 200
+
+    response = await client.put(f"/api/apps/{app_id}", json=build_document_payload(app_id, "Устаревшее"))
+
+    assert response.status_code == 412
+    error = response.json()["error"]
+    assert error == "Документ устарел: приложение изменено, обновите документ перед сохранением"
+    assert not re.search(r"[A-Za-z]", error)
+
+    get_response = await client.get(f"/api/apps/{app_id}")
+    assert get_response.json()["document"]["name"] == "Первое сохранение"
+    assert get_response.json()["document"]["revision"] == 2
+
+
+async def test_save_app_while_pending_returns_409_for_a_stale_revision_too(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+) -> None:
+    pending_id = await create_app(client)
+    pending = await client.put(f"/api/apps/{pending_id}", json=build_document_payload(pending_id, revision=999))
+
+    stale_id = await create_generated_app(client, repository)
+    saved = await client.put(f"/api/apps/{stale_id}", json=build_document_payload(stale_id))
+    assert saved.status_code == 200
+    stale = await client.put(f"/api/apps/{stale_id}", json=build_document_payload(stale_id))
+
+    assert pending.status_code == 409
+    assert stale.status_code == 412
+    assert pending.status_code != stale.status_code
+
+    get_response = await client.get(f"/api/apps/{pending_id}")
+    assert get_response.json()["document"]["revision"] == 1
     assert get_response.json()["document"]["name"] == "New app"
 
 

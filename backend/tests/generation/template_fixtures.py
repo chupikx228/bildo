@@ -85,6 +85,7 @@ def build_template_document(prompt: str, name: str | None) -> AppDocument:
         navigation=content.navigation,
         screens=content.screens,
         state=content.state,
+        revision=1,
         created_at=now,
         updated_at=now,
     )

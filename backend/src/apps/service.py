@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel
+from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel, StaleRevision
 from src.apps.models import App
 from src.apps.repository import AppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppSummary, AppThemeTokens
@@ -25,6 +25,8 @@ DEFAULT_THEME = AppThemeTokens(
 )
 
 DEFAULT_APP_NAME = "New app"
+
+INITIAL_REVISION = 1
 
 AUTO_MODEL = "auto"
 
@@ -68,6 +70,7 @@ class AppService:
             navigation=AppNavigation(type="tabs", roots=[]),
             screens=[],
             state={},
+            revision=INITIAL_REVISION,
             created_at=now,
             updated_at=now,
         )
@@ -102,6 +105,7 @@ class AppService:
                 "id": str(app_id),
                 "slug": existing.slug,
                 "prompt": existing.prompt,
+                "revision": app.revision,
                 "created_at": existing.created_at,
                 "updated_at": datetime.now(UTC).isoformat(),
             }
@@ -121,7 +125,10 @@ class AppService:
             raise AppNotFound(app_id)
         if current.generation_status == "pending":
             raise AppGenerationInProgress(app_id)
-        app = await self._repository.update_document(current, document)
+        if document.revision != current.revision:
+            raise StaleRevision(app_id)
+        saved = document.model_copy(update={"revision": current.revision + 1})
+        app = await self._repository.update_document(current, saved)
         return AppDocument.model_validate(app.document)
 
     async def delete(self, app_id: UUID) -> bool:

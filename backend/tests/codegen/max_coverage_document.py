@@ -285,6 +285,7 @@ def build_max_coverage_document() -> AppDocument:
         navigation=AppNavigation(type="drawer", roots=["screen-index", "screen-profile"]),
         screens=[_index_screen(), _profile_screen(), _settings_screen()],
         state={"userName": "Аня", "counter": 0, "isReady": False, "touched": False},
+        revision=1,
         created_at="2026-08-16T10:00:00+00:00",
         updated_at="2026-08-16T10:30:00+00:00",
     )

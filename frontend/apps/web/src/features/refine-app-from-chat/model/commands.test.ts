@@ -136,6 +136,7 @@ function makeDoc(): AppDocument {
         },
       },
     ],
+    revision: 1,
     createdAt: now,
     updatedAt: now,
   };

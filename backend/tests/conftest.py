@@ -2,12 +2,21 @@ import os
 import subprocess
 import sys
 from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import docker
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import text as sql_text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from testcontainers.community.postgres import PostgresContainer
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -29,6 +38,38 @@ def _docker_available() -> bool:
 
 
 requires_docker = pytest.mark.skipif(not _docker_available(), reason="Docker is not available")
+
+
+def upgrade_to(database_url: str, revision: str) -> None:
+    env = {**os.environ, "DATABASE_URL": database_url}
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", revision],
+        cwd=BACKEND_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        pytest.fail(
+            f"alembic upgrade {revision} failed:\n--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
+        )
+
+
+@asynccontextmanager
+async def migration_database(database_url: str, name: str) -> AsyncIterator[str]:
+    admin = create_async_engine(database_url, isolation_level="AUTOCOMMIT")
+    drop = sql_text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+    create = sql_text(f'CREATE DATABASE "{name}"')
+    async with admin.connect() as connection:
+        await connection.execute(drop)
+        await connection.execute(create)
+    try:
+        yield make_url(database_url).set(database=name).render_as_string(hide_password=False)
+    finally:
+        async with admin.connect() as connection:
+            await connection.execute(drop)
+        await admin.dispose()
 
 
 @pytest.fixture(scope="session")

@@ -15,6 +15,14 @@ class AppGenerationInProgress(ConflictError):  # noqa: N818
         super().__init__(str(app_id))
 
 
+class StaleRevision(DomainError):  # noqa: N818
+    status_code = 412
+
+    def __init__(self, app_id: UUID) -> None:
+        self.message = "Документ устарел: приложение изменено, обновите документ перед сохранением"
+        super().__init__(str(app_id))
+
+
 class InvalidModel(DomainError):  # noqa: N818
     status_code = 422
 

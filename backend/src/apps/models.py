@@ -19,6 +19,7 @@ class App(Base):
     prompt: Mapped[str | None] = mapped_column(nullable=True)
     document: Mapped[dict[str, object]] = mapped_column(JSONB)
     model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    revision: Mapped[int] = mapped_column(server_default="1")
     generation_status: Mapped[GenerationStatus] = mapped_column(String(16), server_default="pending")
     generation_error: Mapped[str | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

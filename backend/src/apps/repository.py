@@ -61,6 +61,7 @@ class SqlAlchemyAppRepository:
             document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
             generation_status=generation_status,
             model=model,
+            revision=document.revision,
         )
         self._session.add(app)
         await self._session.flush()
@@ -70,6 +71,7 @@ class SqlAlchemyAppRepository:
         app.document = document.model_dump(mode="json", by_alias=True, exclude_none=True)
         app.name = document.name
         app.slug = document.slug
+        app.revision = document.revision
         await self._session.flush()
         return app
 
