@@ -8,7 +8,6 @@ export const GENERATION_STAGES = [
   "Заводим переменные приложения…",
   "Настраиваем действия и переходы…",
   "Генерируем Expo-проект…",
-  "Почти готово…",
 ] as const;
 
 export const STAGE_INTERVAL_MS = 2600;
