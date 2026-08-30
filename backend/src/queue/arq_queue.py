@@ -76,4 +76,10 @@ class ArqJobStatusReader:
             return JobStatusInfo(status=status)
         if info.success:
             return JobStatusInfo(status=status, result=info.result)
-        return JobStatusInfo(status=status, error=str(info.result))
+        return JobStatusInfo(status=status, failure=_as_exception(info.result))
+
+
+def _as_exception(result: object) -> BaseException:
+    if isinstance(result, BaseException):
+        return result
+    return RuntimeError(repr(result))
