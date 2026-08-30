@@ -162,11 +162,19 @@ describe("refineAppFromMessage — applied against the store", () => {
     expect(store().document!.theme.colorBg).toBe("#FFFFFF");
   });
 
-  it("fully unwinds an assistant turn once its checkpoints are drained", () => {
+  it("unwinds an assistant turn in a single undo, and redo re-applies it", () => {
     refineAppFromMessage("назови «FitApp»");
     store().undo();
-    store().undo();
     expect(store().document!.name).toBe("Original");
+    store().redo();
+    expect(store().document!.name).toBe("FitApp");
+  });
+
+  it("closes the AI turn even when a command bails out early", () => {
+    store().selectScreen(null);
+    const result = refineAppFromMessage("удали экран");
+    expect(result.ok).toBe(false);
+    expect(store().aiBatch).toBe(false);
   });
 
   it("returns an error with help and touches nothing when nothing matches", () => {

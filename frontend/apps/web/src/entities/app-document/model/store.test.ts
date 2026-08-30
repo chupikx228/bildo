@@ -199,14 +199,22 @@ describe("history slice", () => {
     expect(findAppNode(rootOf(), "n1")?.layout?.x).toBe(50);
   });
 
-  it("collapses an AI batch into two checkpoints", () => {
+  it("collapses an AI batch into a single undoable checkpoint", () => {
     expect(s().past.length).toBe(0);
     s().beginAiTurn();
     s().renameApp("A");
     s().setNodeText("s1", "n1", "X");
     s().renameApp("B");
     s().endAiTurn();
-    expect(s().past.length).toBe(2);
+    expect(s().past.length).toBe(1);
+    expect(s().document!.name).toBe("B");
+    expect(findAppNode(rootOf(), "n1")?.props?.text).toBe("X");
+
+    s().undo();
+    expect(s().document!.name).toBe("Test App");
+    expect(findAppNode(rootOf(), "n1")?.props?.text).toBe("Hello");
+
+    s().redo();
     expect(s().document!.name).toBe("B");
     expect(findAppNode(rootOf(), "n1")?.props?.text).toBe("X");
   });

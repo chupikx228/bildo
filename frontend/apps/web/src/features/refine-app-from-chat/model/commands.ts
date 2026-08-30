@@ -189,11 +189,11 @@ export function applyAppPatches(patches: AppPatch[]): CommandResult {
       }
     }
 
-    state.endAiTurn(`AI: ${summaries.join(", ")}`);
     return { ok: true, summary: summaries.join(", ") };
   } catch (err) {
-    state.endAiTurn("AI: ошибка");
     return { ok: false, errors: [err instanceof Error ? err.message : "Не удалось применить"] };
+  } finally {
+    state.endAiTurn();
   }
 }
 
