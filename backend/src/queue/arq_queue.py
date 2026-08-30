@@ -2,8 +2,10 @@ import logging
 from typing import Any
 
 from arq.connections import ArqRedis, RedisSettings, create_pool
+from arq.constants import result_key_prefix
 from arq.jobs import Job
 from arq.jobs import JobStatus as ArqJobStatus
+from redis.exceptions import RedisError
 
 from src.config import settings
 from src.queue.base import JobStatus, JobStatusInfo
@@ -44,7 +46,15 @@ class ArqTaskQueue:
         job = await self._redis.enqueue_job(job_name, _job_id=job_id, **kwargs)
         if job is None:
             raise TaskEnqueueError(f"Задача {job_name} уже поставлена в очередь под идентификатором {job_id}")
-        return await job.result(timeout=timeout_seconds, poll_delay=RESULT_POLL_DELAY_SECONDS)
+        result = await job.result(timeout=timeout_seconds, poll_delay=RESULT_POLL_DELAY_SECONDS)
+        try:
+            await self._discard_result(job_id)
+        except RedisError as error:
+            logger.warning("Failed to discard the result of job %s: %s", job_id, error)
+        return result
+
+    async def _discard_result(self, job_id: str) -> None:
+        await self._redis.unlink(result_key_prefix + job_id)
 
 
 class ArqJobStatusReader:
