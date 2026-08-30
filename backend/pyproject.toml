@@ -105,7 +105,7 @@ warn_required_dynamic_aliases = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "integration: needs a real Postgres via testcontainers; skipped when Docker is unavailable",
+    "integration: needs real Postgres/Redis via testcontainers; skipped when Docker is unavailable",
 ]
 
 [tool.coverage.run]
