@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { normalizeAppDocument, useApp } from "@bildo/api";
+import { AppGeneratingScreen, LOADING_LABEL } from "@/shared/ui";
 import { PhonePreview } from "@/widgets/canvas";
 
 const WRAPPER = "relative min-h-[100dvh] grid place-items-center bg-board p-6";
@@ -29,11 +30,7 @@ export function PublicPreviewPage() {
   );
 
   if (isLoading) {
-    return (
-      <div className={WRAPPER}>
-        <p className={STATUS}>Загрузка…</p>
-      </div>
-    );
+    return <AppGeneratingScreen label={LOADING_LABEL} />;
   }
 
   if (isError || !data) {
@@ -45,15 +42,20 @@ export function PublicPreviewPage() {
     );
   }
 
-  if (data.generationStatus !== "ready") {
+  if (data.generationStatus === "failed") {
     return (
       <div className={WRAPPER}>
         {backButton}
-        <p className={STATUS}>
-          {data.generationStatus === "failed"
-            ? (data.generationError ?? "Не удалось сгенерировать приложение")
-            : "Генерируем приложение…"}
-        </p>
+        <p className={STATUS}>{data.generationError ?? "Не удалось сгенерировать приложение"}</p>
+      </div>
+    );
+  }
+
+  if (data.generationStatus !== "ready") {
+    return (
+      <div className="relative">
+        <AppGeneratingScreen />
+        {backButton}
       </div>
     );
   }
