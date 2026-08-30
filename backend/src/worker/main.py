@@ -4,6 +4,7 @@ from arq import func
 from arq.connections import RedisSettings
 from arq.worker import Function
 
+from src.database import engine
 from src.generation.dependencies import build_llm_client
 from src.generation.llm_client import LlmClient
 from src.queue.arq_queue import get_redis_settings
@@ -19,8 +20,11 @@ async def startup(ctx: dict[Any, Any]) -> None:
 
 async def shutdown(ctx: dict[Any, Any]) -> None:
     llm_client: LlmClient | None = ctx.get("llm_client")
-    if llm_client is not None:
-        await llm_client.aclose()
+    try:
+        if llm_client is not None:
+            await llm_client.aclose()
+    finally:
+        await engine.dispose()
 
 
 class WorkerSettings:

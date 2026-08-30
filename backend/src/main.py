@@ -11,6 +11,7 @@ from src.apps.router import router as apps_router
 from src.chat.router import router as chat_router
 from src.codegen.router import router as codegen_router
 from src.config import settings
+from src.database import engine
 from src.exceptions import DomainError
 from src.generation.dependencies import get_model_catalog
 from src.generation.router import router as models_router
@@ -54,12 +55,15 @@ CORS_HEADERS = ["Content-Type"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.arq_redis = await create_arq_pool()
-    await get_model_catalog().ensure_fresh()
     try:
-        yield
+        app.state.arq_redis = await create_arq_pool()
+        try:
+            await get_model_catalog().ensure_fresh()
+            yield
+        finally:
+            await app.state.arq_redis.aclose()
     finally:
-        await app.state.arq_redis.aclose()
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:
