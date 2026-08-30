@@ -27,7 +27,7 @@ THEME = AppThemeTokens(
 )
 
 
-def build_document(app_id: str | None = None, name: str = "Test app") -> AppDocument:
+def build_document(app_id: str | None = None, name: str = "Test app", revision: int = 1) -> AppDocument:
     now = datetime.now(UTC).isoformat()
     return AppDocument(
         id=app_id or str(uuid4()),
@@ -37,6 +37,7 @@ def build_document(app_id: str | None = None, name: str = "Test app") -> AppDocu
         navigation=AppNavigation(type="tabs", roots=[]),
         screens=[],
         state={},
+        revision=revision,
         created_at=now,
         updated_at=now,
     )
@@ -110,6 +111,49 @@ async def test_update_document_updates_name_slug_and_document(repository: SqlAlc
     assert fetched is not None
     assert fetched.name == "Renamed"
     assert fetched.slug == "renamed-slug"
+
+
+async def test_create_persists_the_document_revision(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    document = build_document(revision=3)
+
+    async with db_session_factory() as write_session:
+        await SqlAlchemyAppRepository(write_session).create(document.name, document.prompt, document, "ready", None)
+        await write_session.commit()
+
+    async with db_session_factory() as read_session:
+        fetched = await SqlAlchemyAppRepository(read_session).get(UUID(document.id))
+
+    assert fetched is not None
+    assert fetched.revision == 3
+    assert fetched.document["revision"] == 3
+    assert AppDocument.model_validate(fetched.document).revision == 3
+
+
+async def test_update_document_round_trips_the_new_revision_through_jsonb(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    document = build_document(revision=1)
+
+    async with db_session_factory() as write_session:
+        await SqlAlchemyAppRepository(write_session).create(document.name, document.prompt, document, "ready", None)
+        await write_session.commit()
+
+    async with db_session_factory() as update_session:
+        update_repository = SqlAlchemyAppRepository(update_session)
+        app = await update_repository.get(UUID(document.id))
+        assert app is not None
+        await update_repository.update_document(app, document.model_copy(update={"revision": 2}))
+        await update_session.commit()
+
+    async with db_session_factory() as read_session:
+        fetched = await SqlAlchemyAppRepository(read_session).get(UUID(document.id))
+
+    assert fetched is not None
+    assert fetched.revision == 2
+    assert fetched.document["revision"] == 2
+    assert AppDocument.model_validate(fetched.document).revision == 2
 
 
 async def test_set_generation_status_updates_status_and_error(repository: SqlAlchemyAppRepository) -> None:

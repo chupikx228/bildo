@@ -1,4 +1,7 @@
+from collections.abc import Mapping
 from datetime import datetime
+from types import MappingProxyType
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import String, func
@@ -19,7 +22,10 @@ class App(Base):
     prompt: Mapped[str | None] = mapped_column(nullable=True)
     document: Mapped[dict[str, object]] = mapped_column(JSONB)
     model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    revision: Mapped[int] = mapped_column(server_default="1")
     generation_status: Mapped[GenerationStatus] = mapped_column(String(16), server_default="pending")
     generation_error: Mapped[str | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+    __mapper_args__: Mapping[str, Any] = MappingProxyType({"version_id_col": revision, "version_id_generator": False})

@@ -13,6 +13,7 @@ function minimalDoc(): AppDocument {
     id: "app1",
     name: "App",
     theme: DEFAULT_APP_THEME,
+    revision: 1,
     navigation: { type: "stack", roots: ["s1"] },
     screens: [
       {

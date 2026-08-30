@@ -1,16 +1,12 @@
-import os
-import subprocess
-import sys
 from collections.abc import AsyncIterator
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
-from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
-from tests.conftest import ALEMBIC_INI, BACKEND_ROOT, requires_docker
+from tests.conftest import migration_database, requires_docker, upgrade_to
 
 pytestmark = [pytest.mark.integration, requires_docker]
 
@@ -18,8 +14,6 @@ REVISION_BEFORE_SCOPED_FK = "f1a4b9c02d73"
 REVISION_SCOPED_FK = "a2c7e6b18f04"
 
 MIGRATION_DATABASE = "chat_reply_fk_migration"
-CREATE_MIGRATION_DATABASE = 'CREATE DATABASE "chat_reply_fk_migration"'
-DROP_MIGRATION_DATABASE = 'DROP DATABASE IF EXISTS "chat_reply_fk_migration" WITH (FORCE)'
 
 INSERT_APP = """
     INSERT INTO apps (id, name, document)
@@ -30,22 +24,6 @@ INSERT_MESSAGE = """
     VALUES (:id, :app_id, :role, :content, :in_reply_to_id)
 """
 SELECT_REPLY_LINKS = "SELECT id, in_reply_to_id FROM chat_messages ORDER BY sequence"
-
-
-def upgrade_to(database_url: str, revision: str) -> None:
-    env = {**os.environ, "DATABASE_URL": database_url}
-    result = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", revision],
-        cwd=BACKEND_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        pytest.fail(
-            f"alembic upgrade {revision} failed:\n--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
-        )
 
 
 async def insert_app(connection: AsyncConnection, app_id: UUID, name: str) -> None:
@@ -73,16 +51,8 @@ async def insert_message(
 
 @pytest_asyncio.fixture
 async def migration_database_url(database_url: str) -> AsyncIterator[str]:
-    admin = create_async_engine(database_url, isolation_level="AUTOCOMMIT")
-    async with admin.connect() as connection:
-        await connection.execute(text(DROP_MIGRATION_DATABASE))
-        await connection.execute(text(CREATE_MIGRATION_DATABASE))
-    try:
-        yield make_url(database_url).set(database=MIGRATION_DATABASE).render_as_string(hide_password=False)
-    finally:
-        async with admin.connect() as connection:
-            await connection.execute(text(DROP_MIGRATION_DATABASE))
-        await admin.dispose()
+    async with migration_database(database_url, MIGRATION_DATABASE) as url:
+        yield url
 
 
 async def test_the_migration_detaches_cross_app_replies_and_keeps_the_valid_ones(

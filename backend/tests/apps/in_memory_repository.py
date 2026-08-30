@@ -33,6 +33,7 @@ class InMemoryAppRepository:
             document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
             generation_status=generation_status,
             model=model,
+            revision=document.revision,
             created_at=now,
             updated_at=now,
         )
@@ -43,6 +44,7 @@ class InMemoryAppRepository:
         app.document = document.model_dump(mode="json", by_alias=True, exclude_none=True)
         app.name = document.name
         app.slug = document.slug
+        app.revision = document.revision
         app.updated_at = datetime.now(UTC)
         return app
 

@@ -10,6 +10,7 @@ export interface DocumentSlice {
 
   setDocument(doc: AppDocument): void;
   applyDocument(doc: AppDocument): void;
+  setRevision(revision: number): void;
   setSaveStatus(status: AppSaveStatus, error?: string | null): void;
   updateTheme(patch: Partial<AppThemeTokens>): void;
   renameApp(name: string): void;
@@ -49,6 +50,12 @@ export const createDocumentSlice: AppSlice<DocumentSlice> = (set) => ({
         state.selectedScreenId = normalized.screens[0]?.id ?? null;
       }
       touch(state.document);
+    }),
+
+  setRevision: (revision) =>
+    set((state) => {
+      if (!state.document) return;
+      state.document.revision = revision;
     }),
 
   setSaveStatus: (status, error = null) =>

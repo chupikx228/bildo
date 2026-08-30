@@ -151,6 +151,7 @@ export const appDocumentSchema = z.object({
   navigation: appNavigationSchema,
   screens: z.array(appScreenSchema),
   state: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  revision: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

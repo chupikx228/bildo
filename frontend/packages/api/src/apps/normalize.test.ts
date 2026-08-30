@@ -43,6 +43,7 @@ function baseDoc(overrides: Partial<AppDocument> = {}): AppDocument {
     id: "app1",
     name: "App",
     theme: DEFAULT_APP_THEME,
+    revision: 1,
     navigation: { type: "stack", roots: ["s1"] },
     screens: [{ id: "s1", name: "Home", route: "index", root: { id: "r1", type: "View" } }],
     createdAt: "2026-01-01T00:00:00.000Z",

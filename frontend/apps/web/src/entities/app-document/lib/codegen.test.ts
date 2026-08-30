@@ -96,6 +96,7 @@ function coverageDoc(): AppDocument {
         },
       },
     ],
+    revision: 1,
     createdAt: now,
     updatedAt: now,
   };

@@ -49,13 +49,16 @@ export function makeDocument(id: string, name = "Demo App") {
         },
       },
     ],
+    revision: 1,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
 }
 
-function readyDetail(id: string, name = "Demo App") {
-  return { id, name, document: makeDocument(id, name), generationStatus: "ready", generationError: null };
+type DocumentFixture = ReturnType<typeof makeDocument>;
+
+function readyDetail(id: string, document: DocumentFixture) {
+  return { id, name: document.name, document, generationStatus: "ready", generationError: null };
 }
 
 interface ChatMessageFixture {
@@ -75,9 +78,24 @@ interface MockOptions {
   apps?: AppSummaryFixture[];
 }
 
-export async function installApiMocks(page: Page, options: MockOptions = {}): Promise<void> {
+export interface ApiMocks {
+  getDocument(appId: string): DocumentFixture;
+  getRevision(appId: string): number;
+  bumpRevision(appId: string): number;
+}
+
+export async function installApiMocks(page: Page, options: MockOptions = {}): Promise<ApiMocks> {
   const apps = new Map<string, AppSummaryFixture>();
   for (const app of options.apps ?? []) apps.set(app.id, app);
+
+  const documents = new Map<string, DocumentFixture>();
+  const getDocument = (id: string) => {
+    const existing = documents.get(id);
+    if (existing) return existing;
+    const fresh = makeDocument(id, apps.get(id)?.name);
+    documents.set(id, fresh);
+    return fresh;
+  };
 
   const chats = new Map<string, ChatMessageFixture[]>();
   const getChat = (id: string) => {
@@ -113,7 +131,7 @@ export async function installApiMocks(page: Page, options: MockOptions = {}): Pr
         chat.push(makeChatMessage(`${appId}-u${chat.length}`, "user", content));
         chat.push({
           ...makeChatMessage(`${appId}-a${chat.length}`, "assistant", "Готово — предлагаю переименовать приложение."),
-          proposedDocument: makeDocument(appId, "Renamed"),
+          proposedDocument: { ...getDocument(appId), name: "Renamed" },
         });
         await json(route, 202, { taskId: `task-${chat.length}` });
         return;
@@ -154,20 +172,43 @@ export async function installApiMocks(page: Page, options: MockOptions = {}): Pr
       }
       if (method === "GET" && idMatch) {
         const id = idMatch[1]!;
-        const known = apps.get(id);
-        await json(route, 200, readyDetail(id, known?.name));
+        await json(route, 200, readyDetail(id, getDocument(id)));
         return;
       }
       if (method === "PUT" && idMatch) {
-        await json(route, 200, { ok: true, document: makeDocument(idMatch[1]!) });
+        const id = idMatch[1]!;
+        const stored = getDocument(id);
+        const body = request.postDataJSON() as DocumentFixture;
+        if (body.revision !== stored.revision) {
+          await json(route, 412, {
+            error: "Документ устарел: приложение изменено, обновите документ перед сохранением",
+          });
+          return;
+        }
+        const next = { ...body, revision: stored.revision + 1 };
+        documents.set(id, next);
+        await json(route, 200, { ok: true, document: next });
         return;
       }
       if (method === "DELETE" && idMatch) {
-        apps.delete(idMatch[1]!);
+        const id = idMatch[1]!;
+        apps.delete(id);
+        documents.delete(id);
         await json(route, 200, { ok: true });
         return;
       }
       await json(route, 404, { error: "Не найдено" });
     },
   );
+
+  return {
+    getDocument,
+    getRevision: (appId) => getDocument(appId).revision,
+    bumpRevision: (appId) => {
+      const stored = getDocument(appId);
+      const next = { ...stored, revision: stored.revision + 1 };
+      documents.set(appId, next);
+      return next.revision;
+    },
+  };
 }

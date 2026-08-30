@@ -83,12 +83,17 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
             max_attempts=settings.routerai_max_retries,
             subject="ответ ассистента",
         )
+        proposed = (
+            response.document.model_copy(update={"revision": document.revision})
+            if response.document is not None
+            else None
+        )
         try:
             await chat_service.add_message(
                 UUID(app_id),
                 "assistant",
                 response.reply,
-                response.document,
+                proposed,
                 answered_message_id,
             )
             await transaction.commit()

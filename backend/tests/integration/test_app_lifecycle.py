@@ -9,14 +9,19 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.apps.models import App
+from src.apps.repository import SqlAlchemyAppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppThemeTokens
+from src.apps.service import AppService
 from src.dependencies import get_session
 from src.main import app
 from src.queue.dependencies import get_task_queue
 from src.queue.jobs import BUILD_EXPORT_ZIP_JOB
+from src.transaction.session_transaction import SessionTransaction
 from src.worker import tasks as worker_tasks
 from tests.conftest import requires_docker
-from tests.in_memory_task_queue import EnqueuedJob
+from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
+from tests.generation.template_fixtures import build_template_document
+from tests.in_memory_task_queue import EnqueuedJob, InMemoryTaskQueue
 
 pytestmark = [pytest.mark.integration, requires_docker]
 
@@ -34,7 +39,7 @@ THEME = AppThemeTokens(
 )
 
 
-def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, object]:
+def build_document_payload(app_id: str, name: str = "Renamed app", revision: int = 1) -> dict[str, object]:
     now = datetime.now(UTC).isoformat()
     document = AppDocument(
         id=app_id,
@@ -44,6 +49,7 @@ def build_document_payload(app_id: str, name: str = "Renamed app") -> dict[str, 
         navigation=AppNavigation(type="tabs", roots=[]),
         screens=[],
         state={},
+        revision=revision,
         created_at=now,
         updated_at=now,
     )
@@ -106,6 +112,18 @@ async def mark_generation_ready(db_session_factory: async_sessionmaker[AsyncSess
         db_app = await session.get(App, UUID(app_id))
         assert db_app is not None
         db_app.generation_status = "ready"
+        await session.commit()
+
+
+async def run_generation(db_session_factory: async_sessionmaker[AsyncSession], app_id: str) -> None:
+    async with db_session_factory() as session:
+        service = AppService(
+            SqlAlchemyAppRepository(session),
+            InMemoryTaskQueue(),
+            SessionTransaction(session),
+            InMemoryModelCatalog(),
+        )
+        await service.mark_generated(UUID(app_id), build_template_document("a habit tracker", None))
         await session.commit()
 
 
@@ -176,3 +194,29 @@ async def test_export_returns_real_zip_archive(
     names = set(archive.namelist())
     assert "package.json" in names
     assert "app/_layout.tsx" in names
+
+
+async def test_put_of_a_document_read_before_generation_returns_412(
+    client: httpx.AsyncClient,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    create_response = await client.post("/api/apps", json={"prompt": "a habit tracker"})
+    app_id = create_response.json()["id"]
+    placeholder = (await client.get(f"/api/apps/{app_id}")).json()["document"]
+    assert placeholder["revision"] == 1
+    assert placeholder["screens"] == []
+
+    await run_generation(db_session_factory, app_id)
+
+    generated = (await client.get(f"/api/apps/{app_id}")).json()["document"]
+    assert generated["revision"] == 2
+    assert generated["screens"] != []
+
+    response = await client.put(f"/api/apps/{app_id}", json=placeholder)
+
+    assert response.status_code == 412
+    assert response.json() == {"error": "Документ устарел: приложение изменено, обновите документ перед сохранением"}
+
+    stored = (await client.get(f"/api/apps/{app_id}")).json()["document"]
+    assert stored["revision"] == 2
+    assert stored["screens"] == generated["screens"]

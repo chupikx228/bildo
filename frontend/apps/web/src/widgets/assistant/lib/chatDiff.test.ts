@@ -10,6 +10,7 @@ function doc(): AppDocument {
     theme: DEFAULT_APP_THEME,
     navigation: { type: "stack", roots: ["s1"] },
     screens: [{ id: "s1", name: "Home", route: "index", root: { id: "root1", type: "View" } }],
+    revision: 1,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };

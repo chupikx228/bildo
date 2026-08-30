@@ -33,10 +33,11 @@ def generated_answer() -> str:
     return json.dumps(document.model_dump(mode="json", by_alias=True), ensure_ascii=False)
 
 
-def chat_answer(reply: str, *, with_document: bool) -> str:
+def chat_answer(reply: str, *, with_document: bool, document_revision: int = 1) -> str:
     payload: dict[str, Any] = {"reply": reply}
     if with_document:
-        payload["document"] = build_template_document(PROMPT, None).model_dump(mode="json", by_alias=True)
+        document = build_template_document(PROMPT, None).model_copy(update={"revision": document_revision})
+        payload["document"] = document.model_dump(mode="json", by_alias=True)
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -328,6 +329,32 @@ async def test_chat_turn_appends_the_assistant_reply_with_the_proposed_document(
     assert messages[1].accepted is None
     assert len(sessions) == 1
     assert sessions[0].commits == 1
+
+
+async def test_chat_turn_overrides_the_revision_the_model_returned_with_the_apps_own(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    app_service = AppService(repository, InMemoryTaskQueue(), InMemoryTransaction(), InMemoryModelCatalog())
+    app = await repository.get(app_id)
+    assert app is not None
+    await app_service.save_document(app_id, AppDocument.model_validate(app.document))
+    user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
+
+    await worker_tasks.chat_turn(
+        context([chat_answer("готово, добавил", with_document=True, document_revision=999)]),
+        str(app_id),
+        str(user_message.id),
+    )
+
+    current = await repository.get(app_id)
+    assert current is not None
+    assert AppDocument.model_validate(current.document).revision == 2
+
+    messages = await chat_repository.list_messages(app_id)
+    assert messages[1].proposed_document is not None
+    assert AppDocument.model_validate(messages[1].proposed_document).revision == 2
 
 
 async def test_chat_turn_asks_the_llm_for_the_default_model(

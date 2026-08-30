@@ -3,7 +3,9 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 
+from src.apps.exceptions import StaleRevisionError
 from src.apps.models import App
 from src.apps.schemas import AppDocument, GenerationStatus
 
@@ -61,6 +63,7 @@ class SqlAlchemyAppRepository:
             document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
             generation_status=generation_status,
             model=model,
+            revision=document.revision,
         )
         self._session.add(app)
         await self._session.flush()
@@ -70,7 +73,8 @@ class SqlAlchemyAppRepository:
         app.document = document.model_dump(mode="json", by_alias=True, exclude_none=True)
         app.name = document.name
         app.slug = document.slug
-        await self._session.flush()
+        app.revision = document.revision
+        await self._flush(app.id)
         return app
 
     async def set_generation_status(
@@ -81,8 +85,14 @@ class SqlAlchemyAppRepository:
     ) -> App:
         app.generation_status = status
         app.generation_error = error
-        await self._session.flush()
+        await self._flush(app.id)
         return app
+
+    async def _flush(self, app_id: UUID) -> None:
+        try:
+            await self._session.flush()
+        except StaleDataError as error:
+            raise StaleRevisionError(app_id) from error
 
     async def delete(self, app_id: UUID) -> bool:
         app = await self._session.get(App, app_id)
