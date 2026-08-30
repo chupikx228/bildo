@@ -68,7 +68,7 @@ export function parseRefineMessage(message: string): AppPatch[] {
   }
 
   const renameApp =
-    /(?:назван|переимен|назови|имя)\s*(?:приложен\w*)?\s*[:=]?\s*[«"](.+?)[»"]/i.exec(text) ??
+    /(?:назван|переимен|назови|имя)\s*(?:приложен[а-яё]*)?\s*[:=]?\s*[«"](.+?)[»"]/i.exec(text) ??
     /(?:назван|переимен|назови)\s+(\S.{1,40})$/i.exec(text);
   if (renameApp?.[1] && !/экран/i.test(renameApp[0])) {
     patches.push({ op: "renameApp", name: renameApp[1].trim() });
@@ -86,7 +86,7 @@ export function parseRefineMessage(message: string): AppPatch[] {
     patches.push({ op: "setText", text: setText[1].trim() });
   }
 
-  const btn = /(?:кнопк\w*|button)\s*[:=]?\s*[«"](.+?)[»"]/i.exec(text);
+  const btn = /(?:кнопк[а-яё]*|button)\s*[:=]?\s*[«"](.+?)[»"]/i.exec(text);
   if (btn?.[1]) {
     patches.push({ op: "addComponent", type: "Button", text: btn[1].trim() });
   } else if (/добав(ь|ить)\s+кнопк/.test(lower)) {
