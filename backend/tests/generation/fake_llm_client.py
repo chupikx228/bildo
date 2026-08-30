@@ -8,11 +8,20 @@ class FakeLlmClient:
         self._answers = list(answers)
         self.calls: list[list[ChatMessage]] = []
         self.schemas: list[JsonSchema] = []
+        self.models: list[str] = []
         self.closed = False
 
-    async def complete(self, messages: Sequence[ChatMessage], schema_name: str, schema: JsonSchema) -> str:
+    async def complete(
+        self,
+        messages: Sequence[ChatMessage],
+        schema_name: str,
+        schema: JsonSchema,
+        *,
+        model: str,
+    ) -> str:
         self.calls.append(list(messages))
         self.schemas.append(schema)
+        self.models.append(model)
         if not self._answers:
             raise AssertionError("Клиент вызван больше раз, чем подготовлено ответов")
         answer = self._answers.pop(0)

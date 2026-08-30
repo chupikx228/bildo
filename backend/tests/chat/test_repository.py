@@ -64,7 +64,7 @@ def repository(session: AsyncSession) -> SqlAlchemyChatRepository:
 @pytest_asyncio.fixture
 async def app_id(session: AsyncSession) -> UUID:
     document = build_document()
-    app = await SqlAlchemyAppRepository(session).create(document.name, document.prompt, document, "ready")
+    app = await SqlAlchemyAppRepository(session).create(document.name, document.prompt, document, "ready", None)
     return app.id
 
 
@@ -87,7 +87,7 @@ async def test_list_messages_ignores_other_apps(
     app_id: UUID,
 ) -> None:
     other = build_document()
-    other_app = await SqlAlchemyAppRepository(session).create(other.name, other.prompt, other, "ready")
+    other_app = await SqlAlchemyAppRepository(session).create(other.name, other.prompt, other, "ready", None)
     await repository.create_message(app_id, "user", "своё")
     await repository.create_message(other_app.id, "user", "чужое")
 
@@ -122,7 +122,7 @@ async def test_list_messages_up_to_returns_nothing_for_an_anchor_of_another_app(
     app_id: UUID,
 ) -> None:
     other = build_document()
-    other_app = await SqlAlchemyAppRepository(session).create(other.name, other.prompt, other, "ready")
+    other_app = await SqlAlchemyAppRepository(session).create(other.name, other.prompt, other, "ready", None)
     foreign = await repository.create_message(other_app.id, "user", "чужое")
     await repository.create_message(app_id, "user", "своё")
 
@@ -175,7 +175,7 @@ async def test_a_reply_cannot_point_at_a_message_of_another_app(
     app_id: UUID,
 ) -> None:
     other = build_document()
-    other_app = await SqlAlchemyAppRepository(session).create(other.name, other.prompt, other, "ready")
+    other_app = await SqlAlchemyAppRepository(session).create(other.name, other.prompt, other, "ready", None)
     foreign = await repository.create_message(other_app.id, "user", "чужой вопрос")
 
     with pytest.raises(IntegrityError) as raised:

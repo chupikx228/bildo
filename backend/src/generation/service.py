@@ -7,10 +7,18 @@ from src.generation.prompt import SCHEMA_NAME, app_document_schema, build_messag
 from src.generation.structured_output import generate_structured
 
 
-async def generate_document(prompt: str, name: str | None, *, client: LlmClient, max_attempts: int) -> AppDocument:
+async def generate_document(
+    prompt: str,
+    name: str | None,
+    *,
+    client: LlmClient,
+    model: str,
+    max_attempts: int,
+) -> AppDocument:
     document = await generate_structured(
         build_messages(prompt, name),
         client=client,
+        model=model,
         schema_name=SCHEMA_NAME,
         schema=app_document_schema(),
         target_model=AppDocument,

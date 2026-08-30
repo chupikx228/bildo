@@ -9,9 +9,12 @@ import {
   toAttachments,
   type Attachment,
 } from "@/shared/attachments";
+import { resolveErrorMessage } from "@/shared/api";
 import { ROUTES } from "@/shared/config";
 import { useOutsideClick } from "@/shared/lib";
+import { DEFAULT_MODEL_ID, type ModelId } from "../model/models";
 import { AiInterview } from "./AiInterview";
+import { ModelPicker } from "./ModelPicker";
 
 const EXAMPLE_PROMPTS = [
   "Трекер привычек: сегодня, статистика, настройки",
@@ -35,6 +38,7 @@ export function CreateAppFlow() {
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [planMode, setPlanMode] = useState(false);
+  const [modelId, setModelId] = useState<ModelId>(DEFAULT_MODEL_ID);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useOutsideClick<HTMLDivElement>(menuOpen, () => setMenuOpen(false));
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -51,10 +55,10 @@ export function CreateAppFlow() {
     if (override) setPrompt(text);
     setError(null);
     try {
-      const result = await createApp.mutateAsync({ prompt: text });
+      const result = await createApp.mutateAsync({ prompt: text, model: modelId });
       await navigate(ROUTES.editor(result.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось создать приложение");
+      setError(resolveErrorMessage(err, "Не удалось создать приложение"));
     }
   };
 
@@ -66,6 +70,7 @@ export function CreateAppFlow() {
     return (
       <AiInterview
         busy={createApp.isPending}
+        error={error}
         onClose={() => setMode("prompt")}
         onSubmit={(text) => void submit(text)}
       />
@@ -200,6 +205,8 @@ export function CreateAppFlow() {
               }}
             />
           </div>
+
+          <ModelPicker value={modelId} onChange={setModelId} />
 
           <span className="text-[11px] text-[#a5a5b0]">Ctrl+Enter</span>
           <span className="flex-1" />

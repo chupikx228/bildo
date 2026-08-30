@@ -174,6 +174,20 @@ export const appDetailSchema = z.object({
 });
 export type AppDetail = z.infer<typeof appDetailSchema>;
 
+export const modelInfoSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  pro: z.boolean(),
+});
+export type ModelInfo = z.infer<typeof modelInfoSchema>;
+
+export const createAppRequestSchema = z.object({
+  prompt: z.string().min(3),
+  name: z.string().optional(),
+  model: z.string().optional(),
+});
+export type CreateAppRequest = z.infer<typeof createAppRequestSchema>;
+
 export const APP_STAGE_WIDTH = 370;
 export const APP_STAGE_HEIGHT = 640;
 

@@ -2,3 +2,5 @@ node_modules
 dist
 .turbo
 pnpm-lock.yaml
+test-results
+playwright-report

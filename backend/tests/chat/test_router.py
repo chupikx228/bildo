@@ -11,6 +11,7 @@ from src.chat.service import ChatService
 from src.main import app
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.chat.in_memory_repository import InMemoryChatRepository
+from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
 from tests.generation.template_fixtures import build_template_document
 from tests.in_memory_task_queue import InMemoryTaskQueue
 from tests.in_memory_transaction import InMemoryTransaction
@@ -28,7 +29,7 @@ def chat_repository() -> InMemoryChatRepository:
 
 @pytest.fixture
 def app_service(app_repository: InMemoryAppRepository) -> AppService:
-    return AppService(app_repository, InMemoryTaskQueue(), InMemoryTransaction())
+    return AppService(app_repository, InMemoryTaskQueue(), InMemoryTransaction(), InMemoryModelCatalog())
 
 
 @pytest.fixture

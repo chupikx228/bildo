@@ -21,7 +21,7 @@ async def list_apps(service: AppServiceDep) -> AppListResponse:
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateAppResponse)
 async def create_app(body: CreateAppRequest, service: AppServiceDep) -> CreateAppResponse:
-    app_id = await service.create_from_prompt(body.prompt, body.name)
+    app_id = await service.create_from_prompt(body.prompt, body.name, body.model)
     return CreateAppResponse(id=str(app_id))
 
 

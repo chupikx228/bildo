@@ -19,10 +19,12 @@ from src.worker import tasks as worker_tasks
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.chat.in_memory_repository import InMemoryChatRepository, integrity_error
 from tests.generation.fake_llm_client import FakeLlmClient
+from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
 from tests.generation.template_fixtures import build_template_document
 from tests.in_memory_task_queue import InMemoryTaskQueue
 from tests.in_memory_transaction import InMemoryTransaction
 
+MODEL = "test/model"
 PROMPT = "трекер привычек и серии дней"
 
 
@@ -107,7 +109,7 @@ def storage(
 
 
 async def create_pending_app(repository: InMemoryAppRepository) -> UUID:
-    service = AppService(repository, InMemoryTaskQueue(), InMemoryTransaction())
+    service = AppService(repository, InMemoryTaskQueue(), InMemoryTransaction(), InMemoryModelCatalog())
     return await service.create_from_prompt(PROMPT, None)
 
 
@@ -125,7 +127,7 @@ async def test_generate_app_document_marks_app_ready(
 ) -> None:
     app_id = await create_pending_app(repository)
 
-    await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None)
+    await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
 
     app = await repository.get(app_id)
     assert app is not None
@@ -136,10 +138,41 @@ async def test_generate_app_document_marks_app_ready(
     assert sessions[0].rollbacks == 0
 
 
+async def test_generate_app_document_asks_the_llm_for_the_model_it_was_given(
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_pending_app(repository)
+    ctx = context()
+
+    await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert llm_client.models == [MODEL]
+    assert settings.routerai_model != MODEL
+
+
+async def test_generate_app_document_passes_the_model_through_to_generate_document(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+) -> None:
+    seen: list[str] = []
+
+    async def recording_generation(prompt: str, name: str | None, **kwargs: Any) -> AppDocument:
+        seen.append(str(kwargs["model"]))
+        return build_template_document(prompt, name)
+
+    monkeypatch.setattr(worker_tasks, "generate_document", recording_generation)
+    app_id = await create_pending_app(repository)
+
+    await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
+
+    assert seen == [MODEL]
+
+
 async def test_generate_app_document_stores_generated_document(repository: InMemoryAppRepository) -> None:
     app_id = await create_pending_app(repository)
 
-    await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None)
+    await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
 
     app = await repository.get(app_id)
     assert app is not None
@@ -161,7 +194,7 @@ async def test_generate_app_document_marks_app_failed(
     app_id = await create_pending_app(repository)
 
     with pytest.raises(RuntimeError):
-        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None)
+        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
 
     app = await repository.get(app_id)
     assert app is not None
@@ -184,7 +217,7 @@ async def test_generate_app_document_keeps_placeholder_document_on_failure(
     app_id = await create_pending_app(repository)
 
     with pytest.raises(RuntimeError):
-        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None)
+        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
 
     app = await repository.get(app_id)
     assert app is not None
@@ -200,7 +233,7 @@ async def test_generate_app_document_marks_app_failed_when_model_answer_is_inval
     ctx = context(answers)
 
     with pytest.raises(GenerationError):
-        await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None)
+        await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
 
     llm_client: FakeLlmClient = ctx["llm_client"]
     assert len(llm_client.calls) == settings.routerai_max_retries
@@ -224,7 +257,7 @@ async def test_generate_app_document_marks_app_failed_when_generation_is_not_con
     ctx = context([GenerationNotConfiguredError()])
 
     with pytest.raises(GenerationError):
-        await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None)
+        await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
 
     llm_client: FakeLlmClient = ctx["llm_client"]
     assert len(llm_client.calls) == 1
@@ -244,7 +277,7 @@ async def test_generate_app_document_marks_app_failed_when_the_gateway_rejects_t
     ctx = context([GenerationError("RouterAI отклонил запрос генерации: 400")])
 
     with pytest.raises(GenerationError):
-        await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None)
+        await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
 
     app = await repository.get(app_id)
     assert app is not None
@@ -262,7 +295,7 @@ async def test_chat_turn_takes_exactly_the_kwargs_the_chat_service_enqueues(
     assert app is not None
     await repository.set_generation_status(app, "ready", None)
     queue = InMemoryTaskQueue()
-    app_service = AppService(repository, queue, InMemoryTransaction())
+    app_service = AppService(repository, queue, InMemoryTransaction(), InMemoryModelCatalog())
     service = ChatService(InMemoryChatRepository(), app_service, InMemoryTransaction(), queue)
 
     await service.send_message(app_id, "добавь экран настроек")
@@ -295,6 +328,20 @@ async def test_chat_turn_appends_the_assistant_reply_with_the_proposed_document(
     assert messages[1].accepted is None
     assert len(sessions) == 1
     assert sessions[0].commits == 1
+
+
+async def test_chat_turn_asks_the_llm_for_the_default_model(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
+    ctx = context([chat_answer("готово", with_document=False)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert llm_client.models == [settings.routerai_model]
 
 
 async def test_chat_turn_leaves_the_proposed_document_null_when_the_model_only_replies(

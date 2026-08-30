@@ -18,6 +18,7 @@ async def generate_structured[ModelT: BaseModel](
     messages: Sequence[ChatMessage],
     *,
     client: LlmClient,
+    model: str,
     schema_name: str,
     schema: JsonSchema,
     target_model: type[ModelT],
@@ -28,7 +29,7 @@ async def generate_structured[ModelT: BaseModel](
     last_error = ""
 
     for attempt in range(1, max_attempts + 1):
-        raw = await client.complete(history, schema_name, schema)
+        raw = await client.complete(history, schema_name, schema, model=model)
         try:
             return _parse(raw, target_model)
         except (ValueError, ValidationError) as error:
