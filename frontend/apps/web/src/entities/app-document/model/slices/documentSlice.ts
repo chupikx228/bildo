@@ -9,6 +9,7 @@ export interface DocumentSlice {
   lastErrors: string[];
 
   setDocument(doc: AppDocument): void;
+  applyDocument(doc: AppDocument): void;
   setRevision(revision: number): void;
   setSaveStatus(status: AppSaveStatus, error?: string | null): void;
   updateTheme(patch: Partial<AppThemeTokens>): void;
@@ -35,6 +36,20 @@ export const createDocumentSlice: AppSlice<DocumentSlice> = (set) => ({
       state.saveError = null;
       state.lastErrors = [];
       state.aiBatch = false;
+    }),
+
+  applyDocument: (doc) =>
+    set((state) => {
+      if (!state.document) return;
+      pushPast(state, "Ассистент");
+      const normalized = normalizeAppDocument(doc);
+      state.document = normalized;
+      state.selectedNodeId = null;
+      state.selectedNodeIds = [];
+      if (!normalized.screens.some((sc) => sc.id === state.selectedScreenId)) {
+        state.selectedScreenId = normalized.screens[0]?.id ?? null;
+      }
+      touch(state.document);
     }),
 
   setRevision: (revision) =>

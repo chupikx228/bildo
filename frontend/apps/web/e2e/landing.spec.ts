@@ -44,6 +44,9 @@ test("the picked model is listed from the catalog and sent with the create reque
   await expect(page.getByRole("option", { name: /DeepSeek V4 Flash/ })).toBeVisible();
   await option.click();
 
+  await expect(page.getByRole("button", { name: /OpenAI: GPT-5/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать модель" })).toHaveCount(0);
+
   await page.getByPlaceholder(/Например/).fill("трекер привычек");
   const request = page.waitForRequest((r) => r.url().includes("/api/apps") && r.method() === "POST");
   await page.getByRole("button", { name: "Создать приложение" }).click();

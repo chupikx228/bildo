@@ -184,6 +184,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
         {/* Остаётся смонтированной в свёрнутом виде, чтобы переписка не терялась. */}
         <aside className="min-w-0 flex flex-col overflow-hidden border-r border-line max-[720px]:hidden">
           <AssistantPanel
+            appId={appId}
             collapsed={!chatOpen}
             onCollapse={() => setChatOpen(false)}
             onExpand={() => setChatOpen(true)}

@@ -4,18 +4,20 @@ import { useAssistantThread } from "../lib/useAssistantThread";
 import { CollapsedRail } from "./CollapsedRail";
 import { Composer } from "./Composer";
 import { Transcript } from "./Transcript";
-import { HEAD, HEAD_TITLE, ICON_BTN, PENDING_BADGE, QUIET_BTN, RAIL } from "./classes";
+import { HEAD, HEAD_TITLE, ICON_BTN, PENDING_BADGE, RAIL } from "./classes";
 
 export function AssistantPanel({
+  appId,
   collapsed,
   onCollapse,
   onExpand,
 }: {
+  appId: string;
   collapsed: boolean;
   onCollapse: () => void;
   onExpand: () => void;
 }) {
-  const { turns, busy, pendingCount, hasTranscript, scrollRef, send, resolve, clear } = useAssistantThread();
+  const { turns, busy, pendingCount, hasTranscript, scrollRef, send, resolve } = useAssistantThread(appId);
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
@@ -40,11 +42,6 @@ export function AssistantPanel({
         <span className={HEAD_TITLE}>Ассистент</span>
         {pendingCount > 0 && <span className={PENDING_BADGE}>{pendingCount} на подтверждение</span>}
         <div className="flex-1" />
-        {hasTranscript && (
-          <button type="button" onClick={clear} className={QUIET_BTN} title="Очистить переписку">
-            Очистить
-          </button>
-        )}
         <button
           type="button"
           onClick={onCollapse}
