@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -18,12 +19,17 @@ from src.chat.service import ChatService
 from src.codegen.service import build_zip, generate_files
 from src.config import settings
 from src.database import async_session_factory
+from src.exceptions import DomainError
 from src.generation.dependencies import get_model_catalog
 from src.generation.llm_client import LlmClient
 from src.generation.service import generate_document
 from src.generation.structured_output import generate_structured
 from src.queue.arq_queue import ArqTaskQueue
 from src.transaction.session_transaction import SessionTransaction
+
+logger = logging.getLogger(__name__)
+
+GENERATION_FAILURE_MESSAGE = "Не удалось сгенерировать приложение"  # noqa: RUF001
 
 
 async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, name: str | None, model: str) -> None:
@@ -41,11 +47,12 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
             )
             await service.mark_generated(UUID(app_id), document)
             await session.commit()
-    except Exception as error:
-        async with async_session_factory() as failure_session:
-            failure_service = _app_service(failure_session, redis)
-            await failure_service.mark_generation_failed(UUID(app_id), f"Ошибка генерации приложения: {error}")
-            await failure_session.commit()
+    except DomainError as error:
+        await _mark_failed(redis, app_id, f"Ошибка генерации приложения: {error.message}")
+        raise
+    except Exception:
+        logger.exception("Generation failed for app %s", app_id)
+        await _mark_failed(redis, app_id, GENERATION_FAILURE_MESSAGE)
         raise
 
 
@@ -103,6 +110,13 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
             if not is_duplicate_reply_violation(error):
                 raise
             await session.rollback()
+
+
+async def _mark_failed(redis: ArqRedis, app_id: str, message: str) -> None:
+    async with async_session_factory() as session:
+        service = _app_service(session, redis)
+        await service.mark_generation_failed(UUID(app_id), message)
+        await session.commit()
 
 
 def _app_service(session: AsyncSession, redis: ArqRedis) -> AppService:
