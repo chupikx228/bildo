@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -54,7 +55,8 @@ async def build_export_zip(ctx: dict[Any, Any], app_id: str) -> bytes:
         service = _app_service(session, redis)
         app = await service.get_app(UUID(app_id))
         document = AppDocument.model_validate(app.document)
-    return build_zip(generate_files(document))
+    files = await asyncio.to_thread(generate_files, document)
+    return await asyncio.to_thread(build_zip, files)
 
 
 async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
