@@ -7,6 +7,8 @@ import { uid, type Proposal, type Turn } from "./planner";
 
 const MIN_CONTENT = 3;
 const RUNNING = new Set(["deferred", "queued", "in_progress"]);
+const STALE_PROPOSAL_NOTE =
+  "Это предложение устарело: документ изменился после его создания. Отклоните его и переформулируйте запрос, чтобы применить к текущей версии.";
 
 interface LocalNote {
   id: string;
@@ -76,7 +78,13 @@ export function useAssistantThread(appId: string) {
     const message = messages.find((m) => m.id === turnId);
     const proposed = message?.role === "assistant" ? message.proposedDocument : null;
     if (!proposed) return;
-    if (accept) applyDocument(proposed);
+    if (accept) {
+      if (document && proposed.revision !== document.revision) {
+        setNotes((prev) => [...prev, { id: uid("note"), text: STALE_PROPOSAL_NOTE }]);
+        return;
+      }
+      applyDocument(proposed);
+    }
     decisionMutation.mutate({ messageId: turnId, accepted: accept });
   }
 

@@ -1,11 +1,27 @@
+import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type * as BildoApi from "@bildo/api";
-import { APP_STAGE_HEIGHT, APP_STAGE_WIDTH, DEFAULT_APP_THEME, findAppNode, type AppDocument } from "@bildo/api";
+import {
+  APP_STAGE_HEIGHT,
+  APP_STAGE_WIDTH,
+  ApiError,
+  DEFAULT_APP_THEME,
+  appsKeys,
+  findAppNode,
+  type AppDetail,
+  type AppDocument,
+} from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
 import { useAutosave } from "./useAutosave";
 
 const AUTOSAVE_MS = 1200;
+
+let queryClient: QueryClient;
+function wrapper({ children }: { children: ReactNode }) {
+  return createElement(QueryClientProvider, { client: queryClient }, children);
+}
 
 const hoisted = vi.hoisted(() => ({
   mutateAsync: vi.fn<(doc: AppDocument) => Promise<AppDocument>>(),
@@ -81,6 +97,7 @@ async function respond(save: PendingSave, revision: number): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   pending.length = 0;
   hoisted.mutateAsync.mockReset();
   hoisted.mutateAsync.mockImplementation(
@@ -100,7 +117,7 @@ afterEach(() => {
 
 describe("useAutosave", () => {
   it("сохраняет документ после дебаунса и берёт ревизию из ответа", async () => {
-    renderHook(() => useAutosave("app1"));
+    renderHook(() => useAutosave("app1"), { wrapper });
 
     act(() => {
       store().setNodeText("s1", "n1", "Правка");
@@ -124,7 +141,7 @@ describe("useAutosave", () => {
   });
 
   it("не теряет правку, сделанную пока PUT был в полёте", async () => {
-    renderHook(() => useAutosave("app1"));
+    renderHook(() => useAutosave("app1"), { wrapper });
 
     act(() => {
       store().setNodeText("s1", "n1", "Первая правка");
@@ -156,7 +173,7 @@ describe("useAutosave", () => {
   });
 
   it("не отправляет второй PUT поверх летящего и шлёт самое актуальное состояние", async () => {
-    const { result } = renderHook(() => useAutosave("app1"));
+    const { result } = renderHook(() => useAutosave("app1"), { wrapper });
 
     act(() => {
       store().setNodeText("s1", "n1", "A");
@@ -187,7 +204,7 @@ describe("useAutosave", () => {
   });
 
   it("показывает ошибку и оставляет документ несохранённым, если PUT отклонён", async () => {
-    renderHook(() => useAutosave("app1"));
+    renderHook(() => useAutosave("app1"), { wrapper });
 
     act(() => {
       store().setNodeText("s1", "n1", "Правка");
@@ -199,5 +216,29 @@ describe("useAutosave", () => {
 
     expect(store().saveStatus).toBe("error");
     expect(store().saveError).toBe("Не удалось сохранить");
+  });
+
+  it("на 412 загружает серверную версию и помечает ошибку, отдельно от 409", async () => {
+    renderHook(() => useAutosave("app1"), { wrapper });
+
+    act(() => {
+      store().setNodeText("s1", "n1", "Локальная правка поверх устаревшей ревизии");
+    });
+    await tick();
+    expect(pending).toHaveLength(1);
+
+    const serverDetail: AppDetail = {
+      document: { ...makeDoc(), name: "Серверная версия", revision: 5 },
+      generationStatus: "ready",
+      generationError: null,
+    };
+    queryClient.setQueryData(appsKeys.detail("app1"), serverDetail);
+
+    pending[0]!.reject(new ApiError("stale", 412));
+    await settle();
+
+    expect(store().saveStatus).toBe("error");
+    expect(store().document?.name).toBe("Серверная версия");
+    expect(store().document?.revision).toBe(5);
   });
 });
