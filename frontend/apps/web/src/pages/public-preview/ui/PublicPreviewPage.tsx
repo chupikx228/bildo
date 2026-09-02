@@ -14,6 +14,10 @@ export function PublicPreviewPage() {
   const navigate = useNavigate();
   const { data, isLoading, isError } = useApp(id);
   const [screenId, setScreenId] = useState<string | null>(null);
+  const [stateVars, setStateVars] = useState<Record<string, string | number | boolean>>({});
+
+  const handleSetVar = (name: string, value: string | number | boolean) =>
+    setStateVars((prev) => ({ ...prev, [name]: value }));
 
   const backButton = (
     <button type="button" onClick={() => void navigate(-1)} aria-label="Назад" className={BACK}>
@@ -60,7 +64,8 @@ export function PublicPreviewPage() {
     );
   }
 
-  const document = normalizeAppDocument(data.document);
+  const base = normalizeAppDocument(data.document);
+  const document = { ...base, state: { ...base.state, ...stateVars } };
   const screen = document.screens.find((s) => s.id === screenId) ?? document.screens[0];
   if (!screen) {
     return (
@@ -73,7 +78,13 @@ export function PublicPreviewPage() {
   return (
     <div className={WRAPPER}>
       {backButton}
-      <PhonePreview document={document} screen={screen} editMode={false} onSelectScreen={setScreenId} />
+      <PhonePreview
+        document={document}
+        screen={screen}
+        editMode={false}
+        onSelectScreen={setScreenId}
+        onSetVar={handleSetVar}
+      />
     </div>
   );
 }
