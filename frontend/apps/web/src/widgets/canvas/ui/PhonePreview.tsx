@@ -23,11 +23,13 @@ export function PhonePreview({
   screen,
   editMode = true,
   onSelectScreen,
+  onSetVar,
 }: {
   document: AppDocument;
   screen: AppScreen;
   editMode?: boolean;
   onSelectScreen?: (id: string) => void;
+  onSetVar?: (name: string, value: string | number | boolean) => void;
 }) {
   const showTabs = hasTabs(document);
   const tabH = showTabs ? TAB_H : 0;
@@ -90,7 +92,13 @@ export function PhonePreview({
         </div>
 
         <div style={{ width: APP_STAGE_WIDTH, height: APP_STAGE_HEIGHT, position: "relative" }}>
-          <Canvas document={document} screen={screen} editMode={editMode} onNavigateRoute={navigateRoute} />
+          <Canvas
+            document={document}
+            screen={screen}
+            editMode={editMode}
+            onNavigateRoute={navigateRoute}
+            onSetVar={onSetVar}
+          />
         </div>
 
         {showTabs && (
