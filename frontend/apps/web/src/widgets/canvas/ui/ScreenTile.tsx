@@ -20,6 +20,7 @@ export function ScreenTile({
   onRename,
   onStopRename,
   onRequestDelete,
+  onSetVar,
 }: {
   document: AppDocument;
   screen: AppScreen;
@@ -36,6 +37,7 @@ export function ScreenTile({
   onRename: (id: string, name: string) => void;
   onStopRename: () => void;
   onRequestDelete: (screen: AppScreen) => void;
+  onSetVar?: (name: string, value: string | number | boolean) => void;
 }) {
   return (
     <div
@@ -144,7 +146,13 @@ export function ScreenTile({
           transition: "outline-color .16s ease",
         }}
       >
-        <PhonePreview document={document} screen={screen} editMode={!running} onSelectScreen={onSelect} />
+        <PhonePreview
+          document={document}
+          screen={screen}
+          editMode={!running}
+          onSelectScreen={onSelect}
+          onSetVar={onSetVar}
+        />
       </div>
     </div>
   );

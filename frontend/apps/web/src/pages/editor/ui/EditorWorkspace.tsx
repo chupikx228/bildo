@@ -36,6 +36,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [previewVars, setPreviewVars] = useState<Record<string, string | number | boolean>>({});
   const [chatOpen, setChatOpen] = useState(true);
   const [filesOpen, setFilesOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
@@ -71,8 +72,15 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
   function toggleRun() {
     const next = !running;
     if (next) selectNode(null);
+    setPreviewVars({});
     setRunning(next);
   }
+
+  function setPreviewVar(name: string, value: string | number | boolean) {
+    setPreviewVars((prev) => ({ ...prev, [name]: value }));
+  }
+
+  const viewDocument = running ? { ...document, state: { ...document.state, ...previewVars } } : document;
 
   useWindowEvent("keydown", (e) => {
     const meta = e.metaKey || e.ctrlKey;
@@ -209,7 +217,12 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
         </div>
 
         <main className="relative min-w-0 flex flex-col overflow-hidden bg-board bg-[radial-gradient(150%_130%_at_-12%_-30%,rgba(92,108,245,0.085)_0%,rgba(92,108,245,0.035)_42%,rgba(92,108,245,0)_100%),radial-gradient(110%_100%_at_108%_115%,rgba(255,141,92,0.08)_0%,rgba(255,141,92,0)_100%)] before:content-[''] before:absolute before:inset-0 before:pointer-events-none before:bg-[radial-gradient(circle,rgba(16,16,20,0.05)_1px,transparent_1px)] before:bg-[length:22px_22px]">
-          <Board document={document} activeScreenId={screen.id} running={running} />
+          <Board
+            document={viewDocument}
+            activeScreenId={screen.id}
+            running={running}
+            onSetVar={running ? setPreviewVar : undefined}
+          />
 
           {running ? <RunningBadge /> : <BoardToolbar />}
 

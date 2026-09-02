@@ -16,10 +16,12 @@ export function Board({
   document,
   activeScreenId,
   running,
+  onSetVar,
 }: {
   document: AppDocument;
   activeScreenId: string | null;
   running: boolean;
+  onSetVar?: (name: string, value: string | number | boolean) => void;
 }) {
   const selectScreen = useAppDocumentStore((s) => s.selectScreen);
   const addScreen = useAppDocumentStore((s) => s.addScreen);
@@ -207,6 +209,7 @@ export function Board({
             onRename={renameScreen}
             onStopRename={() => setRenamingId(null)}
             onRequestDelete={requestDeleteScreen}
+            onSetVar={onSetVar}
           />
         ))}
 
