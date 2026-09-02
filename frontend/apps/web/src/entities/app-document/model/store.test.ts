@@ -251,3 +251,15 @@ describe("history slice", () => {
     expect(findAppNode(rootOf(), "n1")?.props?.text).toBe("X");
   });
 });
+
+describe("clearErrors", () => {
+  it("clears a lingering guard error", () => {
+    const id = s().addScreen("Second")!;
+    s().removeScreen(id);
+    s().removeScreen("s1");
+    expect(s().lastErrors.length).toBeGreaterThan(0);
+
+    s().clearErrors();
+    expect(s().lastErrors).toEqual([]);
+  });
+});
