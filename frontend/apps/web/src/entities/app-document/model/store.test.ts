@@ -224,6 +224,24 @@ describe("history slice", () => {
     expect(s().document!.name).toBe("Renamed");
   });
 
+  it("keeps the server revision after undo instead of the snapshot's stale one", () => {
+    s().renameApp("Edited");
+    s().setRevision(2);
+    s().undo();
+    expect(s().document!.name).toBe("Test App");
+    expect(s().document!.revision).toBe(2);
+  });
+
+  it("keeps the current revision after redo", () => {
+    s().renameApp("Edited");
+    s().setRevision(2);
+    s().undo();
+    s().setRevision(3);
+    s().redo();
+    expect(s().document!.name).toBe("Edited");
+    expect(s().document!.revision).toBe(3);
+  });
+
   it("coalesces rapid edits sharing a key into one history entry", () => {
     s().setNodeLayout("s1", "n1", { x: 30, y: 24, width: 120, height: 36 }, true);
     s().setNodeLayout("s1", "n1", { x: 50, y: 24, width: 120, height: 36 }, true);

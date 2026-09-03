@@ -22,6 +22,7 @@ export const createHistorySlice: AppSlice<HistorySlice> = (set, get) => ({
   undo: () =>
     set((state) => {
       if (!state.document || state.past.length === 0) return;
+      const revision = state.document.revision;
       const entry = state.past.pop()!;
       state.future.push({
         id: nanoid(),
@@ -30,6 +31,7 @@ export const createHistorySlice: AppSlice<HistorySlice> = (set, get) => ({
         document: cloneDoc(state.document),
       });
       state.document = entry.document;
+      state.document.revision = revision;
       const selection = pruneSelection(
         state.document,
         state.selectedScreenId,
@@ -44,6 +46,7 @@ export const createHistorySlice: AppSlice<HistorySlice> = (set, get) => ({
   redo: () =>
     set((state) => {
       if (!state.document || state.future.length === 0) return;
+      const revision = state.document.revision;
       const entry = state.future.pop()!;
       state.past.push({
         id: nanoid(),
@@ -52,6 +55,7 @@ export const createHistorySlice: AppSlice<HistorySlice> = (set, get) => ({
         document: cloneDoc(state.document),
       });
       state.document = entry.document;
+      state.document.revision = revision;
       const selection = pruneSelection(
         state.document,
         state.selectedScreenId,
