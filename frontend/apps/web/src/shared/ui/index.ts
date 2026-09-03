@@ -4,6 +4,7 @@ export * from "./NumberField";
 export * from "./ColorPicker";
 export * from "./AlignPad";
 export * from "./Modal";
+export * from "./Toast";
 export * from "./QueryState";
 export * from "./ErrorScreen";
 export * from "./icons";

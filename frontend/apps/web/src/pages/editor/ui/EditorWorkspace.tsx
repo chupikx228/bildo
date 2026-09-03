@@ -14,6 +14,7 @@ import { toAttachments, type Attachment } from "@/shared/attachments";
 import { apiClient } from "@/shared/api";
 import { ROUTES } from "@/shared/config";
 import { useSearchFlag, useWindowEvent } from "@/shared/lib";
+import { Toast } from "@/shared/ui";
 
 const RAIL_OPEN = "352px";
 const RAIL_CLOSED = "52px";
@@ -26,6 +27,7 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
   const selectedNodeIds = useAppDocumentStore((s) => s.selectedNodeIds);
   const selectNode = useAppDocumentStore((s) => s.selectNode);
   const lastError = useAppDocumentStore((s) => s.lastErrors[0]);
+  const clearErrors = useAppDocumentStore((s) => s.clearErrors);
   const undo = useAppDocumentStore((s) => s.undo);
   const redo = useAppDocumentStore((s) => s.redo);
   const removeSelected = useAppDocumentStore((s) => s.removeSelected);
@@ -56,6 +58,12 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
     const id = window.setTimeout(() => setShareUrl(null), 3200);
     return () => window.clearTimeout(id);
   }, [shareUrl]);
+
+  useEffect(() => {
+    if (!lastError) return;
+    const id = window.setTimeout(() => clearErrors(), 3200);
+    return () => window.clearTimeout(id);
+  }, [lastError, clearErrors]);
 
   async function exportProject() {
     const ok = await flush();
@@ -170,7 +178,10 @@ export function EditorWorkspace({ appId, document }: { appId: string; document: 
 
       <AppsModal open={appsModal.on} onClose={appsModal.setOff} currentId={appId} />
 
-      {(shareUrl || lastError) && <div>{lastError ?? `Ссылка скопирована: ${shareUrl}`}</div>}
+      <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
+        <Toast tone="warning" message={lastError ?? null} />
+        <Toast tone="success" message={shareUrl ? `Ссылка скопирована: ${shareUrl}` : null} />
+      </div>
 
       <div
         className="min-h-0 flex-1 grid grid-cols-[var(--rail-w,352px)_var(--files-w,0px)_minmax(0,1fr)_minmax(252px,300px)] max-[1020px]:grid-cols-[var(--rail-w,320px)_var(--files-w,0px)_minmax(0,1fr)] max-[720px]:grid-cols-[minmax(0,1fr)]"

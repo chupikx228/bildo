@@ -12,6 +12,7 @@ export interface DocumentSlice {
   applyDocument(doc: AppDocument): void;
   setRevision(revision: number): void;
   setSaveStatus(status: AppSaveStatus, error?: string | null): void;
+  clearErrors(): void;
   updateTheme(patch: Partial<AppThemeTokens>): void;
   renameApp(name: string): void;
   setAppVar(name: string, value: string | number | boolean): void;
@@ -62,6 +63,11 @@ export const createDocumentSlice: AppSlice<DocumentSlice> = (set) => ({
     set((state) => {
       state.saveStatus = status;
       state.saveError = status === "error" ? (error ?? "Ошибка сохранения") : null;
+    }),
+
+  clearErrors: () =>
+    set((state) => {
+      state.lastErrors = [];
     }),
 
   updateTheme: (patch) =>
