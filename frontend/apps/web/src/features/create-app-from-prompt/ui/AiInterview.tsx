@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const OPTION_BASE =
   "inline-flex items-center gap-[7px] px-[13px] py-[9px] rounded-full border text-[13px] cursor-pointer transition-[border-color,background,color,transform] duration-[.14s] ease-[ease] hover:-translate-y-px";
@@ -132,6 +132,9 @@ export function AiInterview({
   const [draft, setDraft] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
 
+  const advanceTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(advanceTimer.current), [step]);
+
   const done = step >= STEPS.length;
   const current = STEPS[step];
   const prompt = buildPromptFromAnswers(answers);
@@ -170,7 +173,8 @@ export function AiInterview({
       }
     });
     if (!current.multi && !current.free) {
-      window.setTimeout(() => setStep((s) => s + 1), 160);
+      window.clearTimeout(advanceTimer.current);
+      advanceTimer.current = window.setTimeout(() => setStep((s) => s + 1), 160);
     }
   };
 
