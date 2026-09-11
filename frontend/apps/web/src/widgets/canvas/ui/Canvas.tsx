@@ -13,18 +13,21 @@ export function Canvas({
   screen,
   editMode,
   onNavigateRoute,
+  onSetVar,
 }: {
   document: AppDocument;
   screen: AppScreen;
   editMode: boolean;
   onNavigateRoute?: (route: string) => void;
+  onSetVar?: (name: string, value: string | number | boolean) => void;
 }) {
   const selectedNodeIds = useAppDocumentStore((s) => s.selectedNodeIds);
   const selectedNodeId = useAppDocumentStore((s) => s.selectedNodeId);
   const selectNode = useAppDocumentStore((s) => s.selectNode);
   const clearSelection = useAppDocumentStore((s) => s.clearSelection);
   const setNodeText = useAppDocumentStore((s) => s.setNodeText);
-  const setAppVar = useAppDocumentStore((s) => s.setAppVar);
+  const storeSetAppVar = useAppDocumentStore((s) => s.setAppVar);
+  const setAppVar = onSetVar ?? storeSetAppVar;
 
   const { stageRef, liveLayouts, guides, draggingIds, suppressClickRef, beginMove, beginResize } = useNodeDrag(
     screen,
