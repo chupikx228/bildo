@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { normalizeAppDocument, useApp } from "@bildo/api";
-import { AppGeneratingScreen, LOADING_LABEL } from "@/shared/ui";
+import { LoadingScreen } from "@/shared/ui";
+import { AppGeneratingScreen } from "@/widgets/app-generation";
 import { PhonePreview } from "@/widgets/canvas";
 
 const WRAPPER = "relative min-h-[100dvh] grid place-items-center bg-board p-6";
@@ -30,7 +31,7 @@ export function PublicPreviewPage() {
   );
 
   if (isLoading) {
-    return <AppGeneratingScreen label={LOADING_LABEL} />;
+    return <LoadingScreen />;
   }
 
   if (isError || !data) {
@@ -54,7 +55,7 @@ export function PublicPreviewPage() {
   if (data.generationStatus !== "ready") {
     return (
       <div className="relative">
-        <AppGeneratingScreen />
+        <AppGeneratingScreen ready={false} />
         {backButton}
       </div>
     );

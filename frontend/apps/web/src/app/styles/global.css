@@ -50,6 +50,42 @@ body {
   border-radius: 2px;
 }
 
+.loader-dotgrid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(16, 16, 20, 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 82% 70% at 50% 42%, #000 32%, transparent 78%);
+  mask-image: radial-gradient(ellipse 82% 70% at 50% 42%, #000 32%, transparent 78%);
+}
+
+.loader-particle {
+  position: absolute;
+  bottom: -6%;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  opacity: 0;
+  animation-name: particle-rise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+.anim-scan {
+  animation: scan-y 1.7s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.loader-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-hover) 37%,
+    var(--color-surface) 63%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
 @media (max-width: 720px) {
   .hide-on-mobile {
     display: none !important;

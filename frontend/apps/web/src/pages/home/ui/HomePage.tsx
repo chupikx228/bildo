@@ -24,7 +24,7 @@ export function HomePage() {
 
       <main className="relative z-[1] flex-1 flex flex-col items-center justify-center pt-10 px-5 pb-20 max-w-[720px] mx-auto w-full box-border">
         <div className="mb-8">
-          <BildoLogo size="hero" />
+          <BildoLogo size="hero" animateMark />
         </div>
         <CreateAppFlow />
       </main>

@@ -8,5 +8,6 @@ export * from "./Toast";
 export * from "./QueryState";
 export * from "./ErrorScreen";
 export * from "./icons";
-export * from "./AppGeneratingScreen";
+export * from "./LoaderAmbient";
+export * from "./LoadingScreen";
 export * from "./generationStages";
