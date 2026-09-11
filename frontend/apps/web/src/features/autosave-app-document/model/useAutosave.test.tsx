@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type * as BildoApi from "@bildo/api";
 import { APP_STAGE_HEIGHT, APP_STAGE_WIDTH, DEFAULT_APP_THEME, findAppNode, type AppDocument } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
@@ -15,6 +17,11 @@ vi.mock("@bildo/api", async (importOriginal) => {
   const actual = await importOriginal<typeof BildoApi>();
   return { ...actual, useSaveApp: () => ({ mutateAsync: hoisted.mutateAsync }) };
 });
+
+let queryClient: QueryClient;
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+);
 
 interface PendingSave {
   doc: AppDocument;
@@ -81,6 +88,7 @@ async function respond(save: PendingSave, revision: number): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  queryClient = new QueryClient();
   pending.length = 0;
   hoisted.mutateAsync.mockReset();
   hoisted.mutateAsync.mockImplementation(
@@ -100,7 +108,7 @@ afterEach(() => {
 
 describe("useAutosave", () => {
   it("сохраняет документ после дебаунса и берёт ревизию из ответа", async () => {
-    renderHook(() => useAutosave("app1"));
+    renderHook(() => useAutosave("app1"), { wrapper });
 
     act(() => {
       store().setNodeText("s1", "n1", "Правка");
@@ -124,7 +132,7 @@ describe("useAutosave", () => {
   });
 
   it("не теряет правку, сделанную пока PUT был в полёте", async () => {
-    renderHook(() => useAutosave("app1"));
+    renderHook(() => useAutosave("app1"), { wrapper });
 
     act(() => {
       store().setNodeText("s1", "n1", "Первая правка");
@@ -156,7 +164,7 @@ describe("useAutosave", () => {
   });
 
   it("не отправляет второй PUT поверх летящего и шлёт самое актуальное состояние", async () => {
-    const { result } = renderHook(() => useAutosave("app1"));
+    const { result } = renderHook(() => useAutosave("app1"), { wrapper });
 
     act(() => {
       store().setNodeText("s1", "n1", "A");
@@ -187,7 +195,7 @@ describe("useAutosave", () => {
   });
 
   it("показывает ошибку и оставляет документ несохранённым, если PUT отклонён", async () => {
-    renderHook(() => useAutosave("app1"));
+    renderHook(() => useAutosave("app1"), { wrapper });
 
     act(() => {
       store().setNodeText("s1", "n1", "Правка");
