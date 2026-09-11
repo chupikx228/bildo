@@ -46,6 +46,7 @@ export function pushPast(
   if (coalesceKey && state.past.length > 0) {
     const last = state.past[state.past.length - 1]!;
     if (last.coalesceKey === coalesceKey && now - new Date(last.at).getTime() < COALESCE_MS) {
+      last.at = new Date(now).toISOString();
       state.future = [];
       return;
     }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APP_STAGE_HEIGHT, APP_STAGE_WIDTH, DEFAULT_APP_THEME, findAppNode, type AppDocument } from "@bildo/api";
 import { useAppDocumentStore } from "./store";
 
@@ -43,6 +43,10 @@ const rootOf = (screenId = "s1") => s().document!.screens.find((sc) => sc.id ===
 
 beforeEach(() => {
   s().setDocument(makeDoc());
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("setDocument (document + selection + history reset)", () => {
@@ -247,6 +251,29 @@ describe("history slice", () => {
     s().setNodeLayout("s1", "n1", { x: 50, y: 24, width: 120, height: 36 }, true);
     expect(s().past.length).toBe(1);
     expect(findAppNode(rootOf(), "n1")?.layout?.x).toBe(50);
+  });
+
+  it("keeps a continuous coalescing run merged past the 900ms window (sliding window)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    s().setNodeLayout("s1", "n1", { x: 20, y: 24, width: 120, height: 36 }, true);
+    vi.setSystemTime(600);
+    s().setNodeLayout("s1", "n1", { x: 40, y: 24, width: 120, height: 36 }, true);
+    vi.setSystemTime(1200);
+    s().setNodeLayout("s1", "n1", { x: 60, y: 24, width: 120, height: 36 }, true);
+
+    expect(s().past.length).toBe(1);
+    expect(findAppNode(rootOf(), "n1")?.layout?.x).toBe(60);
+  });
+
+  it("starts a new history entry after a pause longer than the coalesce window", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    s().setNodeLayout("s1", "n1", { x: 20, y: 24, width: 120, height: 36 }, true);
+    vi.setSystemTime(1000);
+    s().setNodeLayout("s1", "n1", { x: 40, y: 24, width: 120, height: 36 }, true);
+
+    expect(s().past.length).toBe(2);
   });
 
   it("collapses an AI batch into a single undoable checkpoint", () => {
