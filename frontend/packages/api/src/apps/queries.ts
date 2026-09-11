@@ -103,6 +103,9 @@ export function useSaveApp(id: string) {
       queryClient.setQueryData<AppDetail>(appsKeys.detail(id), (prev) =>
         prev ? { ...prev, document } : { document, generationStatus: "ready", generationError: null },
       );
+      queryClient.setQueryData<AppSummary[]>(appsKeys.list(), (prev) =>
+        prev?.map((app) => (app.id === id ? { ...app, name: document.name, updatedAt: document.updatedAt } : app)),
+      );
     },
   });
 }
