@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { useApp } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
-import { AppGeneratingScreen, LOADING_LABEL } from "@/shared/ui";
+import { LoadingScreen } from "@/shared/ui";
+import { AppGeneratingScreen } from "@/widgets/app-generation";
+import { PhonePreview } from "@/widgets/canvas";
 import { EditorWorkspace } from "./EditorWorkspace";
 
 const WORKSPACE = "h-[100dvh] min-h-[520px] flex flex-col overflow-hidden bg-bg text-text";
@@ -15,6 +17,8 @@ export function EditorPage() {
   const document = useAppDocumentStore((s) => s.document);
   const setDocument = useAppDocumentStore((s) => s.setDocument);
 
+  const [revealed, setRevealed] = useState(false);
+
   const loadedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!data || data.generationStatus !== "ready" || loadedRef.current === id) return;
@@ -23,7 +27,7 @@ export function EditorPage() {
   }, [data, id, setDocument]);
 
   if (isLoading) {
-    return <AppGeneratingScreen label={LOADING_LABEL} />;
+    return <LoadingScreen />;
   }
 
   if (isError) {
@@ -42,8 +46,23 @@ export function EditorPage() {
     );
   }
 
-  if (data?.generationStatus === "pending" || !document) {
-    return <AppGeneratingScreen />;
+  const isReady = data?.generationStatus === "ready" && !!document;
+
+  if (!isReady || !revealed) {
+    const screen = isReady && document ? document.screens[0] : undefined;
+    return (
+      <AppGeneratingScreen
+        ready={isReady}
+        preview={
+          isReady && document && screen ? (
+            <PhonePreview document={document} screen={screen} editMode={false} />
+          ) : undefined
+        }
+        onDone={() => {
+          setRevealed(true);
+        }}
+      />
+    );
   }
 
   return <EditorWorkspace appId={id} document={document} />;
