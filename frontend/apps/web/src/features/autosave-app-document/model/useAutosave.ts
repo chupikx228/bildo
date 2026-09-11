@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { ApiError, useSaveApp, type AppDocument } from "@bildo/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { ApiError, appsKeys, useSaveApp, type AppDocument } from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
 
 const AUTOSAVE_MS = 1200;
@@ -9,6 +10,7 @@ export function useAutosave(appId: string) {
   const setSaveStatus = useAppDocumentStore((s) => s.setSaveStatus);
   const setRevision = useAppDocumentStore((s) => s.setRevision);
   const saveApp = useSaveApp(appId);
+  const queryClient = useQueryClient();
 
   const timerRef = useRef<number | null>(null);
   const latestRef = useRef<AppDocument | null>(null);
@@ -44,6 +46,11 @@ export function useAutosave(appId: string) {
       if (err instanceof ApiError && err.status === 409) {
         statusRef.current("saved");
         return true;
+      }
+      if (err instanceof ApiError && err.status === 412) {
+        statusRef.current("error", "Документ изменён в другом месте — обновите страницу");
+        void queryClient.invalidateQueries({ queryKey: appsKeys.detail(appId) });
+        return false;
       }
       statusRef.current("error", "Не удалось сохранить");
       return false;

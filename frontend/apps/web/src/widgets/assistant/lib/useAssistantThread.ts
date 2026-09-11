@@ -76,7 +76,19 @@ export function useAssistantThread(appId: string) {
     const message = messages.find((m) => m.id === turnId);
     const proposed = message?.role === "assistant" ? message.proposedDocument : null;
     if (!proposed) return;
-    if (accept) applyDocument(proposed);
+    if (accept) {
+      if (document && proposed.revision !== document.revision) {
+        setNotes((prev) => [
+          ...prev,
+          {
+            id: uid("note"),
+            text: "Приложение изменилось с момента этого предложения — оно устарело. Отклоните его и попросите ассистента собрать заново.",
+          },
+        ]);
+        return;
+      }
+      applyDocument(proposed);
+    }
     decisionMutation.mutate({ messageId: turnId, accepted: accept });
   }
 
