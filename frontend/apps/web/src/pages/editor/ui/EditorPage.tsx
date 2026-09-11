@@ -46,7 +46,7 @@ export function EditorPage() {
     );
   }
 
-  const isReady = data?.generationStatus === "ready" && !!document;
+  const isReady = data?.generationStatus === "ready" && document?.id === id;
 
   if (!isReady || !revealed) {
     const screen = isReady && document ? document.screens[0] : undefined;
