@@ -857,3 +857,84 @@ async def test_chat_turn_domain_failure_still_reaches_the_task_status(
     status = await TaskService(FakeJobStatusReader(states)).get_status(task_id)
 
     assert status.error == "Генерация недоступна: не задан ключ RouterAI"
+
+
+async def test_chat_turn_raises_a_timeout_error_when_generation_exceeds_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+    sessions: list[FakeSession],
+) -> None:
+    async def slow_generate_structured(*args: Any, **kwargs: Any) -> ChatTurnResponse:
+        await asyncio.sleep(1)
+        return ChatTurnResponse(reply="слишком поздно")
+
+    monkeypatch.setattr(worker_tasks, "generate_structured", slow_generate_structured)
+    monkeypatch.setattr(worker_tasks, "CHAT_TURN_TIMEOUT_SECONDS", 0.01)
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
+
+    with pytest.raises(GenerationTimeoutError) as failure:
+        await worker_tasks.chat_turn(context(), str(app_id), str(user_message.id))
+
+    expected = GenerationTimeoutError(0.01, subject=worker_tasks.CHAT_TURN_TIMEOUT_SUBJECT)
+    assert failure.value.message == expected.message
+    messages = await chat_repository.list_messages(app_id)
+    assert [message.role for message in messages] == ["user"]
+    assert sessions[0].commits == 0
+
+
+async def test_chat_turn_does_not_relabel_a_timeout_raised_inside_generation(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    async def generation_with_socket_timeout(*args: Any, **kwargs: Any) -> ChatTurnResponse:
+        raise TimeoutError(INTERNAL_FAILURE_DETAIL)
+
+    monkeypatch.setattr(worker_tasks, "generate_structured", generation_with_socket_timeout)
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
+
+    with pytest.raises(TimeoutError) as failure:
+        await worker_tasks.chat_turn(context(), str(app_id), str(user_message.id))
+
+    assert not isinstance(failure.value, GenerationTimeoutError)
+    assert str(failure.value) == INTERNAL_FAILURE_DETAIL
+    messages = await chat_repository.list_messages(app_id)
+    assert [message.role for message in messages] == ["user"]
+
+
+async def test_chat_turn_timeout_reaches_the_task_status_as_a_clean_message(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    async def slow_generate_structured(*args: Any, **kwargs: Any) -> ChatTurnResponse:
+        await asyncio.sleep(1)
+        return ChatTurnResponse(reply="слишком поздно")
+
+    monkeypatch.setattr(worker_tasks, "generate_structured", slow_generate_structured)
+    monkeypatch.setattr(worker_tasks, "CHAT_TURN_TIMEOUT_SECONDS", 0.01)
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
+
+    with pytest.raises(GenerationTimeoutError) as failure:
+        await worker_tasks.chat_turn(context(), str(app_id), str(user_message.id))
+
+    task_id = str(user_message.id)
+    states = {task_id: JobStatusInfo(status="complete", failure=failure.value)}
+    status = await TaskService(FakeJobStatusReader(states)).get_status(task_id)
+
+    expected = GenerationTimeoutError(0.01, subject=worker_tasks.CHAT_TURN_TIMEOUT_SUBJECT)
+    assert status.status == "complete"
+    assert status.error == expected.message
+    assert status.error is not None
+    assert "Traceback" not in status.error
+
+
+def test_chat_turn_job_timeout_outlives_the_chat_turn_deadline() -> None:
+    job = next(function for function in WorkerSettings.functions if function.name == CHAT_TURN_JOB)
+
+    assert job.timeout_s is not None
+    assert job.timeout_s > worker_tasks.CHAT_TURN_TIMEOUT_SECONDS

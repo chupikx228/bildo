@@ -15,5 +15,5 @@ class GenerationNotConfiguredError(GenerationError):
 
 
 class GenerationTimeoutError(GenerationError):
-    def __init__(self, timeout_seconds: float) -> None:
-        super().__init__(f"Модель не успела сгенерировать приложение за {timeout_seconds:g} секунд")
+    def __init__(self, timeout_seconds: float, subject: str = "приложение") -> None:
+        super().__init__(f"Модель не успела сгенерировать {subject} за {timeout_seconds:g} секунд")
