@@ -12,3 +12,8 @@ class GenerationError(DomainError):
 class GenerationNotConfiguredError(GenerationError):
     def __init__(self) -> None:
         super().__init__("Генерация недоступна: не задан ключ RouterAI")
+
+
+class GenerationTimeoutError(GenerationError):
+    def __init__(self, timeout_seconds: float) -> None:
+        super().__init__(f"Модель не успела сгенерировать приложение за {timeout_seconds:g} секунд")

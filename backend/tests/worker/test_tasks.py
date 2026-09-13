@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import json
 import logging
@@ -14,11 +15,12 @@ from src.chat.models import REPLY_FOREIGN_KEY_CONSTRAINT, REPLY_UNIQUE_CONSTRAIN
 from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService
 from src.config import settings
-from src.generation.exceptions import GenerationError, GenerationNotConfiguredError
+from src.generation.exceptions import GenerationError, GenerationNotConfiguredError, GenerationTimeoutError
 from src.queue.base import JobStatusInfo
-from src.queue.jobs import CHAT_TURN_JOB
+from src.queue.jobs import CHAT_TURN_JOB, GENERATE_APP_DOCUMENT_JOB
 from src.tasks.service import TASK_FAILURE_MESSAGE, TaskService
 from src.worker import tasks as worker_tasks
+from src.worker.main import WorkerSettings
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.chat.in_memory_repository import InMemoryChatRepository, integrity_error
 from tests.generation.fake_llm_client import FakeLlmClient
@@ -209,6 +211,52 @@ async def test_generate_app_document_marks_app_failed(
     assert len(sessions) == 2
     assert sessions[0].commits == 0
     assert sessions[1].commits == 1
+
+
+async def test_generate_app_document_marks_app_failed_when_generation_exceeds_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+) -> None:
+    async def slow_generation(prompt: str, name: str | None, **kwargs: Any) -> AppDocument:
+        await asyncio.sleep(1)
+        return build_template_document(prompt, name)
+
+    monkeypatch.setattr(worker_tasks, "generate_document", slow_generation)
+    monkeypatch.setattr(worker_tasks, "GENERATION_TIMEOUT_SECONDS", 0.01)
+    app_id = await create_pending_app(repository)
+
+    with pytest.raises(GenerationTimeoutError):
+        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.generation_status == "failed"
+    assert app.generation_error == f"Ошибка генерации приложения: {GenerationTimeoutError(0.01).message}"
+
+
+async def test_generate_app_document_does_not_relabel_a_timeout_raised_inside_generation(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+) -> None:
+    async def generation_with_socket_timeout(prompt: str, name: str | None, **kwargs: Any) -> AppDocument:
+        raise TimeoutError(INTERNAL_FAILURE_DETAIL)
+
+    monkeypatch.setattr(worker_tasks, "generate_document", generation_with_socket_timeout)
+    app_id = await create_pending_app(repository)
+
+    with pytest.raises(TimeoutError):
+        await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.generation_error == worker_tasks.GENERATION_FAILURE_MESSAGE
+
+
+def test_generation_job_timeout_outlives_the_generation_deadline() -> None:
+    job = next(function for function in WorkerSettings.functions if function.name == GENERATE_APP_DOCUMENT_JOB)
+
+    assert job.timeout_s is not None
+    assert job.timeout_s > worker_tasks.GENERATION_TIMEOUT_SECONDS
 
 
 async def test_generate_app_document_hides_details_of_a_non_domain_failure(
