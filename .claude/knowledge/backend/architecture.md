@@ -765,3 +765,45 @@ make fix     # отформатировать и починить всё авт�
 - **Протокол чата с ассистентом — закрыто в BIL-36 (история, решения) и BIL-37 (сам разговор с LLM).** Решение: `POST /api/apps/{id}/chat/messages` отвечает 202 с `taskId`, клиент поллит `/api/tasks/{id}` — та же схема, что у генерации приложения, без SSE и WebSocket. Формы запросов и ответов — в [`../api-contract.md`](../api-contract.md#чат-ассистента-bil-36-bil-37).
 - **Загрузка файлов и изображений.** В прототипе только метаданные, без реального хранилища.
 - **Генерация документа из промпта — закрыто в BIL-15**, шаблоны заменены на LLM-генерацию через RouterAI, см. § 9.1. Открытым остаётся только одно: **модель по умолчанию не проверена вживую**, ключа не было. Появится ключ — перепроверить `deepseek/deepseek-v4-flash` и то, доезжает ли до неё `response_format: json_schema`.
+
+---
+
+## 15. Запуск через Docker Compose
+
+`docker-compose.yml` в корне репозитория (BIL-65) — способ поднять весь бэкенд одной командой, без `brew services` и локального `uv` на хосте. Это dev-инструмент для быстрого локального старта, не прод-артефакт.
+
+### Сервисы
+
+| Сервис | Что делает |
+|---|---|
+| `postgres` | `postgres:16`, healthcheck `pg_isready`, данные в именованном volume `bildo_postgres_data` (не anonymous — переживает `down` без `-v`) |
+| `redis` | официальный `redis:7`, healthcheck `redis-cli ping` |
+| `migrate` | одноразовый сервис: собирается из `backend/Dockerfile`, `command: alembic upgrade head`, ждёт `postgres` healthy, завершается после применения миграций и не остаётся висеть |
+| `api` | тот же образ, `uvicorn src.main:app --host 0.0.0.0 --reload`, порт 8000, ждёт `postgres`/`redis` healthy и `migrate` — `condition: service_completed_successfully` |
+| `worker` | тот же образ, `command: arq src.worker.main.WorkerSettings`, те же зависимости, что у `api` |
+
+### Почему миграции — отдельный сервис, а не `sh -c "alembic upgrade head && uvicorn ..."` в `api`
+
+Обёртка в command `api` заставила бы миграции гоняться при каждом рестарте API-контейнера (в том числе при падении и авторестарте) и создала бы гонку с `worker`, который стартует параллельно и тоже бы претендовал на то же самое, если бы обёртку повесили на оба. Отдельный `migrate` с `condition: service_completed_successfully` у `api` и `worker` — миграция ровно одна на `docker compose up`, оба потребителя ждут её результата, а не гадают, кто успел первым.
+
+### `backend/Dockerfile`
+
+Один стейдж на `python:3.12-slim` (в `pyproject.toml` — `requires-python >= 3.12`) с `uv`: сначала `uv sync --locked --no-dev --no-install-project` по одним `pyproject.toml`/`uv.lock` (кэшируется, пока зависимости не меняются), потом копируются `src/`/`alembic/`/`alembic.ini` и `uv sync --locked --no-dev` докладывает сам пакет. `--no-dev` — в образ, который реально исполняется (`api`/`worker`/`migrate` все три из него собраны), группа `dev` (ruff/mypy/pytest/testcontainers) не нужна и не ставится.
+
+### `DATABASE_URL`/`REDIS_URL` — сервисные имена, а не `localhost`
+
+Внутри сети Docker Compose контейнеры видят друг друга по имени сервиса, не по `localhost` хоста (тот всегда указывает на сам контейнер). `backend/.env` для локального запуска без Docker (см. [README](../../README.md#бэкенд-локально-postgresredis-через-brew-services)) держит `localhost` — он и остаётся неизменным для этого сценария. Заводить отдельный `backend/.env.docker` не стали: `docker-compose.yml` подключает `backend/.env` через `env_file` (оттуда берутся `ROUTERAI_*` и всё остальное) и тут же перебивает `DATABASE_URL`/`REDIS_URL` явным `environment:` — `environment:` в Compose имеет приоритет над `env_file`, так что один и тот же `.env` работает и для локального запуска, и как база для Docker, без дублирования файла.
+
+### Volumes для live reload
+
+`api` и `worker` монтируют `./backend/src` в `/app/src` — `uvicorn --reload` и правка кода воркера подхватываются без пересборки образа. Это единственный смысл `--reload` в команде `api`, который просил заказчик задачи.
+
+### Запуск и остановка
+
+```bash
+docker compose up            # поднять всё, миграции применяются автоматически
+docker compose down          # остановить, данные Postgres остаются в volume
+docker compose down -v       # остановить и стереть данные (только это удаляет volume)
+```
+
+Проверено вживую (BIL-65): чистый старт после `down -v` поднимает Postgres/Redis healthy, `migrate` проходит все ревизии и завершается, `api` отвечает на `GET /docs`, `worker` стартует без ошибок. Полный сценарий через этот compose — `POST /api/apps` → воркер догенерировал документ → `GET /api/apps/{id}/export` отдал валидный zip Expo-проекта — воспроизведён curl'ом целиком. `down` (без `-v`) и повторный `up` — данные (созданные приложения) на месте, миграции не переигрываются (уже на `head`, `alembic upgrade head` — no-op). Локальный `make check` (без Docker) этой задачей не затронут.

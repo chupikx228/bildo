@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: bildo
+      POSTGRES_PASSWORD: bildo
+      POSTGRES_DB: bildo
+    ports:
+      - "5432:5432"
+    volumes:
+      - bildo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bildo -d bildo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ./backend
+    env_file: backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bildo:bildo@postgres:5432/bildo
+      REDIS_URL: redis://redis:6379/0
+    command: alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./backend
+    env_file: backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bildo:bildo@postgres:5432/bildo
+      REDIS_URL: redis://redis:6379/0
+    command: uvicorn src.main:app --host 0.0.0.0 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ./backend
+    env_file: backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bildo:bildo@postgres:5432/bildo
+      REDIS_URL: redis://redis:6379/0
+    command: arq src.worker.main.WorkerSettings
+    volumes:
+      - ./backend/src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  bildo_postgres_data:
