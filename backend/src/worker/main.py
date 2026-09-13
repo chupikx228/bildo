@@ -9,9 +9,11 @@ from src.generation.dependencies import build_llm_client
 from src.generation.llm_client import LlmClient
 from src.queue.arq_queue import get_redis_settings
 from src.queue.jobs import BUILD_EXPORT_ZIP_JOB, CHAT_TURN_JOB, GENERATE_APP_DOCUMENT_JOB
-from src.worker.tasks import build_export_zip, chat_turn, generate_app_document
+from src.worker.tasks import GENERATION_TIMEOUT_SECONDS, build_export_zip, chat_turn, generate_app_document
 
 EXPORT_RESULT_TTL_SECONDS = 5
+GENERATION_JOB_TIMEOUT_GRACE_SECONDS = 30
+GENERATION_JOB_TIMEOUT_SECONDS = GENERATION_TIMEOUT_SECONDS + GENERATION_JOB_TIMEOUT_GRACE_SECONDS
 
 
 async def startup(ctx: dict[Any, Any]) -> None:
@@ -29,7 +31,7 @@ async def shutdown(ctx: dict[Any, Any]) -> None:
 
 class WorkerSettings:
     functions: ClassVar[list[Function]] = [
-        func(generate_app_document, name=GENERATE_APP_DOCUMENT_JOB),
+        func(generate_app_document, name=GENERATE_APP_DOCUMENT_JOB, timeout=GENERATION_JOB_TIMEOUT_SECONDS),
         func(build_export_zip, name=BUILD_EXPORT_ZIP_JOB, keep_result=EXPORT_RESULT_TTL_SECONDS),
         func(chat_turn, name=CHAT_TURN_JOB),
     ]

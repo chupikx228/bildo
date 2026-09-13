@@ -21,6 +21,7 @@ from src.config import settings
 from src.database import async_session_factory
 from src.exceptions import DomainError
 from src.generation.dependencies import get_model_catalog
+from src.generation.exceptions import GenerationTimeoutError
 from src.generation.llm_client import LlmClient
 from src.generation.service import generate_document
 from src.generation.structured_output import generate_structured
@@ -30,6 +31,7 @@ from src.transaction.session_transaction import SessionTransaction
 logger = logging.getLogger(__name__)
 
 GENERATION_FAILURE_MESSAGE = "Не удалось сгенерировать приложение"  # noqa: RUF001
+GENERATION_TIMEOUT_SECONDS = 900
 
 
 async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, name: str | None, model: str) -> None:
@@ -38,13 +40,20 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
     try:
         async with async_session_factory() as session:
             service = _app_service(session, redis)
-            document = await generate_document(
-                prompt,
-                name,
-                client=llm_client,
-                model=model,
-                max_attempts=settings.routerai_max_retries,
-            )
+            deadline = asyncio.timeout(GENERATION_TIMEOUT_SECONDS)
+            try:
+                async with deadline:
+                    document = await generate_document(
+                        prompt,
+                        name,
+                        client=llm_client,
+                        model=model,
+                        max_attempts=settings.routerai_max_retries,
+                    )
+            except TimeoutError as error:
+                if not deadline.expired():
+                    raise
+                raise GenerationTimeoutError(GENERATION_TIMEOUT_SECONDS) from error
             await service.mark_generated(UUID(app_id), document)
             await session.commit()
     except DomainError as error:
