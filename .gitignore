@@ -26,3 +26,5 @@ __pycache__/
 .claude/settings.local.json
 backend/.coverage
 backend/htmlcov/
+
+docker-compose.override.yml

@@ -48,6 +48,32 @@ cd frontend && pnpm install && pnpm dev
 
 Фронт ждёт бэкенд на `VITE_API_BASE_URL` (см. `frontend/apps/web/.env.example`).
 
+### Бэкенд локально (Postgres/Redis через brew services)
+
+```bash
+brew services start postgresql@16
+brew services start redis
+cd backend && uv sync --group dev
+cp .env.example .env   # заполнить ROUTERAI_API_KEY при необходимости
+uv run alembic upgrade head
+uv run uvicorn src.main:app --reload
+uv run arq src.worker.main.WorkerSettings   # в отдельном терминале
+```
+
+### Бэкенд через Docker Compose
+
+Не нужно ставить Postgres/Redis/uv на хост — поднимается всё сразу:
+
+```bash
+docker compose up
+```
+
+Что при этом происходит: `postgres`/`redis` стартуют и ждут healthcheck, одноразовый сервис `migrate` прогоняет `alembic upgrade head` и завершается, только после этого стартуют `api` (http://localhost:8000, `--reload`, живая перезагрузка по `backend/src` через volume) и `worker`. `backend/.env` подхватывается через `env_file` — `DATABASE_URL`/`REDIS_URL` в нём переопределены на имена сервисов (`postgres`/`redis`) прямо в `docker-compose.yml`, остальные переменные (`ROUTERAI_*`) берутся из файла как есть.
+
+Остановить — `docker compose down` (данные Postgres остаются в volume `bildo_postgres_data`). Стереть данные — `docker compose down -v`.
+
+Подробнее — [`.claude/knowledge/backend/architecture.md`](.claude/knowledge/backend/architecture.md#15-запуск-через-docker-compose).
+
 ## Перед коммитом
 
 ```bash
