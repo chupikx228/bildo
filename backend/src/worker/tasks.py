@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 
 GENERATION_FAILURE_MESSAGE = "Не удалось сгенерировать приложение"  # noqa: RUF001
 GENERATION_TIMEOUT_SECONDS = 900
+CHAT_TURN_TIMEOUT_SECONDS = 900
+CHAT_TURN_TIMEOUT_SUBJECT = "ответ ассистента"
 
 
 async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, name: str | None, model: str) -> None:
@@ -91,16 +93,23 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
         if await chat_service.has_reply(answered_message_id):
             return
         document, history = await chat_service.build_context(UUID(app_id), answered_message_id)
-        response = await generate_structured(
-            build_chat_messages(document, history),
-            client=llm_client,
-            schema_name=CHAT_SCHEMA_NAME,
-            schema=CHAT_RESPONSE_SCHEMA,
-            model=settings.routerai_model,
-            target_model=ChatTurnResponse,
-            max_attempts=settings.routerai_max_retries,
-            subject="ответ ассистента",
-        )
+        deadline = asyncio.timeout(CHAT_TURN_TIMEOUT_SECONDS)
+        try:
+            async with deadline:
+                response = await generate_structured(
+                    build_chat_messages(document, history),
+                    client=llm_client,
+                    schema_name=CHAT_SCHEMA_NAME,
+                    schema=CHAT_RESPONSE_SCHEMA,
+                    model=settings.routerai_model,
+                    target_model=ChatTurnResponse,
+                    max_attempts=settings.routerai_max_retries,
+                    subject=CHAT_TURN_TIMEOUT_SUBJECT,
+                )
+        except TimeoutError as error:
+            if not deadline.expired():
+                raise
+            raise GenerationTimeoutError(CHAT_TURN_TIMEOUT_SECONDS, subject=CHAT_TURN_TIMEOUT_SUBJECT) from error
         proposed = (
             response.document.model_copy(update={"revision": document.revision})
             if response.document is not None
