@@ -119,39 +119,6 @@
     }
   }
 
-  @keyframes particle-rise {
-    0% {
-      transform: translateY(0);
-      opacity: 0;
-    }
-    18%,
-    82% {
-      opacity: var(--p-o, 0.4);
-    }
-    100% {
-      transform: translateY(-68vh);
-      opacity: 0;
-    }
-  }
-
-  @keyframes scan-y {
-    0% {
-      top: -18%;
-    }
-    100% {
-      top: 112%;
-    }
-  }
-
-  @keyframes skeleton-shimmer {
-    0% {
-      background-position: 120% 0;
-    }
-    100% {
-      background-position: -120% 0;
-    }
-  }
-
   @keyframes interview-step {
     from {
       opacity: 0;
