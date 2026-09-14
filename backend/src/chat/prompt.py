@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from src.apps.schemas import AppDocument
 from src.chat.models import ChatMessage as ChatMessageRecord
 from src.chat.schemas import ChatTurnResponse
+from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
 from src.generation.prompt import SCREEN_HEIGHT, SCREEN_WIDTH
 
@@ -17,7 +18,9 @@ RULES = f"""Ты ассистент редактора мобильных при
 Формат ответа — один JSON-объект по схеме `ChatTurnResponse`:
 - `reply` — твоя реплика пользователю обычным текстом (не JSON), на языке разговора;
 - `document` — предложенный новый `AppDocument` целиком, только когда ты реально предлагаешь правку приложения;
-  когда правка не нужна (пользователь спрашивает, уточняет, просто общается) — не включай `document` в ответ.
+  когда правка не нужна (пользователь спрашивает, уточняет, просто общается) — верни `document: null`.
+- в ответе обязаны присутствовать ВСЕ ключи из JSON Schema ниже, в том числе внутри `document`, когда он не `null`, —
+  для поля, для которого нет данных, ставь `null`, не опускай ключ.
 
 Правила, когда предлагаешь `document`:
 - Возвращай документ ЦЕЛИКОМ (весь `AppDocument`, не патч и не diff) — возьми текущий документ и примени к нему то,
@@ -31,7 +34,7 @@ RULES = f"""Ты ассистент редактора мобильных при
 Формат ответа: только JSON-объект, без markdown-ограждений, без пояснений до или после."""
 
 
-RESPONSE_SCHEMA: JsonSchema = ChatTurnResponse.model_json_schema(by_alias=True)
+RESPONSE_SCHEMA: JsonSchema = to_strict_json_schema(ChatTurnResponse.model_json_schema(by_alias=True))
 RESPONSE_SCHEMA_JSON = json.dumps(RESPONSE_SCHEMA, ensure_ascii=False)
 
 

@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from src.apps.schemas import AppDocument
 from src.generation.exceptions import GenerationError
+from src.generation.json_schema import to_strict_json_schema
 from src.generation.service import generate_document
 from tests.generation.fake_llm_client import FakeLlmClient
 from tests.generation.template_fixtures import build_template_document
@@ -43,7 +44,7 @@ async def test_generate_document_passes_app_document_schema() -> None:
 
     await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=3)
 
-    assert client.schemas[0] == AppDocument.model_json_schema(by_alias=True)
+    assert client.schemas[0] == to_strict_json_schema(AppDocument.model_json_schema(by_alias=True))
 
 
 async def test_generate_document_accepts_answer_wrapped_in_code_fence() -> None:

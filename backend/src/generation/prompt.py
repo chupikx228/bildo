@@ -1,6 +1,7 @@
 import json
 
 from src.apps.schemas import AppDocument
+from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
 
 SCHEMA_NAME = "app_document"
@@ -14,7 +15,7 @@ RULES = f"""Ты генератор мобильных приложений дл
 Формат ответа:
 - только JSON-объект документа, без markdown-ограждений, без пояснений до или после;
 - ключи в camelCase ровно так, как в JSON Schema ниже;
-- необязательные поля либо заполняй значением, либо опускай — не подставляй null;
+- в ответе обязаны присутствовать ВСЕ ключи из JSON Schema ниже — для поля, для которого нет данных, ставь `null`, не опускай ключ;
 - поля `id`, `createdAt`, `updatedAt` обязательны в схеме, но сервер их перезапишет: положи любые валидные строки;
 - поле `revision` обязательно в схеме, но сервер его перезапишет: положи `1`.
 
@@ -35,7 +36,7 @@ RULES = f"""Ты генератор мобильных приложений дл
 
 
 def app_document_schema() -> JsonSchema:
-    return AppDocument.model_json_schema(by_alias=True)
+    return to_strict_json_schema(AppDocument.model_json_schema(by_alias=True))
 
 
 def build_system_prompt() -> str:

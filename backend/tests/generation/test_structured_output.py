@@ -9,6 +9,7 @@ from src.chat.prompt import RESPONSE_SCHEMA as CHAT_RESPONSE_SCHEMA
 from src.chat.prompt import SCHEMA_NAME as CHAT_SCHEMA_NAME
 from src.chat.schemas import ChatTurnResponse
 from src.generation.exceptions import GenerationError
+from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
 from src.generation.prompt import SCHEMA_NAME as DOCUMENT_SCHEMA_NAME
 from src.generation.prompt import app_document_schema
@@ -116,7 +117,7 @@ async def test_generate_structured_passes_the_schema_of_the_target_model(case: C
 
     await run(case, client)
 
-    assert client.schemas[0] == case.target_model.model_json_schema(by_alias=True)
+    assert client.schemas[0] == to_strict_json_schema(case.target_model.model_json_schema(by_alias=True))
 
 
 async def test_generate_structured_passes_a_different_schema_for_each_target_model() -> None:
