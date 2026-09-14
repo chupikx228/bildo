@@ -16,6 +16,7 @@ from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService
 from src.config import settings
 from src.generation.exceptions import GenerationError, GenerationNotConfiguredError, GenerationTimeoutError
+from src.generation.json_schema import to_strict_json_schema
 from src.queue.base import JobStatusInfo
 from src.queue.jobs import CHAT_TURN_JOB, GENERATE_APP_DOCUMENT_JOB
 from src.tasks.service import TASK_FAILURE_MESSAGE, TaskService
@@ -683,7 +684,7 @@ async def test_chat_turn_passes_the_chat_turn_response_schema(
     await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
 
     llm_client: FakeLlmClient = ctx["llm_client"]
-    assert llm_client.schemas[0] == ChatTurnResponse.model_json_schema(by_alias=True)
+    assert llm_client.schemas[0] == to_strict_json_schema(ChatTurnResponse.model_json_schema(by_alias=True))
 
 
 async def test_chat_turn_links_the_assistant_reply_to_the_answered_message(

@@ -1,6 +1,7 @@
 import json
 
 from src.apps.schemas import AppDocument
+from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
 
 SCHEMA_NAME = "app_document"
@@ -35,7 +36,7 @@ RULES = f"""Ты генератор мобильных приложений дл
 
 
 def app_document_schema() -> JsonSchema:
-    return AppDocument.model_json_schema(by_alias=True)
+    return to_strict_json_schema(AppDocument.model_json_schema(by_alias=True))
 
 
 def build_system_prompt() -> str:
