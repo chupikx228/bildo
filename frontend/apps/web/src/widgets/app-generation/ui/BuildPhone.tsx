@@ -8,8 +8,8 @@ const TOP_H = 46;
 const HOME_H = 20;
 
 const pulse = (delay: number) => ({
-  animate: { opacity: [0.45, 0.9, 0.45] },
-  transition: { duration: 2.2, repeat: Infinity, ease: "easeInOut" as const, delay },
+  animate: { opacity: [0.5, 0.8, 0.5] },
+  transition: { duration: 2.6, repeat: Infinity, ease: "easeInOut" as const, delay },
 });
 
 export function BuildPhone() {
