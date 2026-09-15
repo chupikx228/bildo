@@ -12,12 +12,14 @@ export function Canvas({
   document,
   screen,
   editMode,
+  reveal = false,
   onNavigateRoute,
   onSetVar,
 }: {
   document: AppDocument;
   screen: AppScreen;
   editMode: boolean;
+  reveal?: boolean;
   onNavigateRoute?: (route: string) => void;
   onSetVar?: (name: string, value: string | number | boolean) => void;
 }) {
@@ -67,18 +69,20 @@ export function Canvas({
     selectNode(node.id, { additive: e.metaKey || e.ctrlKey });
   }
 
-  function renderNode(node: AppNode): ReactNode {
+  function renderNode(node: AppNode, revealIndex?: number): ReactNode {
     if (node.hidden || !node.layout) return null;
     const layout = liveLayouts?.[node.id] ?? node.layout;
     const selected = selectedSet.has(node.id) || selectedNodeId === node.id;
     const isContainer = node.type === "View" || node.type === "ScrollView";
     const dragging = draggingIds.includes(node.id);
     const radius = node.style?.borderRadius ?? 0;
+    const staggered = revealIndex !== undefined;
 
     return (
       <div
         key={node.id}
         role="presentation"
+        className={staggered ? "node-reveal-in" : undefined}
         onPointerDown={(e) => beginMove(e, node)}
         onClick={(e) => onNodeClick(e, node)}
         onDoubleClick={(e) => {
@@ -86,7 +90,11 @@ export function Canvas({
           e.stopPropagation();
           if (node.type === "Text" || node.type === "Button") setEditingTextId(node.id);
         }}
-        style={frameStyle(layout, editMode, dragging)}
+        style={
+          staggered
+            ? { ...frameStyle(layout, editMode, dragging), animationDelay: `${revealIndex * 90}ms` }
+            : frameStyle(layout, editMode, dragging)
+        }
       >
         <div
           className={animClass(node.style?.animation)}
@@ -158,7 +166,7 @@ export function Canvas({
         userSelect: editMode ? "none" : "auto",
       }}
     >
-      {topLevel.map((n) => renderNode(n))}
+      {topLevel.map((n, i) => renderNode(n, reveal ? i : undefined))}
       <Guides guides={guides} />
       <CanvasToast message={toast} />
     </div>

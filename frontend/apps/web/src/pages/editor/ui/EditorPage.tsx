@@ -7,9 +7,6 @@ import { AppGeneratingScreen } from "@/widgets/app-generation";
 import { PhonePreview } from "@/widgets/canvas";
 import { EditorWorkspace } from "./EditorWorkspace";
 
-const WORKSPACE = "h-[100dvh] min-h-[520px] flex flex-col overflow-hidden bg-bg text-text";
-const STATUS = "grid place-items-center flex-1 text-muted text-[13px]";
-
 export function EditorPage() {
   const { id = "" } = useParams<{ id: string }>();
   const { data, isLoading, isError, error } = useApp(id);
@@ -32,18 +29,15 @@ export function EditorPage() {
 
   if (isError) {
     return (
-      <div className={WORKSPACE}>
-        <p className={STATUS}>{error instanceof Error ? error.message : "Не удалось загрузить приложение"}</p>
-      </div>
+      <AppGeneratingScreen
+        ready={false}
+        error={error instanceof Error ? error.message : "Не удалось загрузить приложение"}
+      />
     );
   }
 
   if (data?.generationStatus === "failed") {
-    return (
-      <div className={WORKSPACE}>
-        <p className={STATUS}>{data.generationError ?? "Не удалось сгенерировать приложение"}</p>
-      </div>
-    );
+    return <AppGeneratingScreen ready={false} error={data.generationError ?? "Не удалось сгенерировать приложение"} />;
   }
 
   const isReady = data?.generationStatus === "ready" && document?.id === id;
@@ -55,7 +49,7 @@ export function EditorPage() {
         ready={isReady}
         preview={
           isReady && document && screen ? (
-            <PhonePreview document={document} screen={screen} editMode={false} />
+            <PhonePreview document={document} screen={screen} editMode={false} reveal />
           ) : undefined
         }
         onDone={() => {

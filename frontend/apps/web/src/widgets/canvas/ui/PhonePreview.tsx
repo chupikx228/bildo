@@ -22,12 +22,14 @@ export function PhonePreview({
   document,
   screen,
   editMode = true,
+  reveal = false,
   onSelectScreen,
   onSetVar,
 }: {
   document: AppDocument;
   screen: AppScreen;
   editMode?: boolean;
+  reveal?: boolean;
   onSelectScreen?: (id: string) => void;
   onSetVar?: (name: string, value: string | number | boolean) => void;
 }) {
@@ -96,6 +98,7 @@ export function PhonePreview({
             document={document}
             screen={screen}
             editMode={editMode}
+            reveal={reveal}
             onNavigateRoute={navigateRoute}
             onSetVar={onSetVar}
           />

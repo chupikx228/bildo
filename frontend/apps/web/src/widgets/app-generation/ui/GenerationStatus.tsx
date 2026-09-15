@@ -2,26 +2,42 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { GENERATION_STAGES, STAGE_INTERVAL_MS } from "@/shared/ui";
 
-export function GenerationStatus({ ready }: { ready: boolean }) {
+export function GenerationStatus({ ready, error }: { ready: boolean; error?: string | null }) {
+  const failed = Boolean(error);
   const [stage, setStage] = useState(0);
   const last = GENERATION_STAGES.length - 1;
 
   useEffect(() => {
-    if (ready || stage >= last) return;
+    if (ready || failed || stage >= last) return;
     const id = setTimeout(() => {
       setStage(stage + 1);
     }, STAGE_INTERVAL_MS);
     return () => {
       clearTimeout(id);
     };
-  }, [ready, stage, last]);
+  }, [ready, failed, stage, last]);
 
-  const text = ready ? "Готово — открываем редактор" : GENERATION_STAGES[stage];
+  const text = failed
+    ? "Не удалось собрать приложение"
+    : ready
+      ? "Готово — открываем редактор"
+      : GENERATION_STAGES[stage];
+  const sub = failed
+    ? error
+    : ready
+      ? "Экраны собраны, секунду"
+      : "Приложение собирается — это займёт несколько секунд";
 
   return (
     <div className="flex items-center gap-3 rounded-popover border border-line-strong bg-panel/95 px-5 py-3.5 shadow-md backdrop-blur">
       <span className="relative grid h-8 w-8 shrink-0 place-items-center">
-        {ready ? (
+        {failed ? (
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-danger-soft text-danger-strong">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 7.5v6M12 16.5h.01" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+        ) : ready ? (
           <motion.span
             initial={{ scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -64,7 +80,7 @@ export function GenerationStatus({ ready }: { ready: boolean }) {
             {text}
           </motion.p>
         </AnimatePresence>
-        <p className="text-[11px] text-subtle">Приложение собирается — это займёт несколько секунд</p>
+        <p className={`truncate text-[11px] ${failed ? "text-danger-strong" : "text-subtle"}`}>{sub}</p>
       </div>
     </div>
   );

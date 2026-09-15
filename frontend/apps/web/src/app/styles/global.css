@@ -114,6 +114,21 @@ body {
   animation: skeleton-shimmer 2.1s ease-in-out infinite;
 }
 
+@keyframes node-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.node-reveal-in {
+  animation: node-reveal-in 0.5s var(--ease-system) both;
+}
+
 @media (max-width: 720px) {
   .hide-on-mobile {
     display: none !important;
