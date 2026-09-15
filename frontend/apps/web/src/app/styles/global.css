@@ -109,7 +109,7 @@ body {
 }
 
 .loader-skeleton {
-  background: linear-gradient(90deg, #f6f6f8 35%, var(--color-panel) 50%, #f6f6f8 65%);
+  background: linear-gradient(90deg, #e9e9ee 35%, var(--color-panel) 50%, #e9e9ee 65%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 2.1s ease-in-out infinite;
 }

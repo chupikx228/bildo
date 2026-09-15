@@ -26,7 +26,7 @@ export function GenerationStatus({ ready, error }: { ready: boolean; error?: str
     ? error
     : ready
       ? "Экраны собраны, секунду"
-      : "Приложение собирается — это займёт несколько секунд";
+      : "Приложение собирается — это может занять пару минут";
 
   return (
     <div className="flex items-center gap-3 rounded-popover border border-line-strong bg-panel/95 px-5 py-3.5 shadow-md backdrop-blur">
