@@ -16,7 +16,7 @@ export function BuildPhone() {
   return (
     <div
       aria-hidden
-      className="relative box-border bg-[linear-gradient(155deg,#f0f0f3_0%,#d8d8de_32%,#b9b9c2_62%,#e6e6eb_100%)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7),0_0_0_1px_rgba(16,16,20,0.1),0_24px_56px_rgba(16,16,20,0.16),0_6px_16px_rgba(16,16,20,0.08)]"
+      className="relative box-border bg-[linear-gradient(155deg,#f0f0f3_0%,#d8d8de_32%,#b9b9c2_62%,#e6e6eb_100%)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7),0_0_0_1px_rgba(16,16,20,0.08),0_28px_60px_rgba(16,16,20,0.1),0_8px_20px_rgba(16,16,20,0.05)]"
       style={{
         width: APP_STAGE_WIDTH + BEZEL * 2,
         height: TOP_H + APP_STAGE_HEIGHT + HOME_H + BEZEL * 2,
