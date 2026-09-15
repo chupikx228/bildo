@@ -13,4 +13,10 @@ describe("GenerationStatus", () => {
     render(<GenerationStatus ready />);
     expect(screen.getByText("Готово — открываем редактор")).toBeInTheDocument();
   });
+
+  it("shows the error state with the backend message", () => {
+    render(<GenerationStatus ready={false} error="Ключ RouterAI не задан" />);
+    expect(screen.getByText("Не удалось собрать приложение")).toBeInTheDocument();
+    expect(screen.getByText("Ключ RouterAI не задан")).toBeInTheDocument();
+  });
 });

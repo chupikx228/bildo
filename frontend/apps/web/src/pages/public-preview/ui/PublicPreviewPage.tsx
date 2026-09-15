@@ -49,9 +49,9 @@ export function PublicPreviewPage() {
 
   if (data.generationStatus === "failed") {
     return (
-      <div className={WRAPPER}>
+      <div className="relative">
+        <AppGeneratingScreen ready={false} error={data.generationError ?? "Не удалось сгенерировать приложение"} />
         {backButton}
-        <p className={STATUS}>{data.generationError ?? "Не удалось сгенерировать приложение"}</p>
       </div>
     );
   }
