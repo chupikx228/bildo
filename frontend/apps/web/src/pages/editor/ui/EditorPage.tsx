@@ -14,14 +14,19 @@ export function EditorPage() {
   const document = useAppDocumentStore((s) => s.document);
   const setDocument = useAppDocumentStore((s) => s.setDocument);
 
-  const [revealed, setRevealed] = useState(false);
-
   const loadedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!data || data.generationStatus !== "ready" || loadedRef.current === id) return;
     loadedRef.current = id;
     setDocument({ ...data.document, id });
   }, [data, id, setDocument]);
+
+  const [reveal, setReveal] = useState({ id, revealed: false, cameFromPending: false });
+  if (reveal.id !== id) {
+    setReveal({ id, revealed: false, cameFromPending: data?.generationStatus === "pending" });
+  } else if (data?.generationStatus === "pending" && !reveal.cameFromPending) {
+    setReveal((s) => ({ ...s, cameFromPending: true }));
+  }
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -42,7 +47,7 @@ export function EditorPage() {
 
   const isReady = data?.generationStatus === "ready" && document?.id === id;
 
-  if (!isReady || !revealed) {
+  if (!isReady || (reveal.cameFromPending && !reveal.revealed)) {
     const screen = isReady && document ? document.screens[0] : undefined;
     return (
       <AppGeneratingScreen
@@ -53,7 +58,7 @@ export function EditorPage() {
           ) : undefined
         }
         onDone={() => {
-          setRevealed(true);
+          setReveal((s) => ({ ...s, revealed: true }));
         }}
       />
     );
