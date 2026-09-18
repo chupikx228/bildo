@@ -2,11 +2,13 @@ import difflib
 import json
 import shutil
 import subprocess
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 
 import pytest
 
-from src.apps.schemas import AppDocument
+from src.apps.schemas import AppDocument, AppNode
 from src.codegen.service import ExpoFileMap, generate_files
 from tests.codegen.max_coverage_document import build_max_coverage_document
 from tests.generation.template_fixtures import TemplateKey, build_template_document, select_template
@@ -79,10 +81,53 @@ def describe_difference(label: str, python_files: ExpoFileMap, js_files: ExpoFil
     return "\n".join(lines)
 
 
-def assert_generators_agree(label: str, document: AppDocument) -> None:
+PAPER_AFFECTED_STATIC_FILES = frozenset({"package.json", "theme.ts", "app/_layout.tsx"})
+PAPER_NODE_TYPES = frozenset({"Button", "TextInput"})
+
+
+def _contains_paper_node(node: AppNode) -> bool:
+    return node.type in PAPER_NODE_TYPES or any(_contains_paper_node(child) for child in node.children)
+
+
+def paper_affected_files(document: AppDocument) -> frozenset[str]:
+    screens = {f"app/{screen.route}.tsx" for screen in document.screens if _contains_paper_node(screen.root)}
+    return PAPER_AFFECTED_STATIC_FILES | screens
+
+
+def affected_split(files: ExpoFileMap, affected: frozenset[str]) -> tuple[ExpoFileMap, ExpoFileMap]:
+    inside = {path: content for path, content in files.items() if path in affected}
+    outside = {path: content for path, content in files.items() if path not in affected}
+    return inside, outside
+
+
+def template_document(template: TemplateKey) -> AppDocument:
+    prompt = TEMPLATE_PROMPTS[template]
+    assert select_template(prompt) == template
+    return build_template_document(prompt, None)
+
+
+PARITY_DOCUMENTS: dict[str, tuple[str, Callable[[], AppDocument]]] = {
+    **{f"template:{key}": (f"the {key} template", partial(template_document, key)) for key in sorted(TEMPLATE_PROMPTS)},
+    "max-coverage": ("the max coverage document", build_max_coverage_document),
+}
+
+
+@pytest.fixture(scope="module", params=sorted(PARITY_DOCUMENTS))
+def paper_affected_outputs(request: pytest.FixtureRequest) -> tuple[str, ExpoFileMap, ExpoFileMap]:
+    if shutil.which("node") is None:
+        pytest.skip("Node.js not available")
+    label, build_document = PARITY_DOCUMENTS[request.param]
+    document = build_document()
     python_files = generate_files(document)
     js_files = run_ts_codegen(document)
-    assert python_files == js_files, describe_difference(label, python_files, js_files)
+    assert set(python_files) == set(js_files), describe_difference(label, python_files, js_files)
+
+    affected = paper_affected_files(document)
+    assert affected <= set(python_files)
+    python_affected, python_rest = affected_split(python_files, affected)
+    js_affected, js_rest = affected_split(js_files, affected)
+    assert python_rest == js_rest, describe_difference(label, python_rest, js_rest)
+    return label, python_affected, js_affected
 
 
 @requires_node
@@ -91,20 +136,16 @@ def test_codegen_cli_script_exists() -> None:
 
 
 @requires_node
-@pytest.mark.xfail(strict=True, reason="BIL-77: TS codegen not yet updated for Paper")
-@pytest.mark.parametrize("template", sorted(TEMPLATE_PROMPTS))
-def test_generators_agree_on_template_documents(template: TemplateKey) -> None:
-    prompt = TEMPLATE_PROMPTS[template]
-    assert select_template(prompt) == template
-    document = build_template_document(prompt, None)
-
-    assert_generators_agree(f"the {template} template", document)
+def test_generators_agree_outside_paper_files(paper_affected_outputs: tuple[str, ExpoFileMap, ExpoFileMap]) -> None:
+    _, python_affected, js_affected = paper_affected_outputs
+    assert set(python_affected) == set(js_affected)
 
 
 @requires_node
-@pytest.mark.xfail(strict=True, reason="BIL-77: TS codegen not yet updated for Paper")
-def test_generators_agree_on_max_coverage_document() -> None:
-    assert_generators_agree("the max coverage document", build_max_coverage_document())
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="BIL-77: TS codegen not yet updated for Paper")
+def test_generators_agree_on_paper_files(paper_affected_outputs: tuple[str, ExpoFileMap, ExpoFileMap]) -> None:
+    label, python_affected, js_affected = paper_affected_outputs
+    assert python_affected == js_affected, describe_difference(label, python_affected, js_affected)
 
 
 @requires_node

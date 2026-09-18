@@ -239,10 +239,32 @@ def test_text_input_is_outlined_without_label_or_hardcoded_placeholder_color() -
     assert "from 'react-native';" in screen
     assert "TextInput" not in screen.split("\n", 1)[0]
     assert 'mode="outlined"' in screen
-    assert 'placeholder="Имя"' in screen
+    assert 'placeholder={"Имя"}' in screen
     assert "label=" not in screen
     assert "placeholderTextColor" not in screen
     assert "#71717A" not in screen
+
+
+def test_text_input_placeholder_with_quotes_is_a_jsx_expression() -> None:
+    node = AppNode(id="input", type="TextInput", props=AppNodeProps(placeholder='Скажите "привет" и it\'s {ok}'))
+
+    assert 'placeholder={"Скажите \\"привет\\" и it\'s {ok}"}' in _screen(node)
+
+
+def test_text_input_without_placeholder_keeps_empty_attribute() -> None:
+    screen = _screen(AppNode(id="input", type="TextInput"))
+
+    assert 'placeholder=""' in screen
+
+
+def test_button_literal_text_with_quotes_is_a_jsx_expression() -> None:
+    node = AppNode(id="button", type="Button", props=AppNodeProps(text='Жми "сюда" — it\'s <ok>'))
+
+    assert '      >\n        {"Жми \\"сюда\\" — it\'s <ok>"}\n      </Button>' in _screen(node)
+
+
+def test_button_without_text_keeps_ok_fallback() -> None:
+    assert "      >\n        OK\n      </Button>" in _screen(AppNode(id="button", type="Button"))
 
 
 def test_text_input_defaults() -> None:

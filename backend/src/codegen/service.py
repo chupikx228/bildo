@@ -197,8 +197,10 @@ def _render_button(node: AppNode, pad: str, is_root: bool) -> str:
     handler = _actions_to_handler(props.on_press if props else None, props.href if props else None)
     if props and props.text_bind:
         label = "{String(state['" + _esc(props.text_bind) + "'] ?? '')}"
+    elif props is not None and props.text is not None:
+        label = "{" + _json_compact(props.text) + "}"
     else:
-        label = _esc(props.text if props is not None and props.text is not None else "OK")
+        label = "OK"
 
     style_entries = _position_entries(node, is_root) + _passthrough_entries(node, is_root, PAPER_PASSTHROUGH_KEYS)
     style_entries.append(
@@ -255,7 +257,7 @@ def _render_text_input(node: AppNode, pad: str, is_root: bool) -> str:
     props = node.props
     style = node.style if node.style is not None else AppNodeStyle()
     bind = props.value_bind if props else None
-    placeholder = _esc(props.placeholder if props and props.placeholder else "")
+    placeholder = "{" + _json_compact(props.placeholder) + "}" if props and props.placeholder else '""'
 
     style_entries = _position_entries(node, is_root) + _passthrough_entries(node, is_root, PAPER_TEXT_INPUT_KEYS)
     style_entries.append(
@@ -285,7 +287,7 @@ def _render_text_input(node: AppNode, pad: str, is_root: bool) -> str:
     if style.border_width is not None and style.border_width > 0:
         outline_entries.append(("borderWidth", _number(style.border_width)))
 
-    attributes = ['mode="outlined"', 'placeholder="' + placeholder + '"']
+    attributes = ['mode="outlined"', "placeholder=" + placeholder]
     attributes.append("style={" + _object_literal(style_entries) + "}")
     attributes.append("contentStyle={" + _object_literal(content_entries) + "}")
     attributes.append("outlineStyle={" + _object_literal(outline_entries) + "}")
