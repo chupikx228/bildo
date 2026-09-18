@@ -1,5 +1,6 @@
 import io
 import json
+import math
 import re
 import zipfile
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from src.apps.schemas import (
     AppAction,
     AppDocument,
     AppNode,
+    AppNodeStyle,
     AppScreen,
     NavigateAction,
     OpenUrlAction,
@@ -44,6 +46,57 @@ def _json_compact(value: Any) -> str:
 
 def _json_pretty(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
+
+
+def _literal(value: str | float) -> str:
+    if isinstance(value, str):
+        return f"'{_esc(value)}'"
+    return _number(value)
+
+
+def _object_literal(entries: list[tuple[str, str]]) -> str:
+    if not entries:
+        return "{}"
+    return "{\n" + ",\n".join(f"  {key}: {value}" for key, value in entries) + "\n}"
+
+
+def _position_entries(node: AppNode, is_root: bool) -> list[tuple[str, str]]:
+    if is_root:
+        return [("flex", "1")]
+    if node.layout is None:
+        return []
+    entries = [
+        ("position", "'absolute'"),
+        ("left", _number(node.layout.x)),
+        ("top", _number(node.layout.y)),
+        ("width", _number(node.layout.width)),
+        ("height", _number(node.layout.height)),
+    ]
+    if node.layout.z_index is not None:
+        entries.append(("zIndex", str(node.layout.z_index)))
+    return entries
+
+
+def _passthrough_entries(node: AppNode, is_root: bool, keys: frozenset[str]) -> list[tuple[str, str]]:
+    if node.style is None:
+        return []
+    entries: list[tuple[str, str]] = []
+    for key, value in node.style.model_dump(by_alias=True, exclude_none=True).items():
+        if key not in keys:
+            continue
+        if not is_root and node.layout is not None and key in {"width", "height"}:
+            continue
+        entries.append((key, _literal(value)))
+    return entries
+
+
+PAPER_PASSTHROUGH_KEYS = frozenset({"margin", "marginTop", "marginBottom", "width", "height", "opacity", "animation"})
+PAPER_TEXT_INPUT_KEYS = PAPER_PASSTHROUGH_KEYS | {"fontWeight", "lineHeight", "textAlign"}
+BUTTON_DEFAULT_LABEL_MARGIN = 16
+TEXT_INPUT_DEFAULT_PADDING = 10
+TEXT_INPUT_DEFAULT_FONT_SIZE = 14
+BUTTON_LINE_HEIGHT_RATIO = 1.4
+TEXT_ALIGN_TO_JUSTIFY = {"left": "flex-start", "center": "center", "right": "flex-end"}
 
 
 def _style_to_rn(node: AppNode, is_root: bool) -> str:
@@ -116,10 +169,9 @@ def _collect_needs(node: AppNode, needs: _ScreenNeeds) -> None:
         _collect_needs(child, needs)
 
 
-def _collect_imports(node: AppNode, names: set[str]) -> None:
-    if node.type == "Button":
-        names.add("Pressable")
-        names.add("Text")
+def _collect_imports(node: AppNode, names: set[str], paper_names: set[str]) -> None:
+    if node.type in {"Button", "TextInput"}:
+        paper_names.add(node.type)
     elif node.type == "Spacer":
         names.add("View")
     elif node.type == "Image":
@@ -129,7 +181,124 @@ def _collect_imports(node: AppNode, names: set[str]) -> None:
     else:
         names.add(node.type)
     for child in node.children:
-        _collect_imports(child, names)
+        _collect_imports(child, names, paper_names)
+
+
+def _jsx_element(pad: str, tag: str, attributes: list[str], children: str | None) -> str:
+    lines = [pad + "<" + tag] + [pad + "  " + attribute for attribute in attributes]
+    if children is None:
+        return "\n".join([*lines, pad + "/>"])
+    return "\n".join([*lines, pad + ">", pad + "  " + children, pad + "</" + tag + ">"])
+
+
+def _render_button(node: AppNode, pad: str, is_root: bool) -> str:
+    props = node.props
+    style = node.style if node.style is not None else AppNodeStyle()
+    handler = _actions_to_handler(props.on_press if props else None, props.href if props else None)
+    if props and props.text_bind:
+        label = "{String(state['" + _esc(props.text_bind) + "'] ?? '')}"
+    else:
+        label = _esc(props.text if props is not None and props.text is not None else "OK")
+
+    style_entries = _position_entries(node, is_root) + _passthrough_entries(node, is_root, PAPER_PASSTHROUGH_KEYS)
+    style_entries.append(
+        ("borderRadius", _number(style.border_radius) if style.border_radius is not None else "paperTheme.roundness")
+    )
+    if style.border_width is not None:
+        style_entries.append(("borderWidth", _number(style.border_width)))
+        style_entries.append(
+            ("borderColor", _literal(style.border_color) if style.border_color is not None else "theme.colorBorder")
+        )
+    elif style.border_color is not None:
+        style_entries.append(("borderColor", _literal(style.border_color)))
+
+    content_entries: list[tuple[str, str]] = []
+    if not is_root and node.layout is not None:
+        content_entries.append(("height", _number(node.layout.height - 2 * (style.border_width or 0))))
+    if style.text_align is not None:
+        content_entries.append(("justifyContent", _literal(TEXT_ALIGN_TO_JUSTIFY[style.text_align])))
+
+    label_margin = (
+        style.padding_horizontal
+        if style.padding_horizontal is not None
+        else style.padding
+        if style.padding is not None
+        else BUTTON_DEFAULT_LABEL_MARGIN
+    )
+    label_entries = [("marginHorizontal", _number(label_margin)), ("marginVertical", "0")]
+    if style.font_size is not None:
+        label_entries.append(("fontSize", _number(style.font_size)))
+    label_entries.append(("fontWeight", _literal(style.font_weight or "600")))
+    if style.letter_spacing is not None:
+        label_entries.append(("letterSpacing", _number(style.letter_spacing)))
+    if style.line_height is not None:
+        label_entries.append(("lineHeight", _number(style.line_height)))
+    elif style.font_size is not None:
+        label_entries.append(("lineHeight", _number(math.floor(style.font_size * BUTTON_LINE_HEIGHT_RATIO + 0.5))))
+
+    attributes = [
+        'mode="elevated"' if style.shadow else 'mode="contained"',
+        "compact",
+        "buttonColor={"
+        + (_literal(style.background_color) if style.background_color is not None else "theme.colorPrimary")
+        + "}",
+        "textColor={" + (_literal(style.color) if style.color is not None else "theme.colorPrimaryFg") + "}",
+        "style={" + _object_literal(style_entries) + "}",
+        "contentStyle={" + _object_literal(content_entries) + "}",
+        "labelStyle={" + _object_literal(label_entries) + "}",
+        "onPress={" + handler + "}",
+    ]
+    return _jsx_element(pad, "Button", attributes, label)
+
+
+def _render_text_input(node: AppNode, pad: str, is_root: bool) -> str:
+    props = node.props
+    style = node.style if node.style is not None else AppNodeStyle()
+    bind = props.value_bind if props else None
+    placeholder = _esc(props.placeholder if props and props.placeholder else "")
+
+    style_entries = _position_entries(node, is_root) + _passthrough_entries(node, is_root, PAPER_TEXT_INPUT_KEYS)
+    style_entries.append(
+        ("fontSize", _number(style.font_size if style.font_size is not None else TEXT_INPUT_DEFAULT_FONT_SIZE))
+    )
+    style_entries.append(
+        (
+            "backgroundColor",
+            _literal(style.background_color) if style.background_color is not None else "theme.colorSurface",
+        )
+    )
+
+    padding = (
+        style.padding_horizontal
+        if style.padding_horizontal is not None
+        else style.padding
+        if style.padding is not None
+        else TEXT_INPUT_DEFAULT_PADDING
+    )
+    content_entries = [("paddingHorizontal", _number(padding))]
+    if style.letter_spacing is not None:
+        content_entries.append(("letterSpacing", _number(style.letter_spacing)))
+
+    outline_entries = [
+        ("borderRadius", _number(style.border_radius) if style.border_radius is not None else "paperTheme.roundness")
+    ]
+    if style.border_width is not None and style.border_width > 0:
+        outline_entries.append(("borderWidth", _number(style.border_width)))
+
+    attributes = ['mode="outlined"', 'placeholder="' + placeholder + '"']
+    attributes.append("style={" + _object_literal(style_entries) + "}")
+    attributes.append("contentStyle={" + _object_literal(content_entries) + "}")
+    attributes.append("outlineStyle={" + _object_literal(outline_entries) + "}")
+    if style.border_width == 0:
+        attributes.append('outlineColor="transparent"')
+    elif style.border_color is not None:
+        attributes.append("outlineColor={" + _literal(style.border_color) + "}")
+    if style.color is not None:
+        attributes.append("textColor={" + _literal(style.color) + "}")
+    if bind:
+        attributes.append("value={String(state['" + _esc(bind) + "'] ?? '')}")
+        attributes.append("onChangeText={(t) => setVar('" + _esc(bind) + "', t)}")
+    return _jsx_element(pad, "TextInput", attributes, None)
 
 
 def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
@@ -147,25 +316,7 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
         return pad + "<Text style={" + style + "}>" + _esc(text) + "</Text>"
 
     if node.type == "Button":
-        handler = _actions_to_handler(props.on_press if props else None, props.href if props else None)
-        if props and props.text_bind:
-            label = "{String(state['" + _esc(props.text_bind) + "'] ?? '')}"
-        else:
-            label = _esc(props.text if props is not None and props.text is not None else "OK")
-        return (
-            pad
-            + "<Pressable style={"
-            + style
-            + "} onPress={"
-            + handler
-            + "}>\n"
-            + pad
-            + "  <Text style={{ color: theme.colorPrimaryFg, fontWeight: '600', textAlign: 'center' }}>"
-            + label
-            + "</Text>\n"
-            + pad
-            + "</Pressable>"
-        )
+        return _render_button(node, pad, is_root)
 
     if node.type == "Image":
         source = props.source if props else None
@@ -180,36 +331,7 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
         return pad + "<Image source={{ uri: '" + _esc(source) + "' }} style={" + style + "} />"
 
     if node.type == "TextInput":
-        bind = props.value_bind if props else None
-        placeholder = _esc(props.placeholder if props and props.placeholder else "")
-        if bind:
-            return (
-                pad
-                + "<TextInput\n"
-                + pad
-                + '  placeholder="'
-                + placeholder
-                + '"\n'
-                + pad
-                + '  placeholderTextColor="#71717A"\n'
-                + pad
-                + "  style={"
-                + style
-                + "}\n"
-                + pad
-                + "  value={String(state['"
-                + _esc(bind)
-                + "'] ?? '')}\n"
-                + pad
-                + "  onChangeText={(t) => setVar('"
-                + _esc(bind)
-                + "', t)}\n"
-                + pad
-                + "/>"
-            )
-        return (
-            pad + '<TextInput placeholder="' + placeholder + '" placeholderTextColor="#71717A" style={' + style + "} />"
-        )
+        return _render_text_input(node, pad, is_root)
 
     if node.type == "Spacer":
         return pad + "<View style={" + style + "} />"
@@ -262,7 +384,8 @@ def _screen_file(screen: AppScreen) -> str:
     needs = _ScreenNeeds()
     _collect_needs(screen.root, needs)
     imports = {"View"}
-    _collect_imports(screen.root, imports)
+    paper_imports: set[str] = set()
+    _collect_imports(screen.root, imports, paper_imports)
     if needs.alert:
         imports.add("Alert")
     if needs.linking:
@@ -276,16 +399,24 @@ def _screen_file(screen: AppScreen) -> str:
     if needs.state:
         hooks.append("  const { state, setVar } = useAppState();")
 
+    paper_import = (
+        "import { " + ", ".join(sorted(paper_imports)) + " } from 'react-native-paper';\n" if paper_imports else ""
+    )
     router_import = "import { useRouter } from 'expo-router';\n" if needs.router else ""
     state_import = "import { useAppState } from './state';\n" if needs.state else ""
     hooks_block = "\n".join(hooks) + "\n" if hooks else ""
+    theme_names = "paperTheme, theme" if paper_imports else "theme"
+    theme_import = "import { " + theme_names + " } from '../theme';\n"
 
     return (
-        "import { " + ", ".join(unique) + " } from 'react-native';\n"
-        "import { SafeAreaView } from 'react-native-safe-area-context';\n"
-        "import { StatusBar } from 'expo-status-bar';\n"
+        "import { "
+        + ", ".join(unique)
+        + " } from 'react-native';\n"
+        + paper_import
+        + "import { SafeAreaView } from 'react-native-safe-area-context';\n"
+        + "import { StatusBar } from 'expo-status-bar';\n"
         + router_import
-        + "import { theme } from '../theme';\n"
+        + theme_import
         + state_import
         + "\n"
         + "export default function "
@@ -326,6 +457,9 @@ def _package_json(document: AppDocument) -> str:
                 "react-native-safe-area-context": "4.12.0",
                 "react-native-screens": "~4.4.0",
                 "react-native-gesture-handler": "~2.20.2",
+                "react-native-paper": "~5.15.3",
+                "@expo/vector-icons": "~14.0.4",
+                "expo-font": "~13.0.4",
             },
             "devDependencies": {
                 "@babel/core": "^7.25.0",
@@ -395,7 +529,7 @@ def _state_file(document: AppDocument) -> str:
 
 def _tabs_layout(roots: list[AppScreen]) -> str:
     screens = "\n".join(
-        '            <Tabs.Screen name="'
+        '              <Tabs.Screen name="'
         + ("index" if screen.route == "index" else screen.route)
         + "\" options={{ title: '"
         + _esc(screen.name)
@@ -405,28 +539,31 @@ def _tabs_layout(roots: list[AppScreen]) -> str:
     return (
         "import { Tabs } from 'expo-router';\n"
         "import { GestureHandlerRootView } from 'react-native-gesture-handler';\n"
+        "import { PaperProvider } from 'react-native-paper';\n"
         "import { SafeAreaProvider } from 'react-native-safe-area-context';\n"
         "import { AppStateProvider } from './state';\n"
-        "import { theme } from '../theme';\n"
+        "import { paperTheme, theme } from '../theme';\n"
         "\n"
         "export default function Layout() {\n"
         "  return (\n"
         "    <GestureHandlerRootView style={{ flex: 1 }}>\n"
         "      <SafeAreaProvider>\n"
-        "        <AppStateProvider>\n"
-        "          <Tabs\n"
-        "            screenOptions={{\n"
-        "              headerStyle: { backgroundColor: theme.colorSurface },\n"
-        "              headerTintColor: theme.colorText,\n"
-        "              tabBarStyle: { backgroundColor: theme.colorSurface,"
+        "        <PaperProvider theme={paperTheme}>\n"
+        "          <AppStateProvider>\n"
+        "            <Tabs\n"
+        "              screenOptions={{\n"
+        "                headerStyle: { backgroundColor: theme.colorSurface },\n"
+        "                headerTintColor: theme.colorText,\n"
+        "                tabBarStyle: { backgroundColor: theme.colorSurface,"
         " borderTopColor: theme.colorBorder },\n"
-        "              tabBarActiveTintColor: theme.colorPrimary,\n"
-        "              tabBarInactiveTintColor: theme.colorTextMuted,\n"
-        "              sceneStyle: { backgroundColor: theme.colorBg },\n"
-        "            }}\n"
-        "          >\n" + screens + "\n"
-        "          </Tabs>\n"
-        "        </AppStateProvider>\n"
+        "                tabBarActiveTintColor: theme.colorPrimary,\n"
+        "                tabBarInactiveTintColor: theme.colorTextMuted,\n"
+        "                sceneStyle: { backgroundColor: theme.colorBg },\n"
+        "              }}\n"
+        "            >\n" + screens + "\n"
+        "            </Tabs>\n"
+        "          </AppStateProvider>\n"
+        "        </PaperProvider>\n"
         "      </SafeAreaProvider>\n"
         "    </GestureHandlerRootView>\n"
         "  );\n"
@@ -436,7 +573,7 @@ def _tabs_layout(roots: list[AppScreen]) -> str:
 
 def _stack_layout(screens_list: list[AppScreen]) -> str:
     screens = "\n".join(
-        '            <Stack.Screen name="'
+        '              <Stack.Screen name="'
         + ("index" if screen.route == "index" else screen.route)
         + "\" options={{ title: '"
         + _esc(screen.name)
@@ -446,24 +583,27 @@ def _stack_layout(screens_list: list[AppScreen]) -> str:
     return (
         "import { Stack } from 'expo-router';\n"
         "import { GestureHandlerRootView } from 'react-native-gesture-handler';\n"
+        "import { PaperProvider } from 'react-native-paper';\n"
         "import { SafeAreaProvider } from 'react-native-safe-area-context';\n"
         "import { AppStateProvider } from './state';\n"
-        "import { theme } from '../theme';\n"
+        "import { paperTheme, theme } from '../theme';\n"
         "\n"
         "export default function Layout() {\n"
         "  return (\n"
         "    <GestureHandlerRootView style={{ flex: 1 }}>\n"
         "      <SafeAreaProvider>\n"
-        "        <AppStateProvider>\n"
-        "          <Stack\n"
-        "            screenOptions={{\n"
-        "              headerStyle: { backgroundColor: theme.colorSurface },\n"
-        "              headerTintColor: theme.colorText,\n"
-        "              contentStyle: { backgroundColor: theme.colorBg },\n"
-        "            }}\n"
-        "          >\n" + screens + "\n"
-        "          </Stack>\n"
-        "        </AppStateProvider>\n"
+        "        <PaperProvider theme={paperTheme}>\n"
+        "          <AppStateProvider>\n"
+        "            <Stack\n"
+        "              screenOptions={{\n"
+        "                headerStyle: { backgroundColor: theme.colorSurface },\n"
+        "                headerTintColor: theme.colorText,\n"
+        "                contentStyle: { backgroundColor: theme.colorBg },\n"
+        "              }}\n"
+        "            >\n" + screens + "\n"
+        "            </Stack>\n"
+        "          </AppStateProvider>\n"
+        "        </PaperProvider>\n"
         "      </SafeAreaProvider>\n"
         "    </GestureHandlerRootView>\n"
         "  );\n"
@@ -510,6 +650,102 @@ BABEL_CONFIG = """module.exports = function (api) {
 """
 
 
+PAPER_THEME = """
+function parseHex(color: string): [number, number, number] | null {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (!match) return null;
+  const hex = match[1].length === 3 ? match[1].replace(/./g, (c) => c + c) : match[1];
+  return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+}
+
+function mix(a: string, b: string, t: number): string {
+  const from = parseHex(a);
+  const to = parseHex(b);
+  if (!from || !to) return a;
+  return (
+    '#' +
+    from
+      .map((channel, i) => Math.round(channel * (1 - t) + to[i] * t).toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+  );
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const rgb = parseHex(color);
+  if (!rgb) return color;
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+}
+
+function isDarkColor(color: string): boolean {
+  const rgb = parseHex(color);
+  if (!rgb) return false;
+  const [r, g, b] = rgb.map((channel) => {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.179;
+}
+
+const dark = isDarkColor(theme.colorBg);
+const base = dark ? MD3DarkTheme : MD3LightTheme;
+const radius = parseFloat(theme.radiusBase);
+
+export const paperTheme: MD3Theme = {
+  ...base,
+  dark,
+  mode: 'exact',
+  roundness: Number.isFinite(radius) && radius >= 0 ? radius : 12,
+  colors: {
+    ...base.colors,
+    primary: theme.colorPrimary,
+    onPrimary: theme.colorPrimaryFg,
+    primaryContainer: mix(theme.colorBg, theme.colorPrimary, 0.16),
+    onPrimaryContainer: theme.colorText,
+    secondary: theme.colorPrimary,
+    onSecondary: theme.colorPrimaryFg,
+    secondaryContainer: mix(theme.colorSurface, theme.colorPrimary, 0.16),
+    onSecondaryContainer: theme.colorText,
+    tertiary: theme.colorPrimary,
+    onTertiary: theme.colorPrimaryFg,
+    tertiaryContainer: mix(theme.colorSurface, theme.colorPrimary, 0.16),
+    onTertiaryContainer: theme.colorText,
+    background: theme.colorBg,
+    onBackground: theme.colorText,
+    surface: theme.colorSurface,
+    onSurface: theme.colorText,
+    surfaceVariant: mix(theme.colorSurface, theme.colorText, 0.08),
+    onSurfaceVariant: theme.colorTextMuted,
+    surfaceDisabled: withAlpha(theme.colorText, 0.12),
+    onSurfaceDisabled: withAlpha(theme.colorText, 0.38),
+    outline: theme.colorBorder,
+    outlineVariant: theme.colorBorder,
+    inverseSurface: theme.colorText,
+    inverseOnSurface: theme.colorBg,
+    inversePrimary: mix(theme.colorPrimary, theme.colorBg, 0.5),
+    shadow: '#000000',
+    scrim: '#000000',
+    elevation: {
+      level0: 'transparent',
+      level1: mix(theme.colorSurface, theme.colorPrimary, 0.05),
+      level2: mix(theme.colorSurface, theme.colorPrimary, 0.08),
+      level3: mix(theme.colorSurface, theme.colorPrimary, 0.11),
+      level4: mix(theme.colorSurface, theme.colorPrimary, 0.12),
+      level5: mix(theme.colorSurface, theme.colorPrimary, 0.14),
+    },
+  },
+};
+"""
+
+
+def _theme_file(document: AppDocument) -> str:
+    return (
+        "import { MD3DarkTheme, MD3LightTheme, type MD3Theme } from 'react-native-paper';\n"
+        "\n"
+        "export const theme = " + _json_pretty(document.theme.model_dump(by_alias=True)) + " as const;\n" + PAPER_THEME
+    )
+
+
 def generate_files(document: AppDocument) -> ExpoFileMap:
     files: ExpoFileMap = {}
 
@@ -518,9 +754,7 @@ def generate_files(document: AppDocument) -> ExpoFileMap:
     files["tsconfig.json"] = _json_pretty({"extends": "expo/tsconfig.base", "compilerOptions": {"strict": True}})
     files["babel.config.js"] = BABEL_CONFIG
     files[".gitignore"] = GITIGNORE
-    files["theme.ts"] = (
-        "export const theme = " + _json_pretty(document.theme.model_dump(by_alias=True)) + " as const;\n"
-    )
+    files["theme.ts"] = _theme_file(document)
     files["app/state.tsx"] = _state_file(document)
 
     screens_by_id = {screen.id: screen for screen in document.screens}

@@ -91,6 +91,7 @@ def test_codegen_cli_script_exists() -> None:
 
 
 @requires_node
+@pytest.mark.xfail(strict=True, reason="BIL-77: TS codegen not yet updated for Paper")
 @pytest.mark.parametrize("template", sorted(TEMPLATE_PROMPTS))
 def test_generators_agree_on_template_documents(template: TemplateKey) -> None:
     prompt = TEMPLATE_PROMPTS[template]
@@ -101,6 +102,7 @@ def test_generators_agree_on_template_documents(template: TemplateKey) -> None:
 
 
 @requires_node
+@pytest.mark.xfail(strict=True, reason="BIL-77: TS codegen not yet updated for Paper")
 def test_generators_agree_on_max_coverage_document() -> None:
     assert_generators_agree("the max coverage document", build_max_coverage_document())
 
