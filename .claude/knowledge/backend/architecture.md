@@ -825,6 +825,178 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 
 Там же в workflow к фильтру `paths` добавлены `frontend/apps/web/src/entities/app-document/lib/codegen.ts` и `frontend/apps/web/scripts/codegen-cli.ts`. Без этого правка одного только TS-генератора не запускала бы бэковый пайплайн, и расхождение проехало бы в `main` незамеченным.
 
+### 10.2 React Native Paper: маппинг темы и стилей узлов (BIL-75)
+
+Решено переводить экспортируемый Expo-проект на **React Native Paper** (MD3), чтобы поднять визуальное качество. Этот раздел — спецификация, по которой реализуют оба генератора: **BIL-76** (Python, `src/codegen/service.py`) и **BIL-77** (TS, `codegen.ts`), а **BIL-78** правит промпты. Выводить что-то заново им не нужно — всё решено здесь, и оба генератора обязаны реализовать это одинаково (тест на равенство из § 10.1 никуда не девается).
+
+**Источник.** Всё ниже проверено по исходникам `react-native-paper@5.15.3` (npm `latest` на 2026-09-18; `6.0.0` пока только `alpha`), не по документации и не по памяти. Файлы, на которые опираются выводы: `src/types.tsx` (`MD3Colors`, `MD3Theme`), `src/styles/themes/v3/LightTheme.tsx`, `src/components/Button/Button.tsx` + `utils.tsx`, `src/components/Surface.tsx`, `src/components/TextInput/TextInputOutlined.tsx` + `helpers.tsx` + `Addons/Outline.tsx` + `constants.tsx`. Обновляете Paper — перепроверьте таблицы ниже по тем же файлам.
+
+**Объём.** На Paper переезжают только `Button` → `<Button>` и `TextInput` → `<TextInput>`. Остальные шесть типов узлов остаются на голом RN. Тема Paper при этом строится целиком (все слоты), чтобы любой следующий компонент Paper получал осмысленные цвета, а не фиолетовые дефолты MD3.
+
+#### Что уже сломано сегодня, до Paper
+
+Три поля `AppNodeStyle` в экспорте **инертны уже сейчас**, в обоих генераторах: `styleToRN` / `_style_to_rn` выписывают их в RN-стиль как есть, а таких ключей у RN нет.
+
+| Поле | Почему не работает |
+|---|---|
+| `shadow` | в документе это CSS-строка (`"0 6px 16px rgba(0,0,0,.3)"`), а ключ `shadow` в RN не существует (есть `shadow*`, `elevation`, в RN 0.76 с новой архитектурой — `boxShadow`) |
+| `backgroundGradient` | CSS-градиент; у RN нет градиентной заливки без `expo-linear-gradient` |
+| `animation` | пресеты движения есть только в превью редактора (`app-anim--*`), в экспорт не реализованы |
+
+Отбросить их у Paper-узлов — значит **не потерять ничего, что работает сейчас**. В редакторе они при этом видны: превью и экспорт расходятся по этим полям уже до этой задачи.
+
+Токены `fontBody`/`fontHeading` в экспорте тоже не применяются нигде: `theme.ts` их просто содержит.
+
+#### 1. Тема: 10 `AppThemeTokens` → `MD3Theme`
+
+**Где считается.** Производные цвета вычисляются **в рантайме сгенерированного проекта**, в `theme.ts`, а не во время кодогенерации. Генераторы выписывают в `theme.ts` одну и ту же статичную строку-шаблон (маленькие хелперы + сборка `paperTheme`), меняется в ней только JSON с токенами — ровно как сейчас. Так в генераторах нет ни одной цветовой арифметики, и тесту на равенство нечему расходиться (округление, форматирование float в JS и Python). Внешних пакетов для цвета не тянем: `color` у Paper — транзитивная зависимость, полагаться на неё нельзя.
+
+Экспорт `theme` остаётся как есть (им пользуются `_layout.tsx` и экраны), рядом добавляется `export const paperTheme: MD3Theme`, `_layout.tsx` оборачивает дерево в `<PaperProvider theme={paperTheme}>` внутри `SafeAreaProvider`. В `package.json` проекта — `"react-native-paper": "~5.15.3"`; `react-native-safe-area-context` (peer) уже есть, иконки Paper при необходимости сам берёт из `@expo/vector-icons`, который приходит с `expo`.
+
+Хелперы в `theme.ts` (контракт, реализация — на BIL-76/77, одна на оба генератора, потому что это шаблонный текст):
+
+| Хелпер | Что делает | Невалидный вход |
+|---|---|---|
+| `mix(a, b, t)` | непрозрачный HEX: `a·(1−t) + b·t` по каналам sRGB, с округлением каналов | если `a` или `b` не `#rgb`/`#rrggbb` — возвращает `a` |
+| `withAlpha(c, a)` | `rgba(r, g, b, a)` | возвращает `c` как есть |
+| `isDarkColor(c)` | относительная яркость по WCAG `< 0.179` — порог, на котором белый и чёрный текст контрастны одинаково | `false` |
+
+Валидным HEX токен должен быть и так (`RULES` требует HEX, `ColorPicker` выдаёт HEX), фоллбэки нужны, только чтобы один кривой токен не ронял приложение на старте.
+
+**Корень темы.**
+
+| Поле `MD3Theme` | Значение | Почему |
+|---|---|---|
+| база | `dark ? MD3DarkTheme : MD3LightTheme`, поверх — всё ниже | слоты, для которых мы сознательно берём базовый MD3, приходят отсюда |
+| `dark` | `isDarkColor(colorBg)` | Paper читает `dark` при выборе базовых цветов и в части компонентов; угадывать по одному флагу из документа нечем, а фон — главный признак |
+| `mode` | `'exact'` | в тёмной теме с `adaptive` часть компонентов (`Appbar`, `Card`, `Dialog`, `BottomNavigation`) подмешивает оверлеи к фону и сдвигает наши цвета |
+| `roundness` | `parseFloat(radiusBase)`, если конечно и `>= 0`, иначе `12` | см. ниже |
+| `fonts` | базовый `configureFonts()` без изменений | см. ниже |
+| `animation` | из базы (`scale: 1`) | — |
+
+**`roundness` = `radiusBase` один к одному, но Button его не умножает.** Paper масштабирует `roundness` по компонентам: V3-`Button` — `5 × roundness` (при дефолтных 4 это «пилюля» 20px), `Card` и малый `FAB` — `3×`, средний `FAB` — `4×`, большой — `7×`, outlined-`TextInput` — `1×`. Единого множителя, при котором все компоненты получают `radiusBase`, нет. Поэтому `roundness = radiusBase` (так он честно работает для `TextInput`), а у `Button` генератор **всегда** передаёт явный `borderRadius` (см. таблицу Button) — Paper это официально поддерживает, и множитель в игру не вступает. **Любой следующий компонент Paper, который будут внедрять, — сначала проверить его множитель `roundness` и при необходимости так же передавать радиус явно.**
+
+`radiusBase` в документах бывает в двух форматах: `"14"` (бэкенд-плейсхолдер `"9"`, фикстуры) и `"12px"` (`DEFAULT_APP_THEME` во фронте). `parseFloat` понимает оба. Что с этим делать в промпте — см. п. 4.
+
+**`fontBody`/`fontHeading` не маппятся — сознательно.** Шрифты в сгенерированном проекте не загружаются (`expo-font`/`@expo-google-fonts` в зависимостях нет), а `fontFamily: "Inter"` без загруженного файла не отрисуется этим шрифтом (iOS ругается «Unrecognized font family», Android молча берёт системный). Paper с типографикой по умолчанию (`System` на iOS, `sans-serif`/`sans-serif-medium` на Android) — ровно то, что экспорт показывает сегодня. Подключение шрифтов — отдельная задача: загрузка файлов + `configureFonts({ config: { fontFamily } })`; значение `"System"` при этом маппить не нужно.
+
+**Цвета.** В `MD3Colors` 31 строковый слот плюс `elevation` (`level0`–`level5`). Прямых токенов у нас 7 цветовых, так что у каждого слота ниже записано, откуда он берётся. `mix(a, b, t)` — доля `b` равна `t`.
+
+| Слот `MD3Colors` | Значение | Где Paper его читает / почему так |
+|---|---|---|
+| `primary` | `colorPrimary` | заливка contained-`Button`, активная обводка `TextInput`, курсор |
+| `onPrimary` | `colorPrimaryFg` | текст contained-`Button` |
+| `primaryContainer` | `mix(colorBg, colorPrimary, 0.16)` | лёгкая тонировка акцентом поверх фона |
+| `onPrimaryContainer` | `colorText` | контейнер близок к фону, значит основной текст на нём читается |
+| `secondary` | `colorPrimary` | второго акцента в теме нет; выдумывать оттенок — значит вводить цвет, который пользователь не выбирал. Все три акцентные роли MD3 сходятся на одном |
+| `onSecondary` | `colorPrimaryFg` | то же |
+| `secondaryContainer` | `mix(colorSurface, colorPrimary, 0.16)` | самый используемый «контейнер» Paper: contained-tonal `Button`, выбранные `Chip`/`SegmentedButtons`, индикатор `BottomNavigation`/`Drawer` |
+| `onSecondaryContainer` | `colorText` | то же, что у `onPrimaryContainer` |
+| `tertiary` | `colorPrimary` | см. `secondary` |
+| `onTertiary` | `colorPrimaryFg` | — |
+| `tertiaryContainer` | как `secondaryContainer` | — |
+| `onTertiaryContainer` | `colorText` | — |
+| `background` | `colorBg` | дефолтный фон outlined-`TextInput` и подложка его лейбла (генератор всё равно передаёт фон поля явно, см. TextInput) |
+| `onBackground` | `colorText` | — |
+| `surface` | `colorSurface` | — |
+| `onSurface` | `colorText` | цвет вводимого текста `TextInput` |
+| `surfaceVariant` | `mix(colorSurface, colorText, 0.08)` | фон flat-`TextInput`, `Searchbar`, `Chip`; чуть отличим от `surface` |
+| `onSurfaceVariant` | `colorTextMuted` | цвет плейсхолдера `TextInput` — совпадает с превью редактора |
+| `surfaceDisabled` | `withAlpha(colorText, 0.12)` | так же, как Paper строит его сам (нейтраль с прозрачностью `.12`), только от нашего текста |
+| `onSurfaceDisabled` | `withAlpha(colorText, 0.38)` | то же, прозрачность `.38` |
+| `outline` | `colorBorder` | обводка outlined-`TextInput` и outlined-`Button` в покое — как рамка поля в превью |
+| `outlineVariant` | `colorBorder` | `Divider`; у токена `colorBorder` роль и есть «граница/разделитель», второй ступени нет |
+| `inverseSurface` | `colorText` | `Snackbar`, `Tooltip` — инверсия темы |
+| `inverseOnSurface` | `colorBg` | — |
+| `inversePrimary` | `mix(colorPrimary, colorBg, 0.5)` | акцент на инверсной поверхности: в светлой теме светлеет, в тёмной темнеет — в обоих случаях от `inverseSurface` уходит |
+| `error`, `onError`, `errorContainer`, `onErrorContainer` | из базовой темы (MD3 baseline, свой для светлой и тёмной) | токена ошибки у нас нет; ни один генерируемый узел состояние ошибки не выставляет (`error` у `TextInput` не пишем), так что выдумывать цвет не ради чего |
+| `shadow`, `scrim` | `#000000` | как в MD3, тень от темы не зависит |
+| `backdrop` | из базовой темы | нейтральное затемнение под модалками — наши токены тут ни о чём не говорят |
+| `elevation.level0` | `'transparent'` | как в MD3 |
+| `elevation.level1`…`level5` | `mix(colorSurface, colorPrimary, t)`, `t` = `0.05` / `0.08` / `0.11` / `0.12` / `0.14` | ровно формула Paper (`primary` поверх `surface` с этими долями), только от наших токенов. Значения обязаны быть **непрозрачными**: Paper прямо предупреждает, что полупрозрачный фон `Surface` ломает тени |
+
+#### 2–3. `Button` → Paper `<Button>`
+
+Генерируемый вид — `mode="contained"` (или `"elevated"`, см. `shadow`), всегда с `compact`, `buttonColor`, `textColor`, `style`, `contentStyle`, `labelStyle`, `onPress`, текст — `children`.
+
+Как устроен Paper `Button` и почему это важно: снаружи `Surface` (к нему уходит `style`), в нём `TouchableRipple` (зона нажатия и ripple), в нём `View` контента (`contentStyle`, `flexDirection: 'row'`, центрирование) и `Text` лейбла (`labelStyle`, `numberOfLines={1}`, `labelLarge`: 14/20, вес 500, у V3 поля лейбла `marginVertical: 10`, `marginHorizontal: 24`). Высота кнопки сама по себе — 40px от лейбла; высота, заданная `Surface`, **не** растягивает контент — `TouchableRipple` не `flex: 1`. Документация Paper прямо говорит: высоту и отступы задавать через `contentStyle`.
+
+| Поле | Что происходит в Paper, если выписать как сейчас в `style` | Решение |
+|---|---|---|
+| `layout.x/y/width/height/zIndex` | `position/left/top/width/height/zIndex` в `style` работают (на iOS уходят во внешний слой `Surface`), но контент остаётся высотой 40px и прижат к верху | `style` как сейчас **плюс** `contentStyle.height = layout.height − 2 × (style.borderWidth ?? 0)` — число считается в генераторе |
+| `flex`, `flexDirection`, `alignItems`, `justifyContent`, `gap` | ложатся на `Surface`. Хуже всего `alignItems: 'center'`: `TouchableRipple` сжимается до ширины текста, и **нажимается только середина кнопки**. Этот `alignItems` стоит в дефолтном стиле кнопки в `component-registry.ts`, то есть почти в каждом документе | **выбросить** |
+| `padding`, `paddingHorizontal` | `padding` на `Surface` сужает `TouchableRipple` (кольцо у края не нажимается) и сжимает контент; внутренние поля Paper остаются | в `style` не пишем; `labelStyle.marginHorizontal = paddingHorizontal ?? padding ?? 16` (16 — дефолтный `paddingHorizontal` кнопки в реестре) |
+| `paddingVertical` (и вертикальная часть `padding`) | то же + лейбл с `marginVertical: 10` не влезает в кнопки ниже 40px | **выбросить**; `labelStyle.marginVertical = 0` всегда — вертикаль центрирует `contentStyle` высотой из `layout` |
+| `margin`, `marginTop`, `marginBottom` | уходят во внешний слой `Surface`, ведут себя как у `View` | в `style` как есть |
+| `backgroundColor` | `style` перекрыл бы фон `Surface`, но в обход API: ripple и логика `disabled` считаются от `buttonColor` | проп `buttonColor = backgroundColor ?? theme.colorPrimary` — **всегда явно** (нужно для `elevated`, где дефолт другой) |
+| `backgroundGradient` | инертно уже сейчас | **выбросить** |
+| `color` | `color` в `style` (ViewStyle) никуда не доходит; Paper красит лейбл сам: `onPrimary`, а в `elevated` — `primary` | проп `textColor = color ?? theme.colorPrimaryFg` — **всегда явно** |
+| `fontSize`, `fontWeight`, `letterSpacing`, `lineHeight` | в `style` инертны (это ViewStyle `Surface`), лейбл остаётся `labelLarge` | в `labelStyle`. `fontWeight = fontWeight ?? '600'` — так рисует превью редактора и так генерирует экспорт сейчас (у Paper по умолчанию 500). `lineHeight`: если задан — как есть; если задан только `fontSize` — `floor(fontSize × 1.4 + 0.5)` (иначе остаётся `labelLarge` 20px и крупный текст обрезается). В Python именно `math.floor(x + 0.5)`, не `round()`: у `round()` банковское округление, у JS `Math.round` — нет, и тест на равенство покраснеет |
+| `textAlign` | лейбл однострочный, шириной по тексту и отцентрирован контентом — `textAlign` не виден | маппим в `contentStyle.justifyContent`: `left` → `'flex-start'`, `center` → `'center'`, `right` → `'flex-end'` |
+| `borderRadius` | работает: Paper вынимает все `border*Radius` из `style` и применяет и к `Surface`, и к ripple. Без него — `5 × roundness` | `style.borderRadius = borderRadius ?? paperTheme.roundness` — **всегда явно** (в генерируемом коде — ссылка на `paperTheme.roundness`, не число: `radiusBase` разбирается в рантайме) |
+| `borderWidth`, `borderColor` | работают: `style` идёт после вычисленных Paper `borderWidth: 0 / borderColor: transparent` и перекрывает их. Мелочь: радиус ripple Paper считает от своего `borderWidth` (0), так что при толстой рамке углы ripple чуть выходят за внутренний край | в `style`; если `borderWidth` задан без `borderColor` — `borderColor: theme.colorBorder` (как превью) |
+| `shadow` | инертно уже сейчас. Тенью `Button` управляет сам: `Surface` получает `elevation` от `Button` поверх любого переданного, и она ненулевая только в `mode="elevated"` (уровень 1, при нажатии 2) | CSS-значение **выбросить**; наличие непустого `shadow` → `mode="elevated"` (поэтому `buttonColor`/`textColor` всегда явные — иначе elevated перекрасил бы кнопку) |
+| `width`, `height` в `style` | уже пропускаются при наличии `layout` | без изменений |
+| `opacity` | внешний слой `Surface`, работает | в `style` |
+| `animation` | инертно уже сейчас | без изменений |
+
+Ещё два свойства Paper-кнопки, которые меняют результат:
+
+- **`minWidth: 64`** у `Surface` — кнопки уже 64px растягиваются. Поэтому `compact` всегда: он снимает `minWidth`, а горизонтальные поля лейбла всё равно задаём сами через `labelStyle`.
+- **Лейбл однострочный** (`numberOfLines={1}`): длинный текст обрезается многоточием, а не переносится, как у голого `Text`. Это в промпт (п. 4).
+
+#### 2–3. `TextInput` → Paper `<TextInput>`
+
+Генерируемый вид — `mode="outlined"`, **без `label`**, только `placeholder`. Почему outlined: превью редактора рисует поле как залитый прямоугольник со скруглением и рамкой в 1px (`NodeBody.tsx`); outlined-вариант Paper — ровно это. Flat — подчёркивание и скругление только сверху. `label` не используем: плавающий лейбл добавляет отступ сверху (`LABEL_PADDING_TOP`), вырезает «окно» в обводке и меняет геометрию относительно `layout`, а плейсхолдер без лейбла Paper показывает всегда.
+
+Как устроен outlined `TextInput`: из `style` Paper **вынимает** `fontSize`, `fontWeight`, `lineHeight`, `height`, `backgroundColor`, `textAlign`; всё остальное уходит на внешнюю обёртку `View`. Видимая рамка — отдельный абсолютный `Outline` (`borderRadius: roundness`, `borderWidth` 1, в фокусе 2, цвет `outline`/`primary`), стилизуется `outlineStyle`. Нативный инпут получает `paddingHorizontal: 16` и вычисленные вертикальные поля; последним к нему применяется `contentStyle`.
+
+| Поле | Что происходит в Paper, если выписать как сейчас в `style` | Решение |
+|---|---|---|
+| `layout.x/y/width/zIndex` | на обёртку, работают | в `style` как сейчас |
+| `layout.height` | вынимается и становится высотой инпута (для однострочного — ровно она); вертикально текст центрируется сам | в `style` как сейчас |
+| `flex`, `flexDirection`, `alignItems`, `justifyContent`, `gap` | на обёртку, внутри которой Paper раскладывает свои слои; `alignItems: 'center'` сузил бы инпут до ширины текста | **выбросить** |
+| `padding`, `paddingHorizontal` | на обёртку: сдвигают инпут внутрь от рамки, а свои 16px Paper добавляет сверху | в `style` не пишем; `contentStyle.paddingHorizontal = paddingHorizontal ?? padding ?? 10` (10 — дефолт превью редактора) |
+| `paddingVertical` (и вертикальная часть `padding`) | вертикальные поля Paper считает сам из высоты | **выбросить** |
+| `margin`, `marginTop`, `marginBottom` | на обёртку, работают | в `style` |
+| `backgroundColor` | вынимается и становится фоном `Outline` — работает. Но без него Paper берёт `colors.background` (`colorBg`), а превью — `colorSurface` | `style.backgroundColor = backgroundColor ?? theme.colorSurface` — **всегда явно** |
+| `backgroundGradient` | инертно уже сейчас | **выбросить** |
+| `color` | не вынимается → на обёртку `View` → **инертно**. Цвет текста Paper берёт из `textColor` или `onSurface` | проп `textColor`, только если `color` задан (иначе `onSurface` = `colorText`) |
+| плейсхолдер | генератор сейчас зашивает `placeholderTextColor="#71717A"` | **убрать хардкод**: Paper берёт `onSurfaceVariant` = `colorTextMuted`, как превью |
+| `fontSize`, `fontWeight`, `lineHeight`, `textAlign` | вынимаются и применяются к инпуту — работают. Дефолт `fontSize` у Paper 16, у превью 14 | в `style`; `fontSize = fontSize ?? 14` явно |
+| `letterSpacing` | не вынимается → на обёртку → **инертно** | в `contentStyle.letterSpacing` |
+| `borderRadius` | на обёртку: скругляет невидимый контейнер, видимая рамка `Outline` остаётся с `roundness` | в `style` не пишем; `outlineStyle.borderRadius = borderRadius ?? paperTheme.roundness` явно |
+| `borderColor` | на обёртку → инертно (рамка — это `Outline`) | проп `outlineColor = borderColor` (если не задан — `outline` = `colorBorder` из темы) |
+| `borderWidth` | на обёртку → лишняя вторая рамка вокруг `Outline` | в `style` не пишем. `borderWidth: 0` → `outlineColor="transparent"` (поле без рамки в покое, но с рамкой 2px `primary` в фокусе). `borderWidth > 0` → `outlineStyle.borderWidth` — **ценой утолщения в фокусе**: `outlineStyle` применяется после фокусной ширины и фиксирует её; цвет в фокусе по-прежнему меняется |
+| `shadow` | инертно уже сейчас; API тени у `TextInput` нет | **выбросить** |
+| `width`, `height` в `style` | уже пропускаются при наличии `layout` | без изменений |
+| `opacity` | на обёртку, работает | в `style` |
+| `animation` | инертно уже сейчас | без изменений |
+
+`activeOutlineColor` не передаём — фокус красится в `primary`, это единственная видимая реакция поля на фокус, и она нужна.
+
+#### Расхождения превью и экспорта, которые остаются (для BIL-77)
+
+Решения выше подогнаны под то, как рисует превью редактора. Остались места, где уже *сейчас* превью и экспорт расходятся, и Paper этого не чинит — это правки канваса, не кодогена, и в BIL-77 их можно сделать заодно, раз задача всё равно фронтовая:
+
+- **Дефолтный радиус.** Экспорт после Paper: `borderRadius ?? radiusBase` у обоих типов. Превью: у `Button` нет фоллбэка вообще (`borderRadius` не задан → 0), у `TextInput` — зашитые `10`. Лучше перевести оба фоллбэка превью на `radiusBase`.
+- **`textAlign` у `Button`**: превью выравнивает текст внутри кнопки, экспорт после маппинга в `justifyContent` — сдвигает однострочный лейбл целиком. На кнопке по ширине текста это одно и то же, на переносящемся тексте — нет (в экспорте переноса нет).
+- **`alignItems: 'center'` в `defaultStyle` кнопки** в `component-registry.ts`: генератор его выбрасывает, но убрать его из дефолтов имеет смысл, чтобы он не копился в документах.
+
+#### 4. Что поменять в промптах (для BIL-78)
+
+Промпты в этой задаче не трогались. Что в них расходится с решениями выше:
+
+1. **`DESIGN_RULES`, пункт про палитру, уже сейчас врёт**: перечисляет роли «успех, ошибка, дополнительный/приглушённый», а таких токенов в `AppThemeTokens` нет. Переписать под фактические 10 и их роли в Paper: `colorBorder` — обводка полей ввода и разделители, `colorTextMuted` — плейсхолдеры и вторичный текст, `colorPrimaryFg` — текст на залитых кнопках (обязан контрастировать с `colorPrimary`), `colorSurface` — заливка полей ввода и карточек.
+2. **`DESIGN_RULES`, «один и тот же `borderRadius` на всём»**: теперь `radiusBase` — радиус по умолчанию для `Button` и `TextInput`. Сказать модели, что ставить `borderRadius` на них нужно, только когда радиус осознанно отличается от `radiusBase`; различие радиусов по ролям остаётся актуальным для `View`/`Image`.
+3. **`DESIGN_RULES`, пункт про тени**: у `Button` тень — только вкл/выкл (любое непустое значение `shadow` = поднятая кнопка MD3, само значение игнорируется), у `TextInput` не работает вовсе. Честнее прямо сказать, что на остальных узлах `shadow` в экспорте сейчас не работает тоже (см. «Что уже сломано сегодня»), — или заодно чинить экспорт теней отдельной задачей.
+4. **`radiusBase` — формат**: в `RULES` требовать число без единиц (`"12"`, не `"12px"`). `parseFloat` переварит и то и другое, но строка с единицами — источник будущих расхождений; при желании можно поправить и `DEFAULT_APP_THEME` во фронте (это `model.ts`, форма документа не меняется).
+5. **`Button`**: подпись в одну строку, длинная обрезается многоточием — короткие подписи по действию (с пунктом «называй по действию» из `DESIGN_RULES` это согласуется); `paddingVertical`, `alignItems`, `justifyContent`, `gap`, `flex*`, `backgroundGradient` на кнопке игнорируются; высота кнопки берётся из `layout.height`.
+6. **`TextInput`**: `paddingVertical`, `backgroundGradient`, `shadow` игнорируются; рамка поля — `borderColor`/`borderWidth` (0 — без рамки), цвет текста — `color`, плейсхолдер красится `colorTextMuted`.
+7. **`fontBody`/`fontHeading`**: в экспорте не применяются. Решить в BIL-78, говорить ли об этом модели или оставить как есть до задачи про шрифты.
+
+Промпт чата импортирует `DESIGN_RULES` из `src.generation.prompt` (§ 9.1, BIL-72), так что пп. 1–3 попадут в чат автоматически; отдельных правил про стили в `RULES` чата нет.
+
 ---
 
 ## 11. Миграции
