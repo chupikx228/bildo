@@ -450,6 +450,7 @@ def _package_json(document: AppDocument) -> str:
             },
             "dependencies": {
                 "expo": "~52.0.46",
+                "expo-asset": "~11.0.5",
                 "expo-router": "~4.0.20",
                 "expo-status-bar": "~2.0.1",
                 "expo-linking": "~7.0.5",
@@ -460,8 +461,10 @@ def _package_json(document: AppDocument) -> str:
                 "react-native-screens": "~4.4.0",
                 "react-native-gesture-handler": "~2.20.2",
                 "react-native-paper": "~5.15.3",
+                "react-native-web": "~0.19.13",
                 "@expo/vector-icons": "~14.0.4",
                 "expo-font": "~13.0.4",
+                "query-string": "^7.1.3",
             },
             "devDependencies": {
                 "@babel/core": "^7.25.0",
