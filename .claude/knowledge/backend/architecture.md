@@ -997,6 +997,22 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 
 Промпт чата импортирует `DESIGN_RULES` из `src.generation.prompt` (§ 9.1, BIL-72), так что пп. 1–3 попадут в чат автоматически; отдельных правил про стили в `RULES` чата нет.
 
+### 10.3 Недостающие зависимости экспорта: `expo-asset`, `query-string`, `react-native-web` (BIL-79)
+
+**Симптом.** Найдено при проверке BIL-76: свежий экспортированный проект (`npm install` без ручных правок) падал уже на старте Metro — `Error: The required package 'expo-asset' cannot be found` (`@expo/metro-config` читает `expo-asset` в `getAssetPlugins`, а его не было ни в `dependencies`, ни транзитивно). Экспорт для `web` падал отдельно и по другой причине: `expo export --platform web` отказывался стартовать без `react-native-web` («Please install react-native-web@~0.19.13»).
+
+**Причина — не одна, все три пакета выпали по-разному:**
+
+- **`expo-asset`** генератор никогда не перечислял явно — раньше сходило с рук, потому что какой-то другой пакет тянул его транзитивно; в текущем графе SDK 52 транзитивной цепочки к нему нет, а `@expo/metro-config` требует его напрямую при любой сборке (`expo start`, `expo export`, оба платформы).
+- **`query-string`** — не наша недоглядка, а чужой breaking change без объявления зависимости. `expo-router` (`build/fork/getPathFromState*.js`, `build/global-state/routeInfo.js`) делает `require("query-string")` напрямую, но сам его в `dependencies` не перечисляет — рассчитывает, что пакет придёт транзитивно через `@react-navigation/core`. До `@react-navigation/native@7.4` `core` действительно тянул `query-string@^7.1.3`; начиная с 7.4.1 (на неё резолвится диапазон `^7.0.14`, который просит `expo-router@~4.0.20`/`4.0.22`) `core` его больше не зависит — `require` в `expo-router` не находит пакет вообще.
+- **`react-native-web`** — не транзитивная недостача, а осознанно заявленная в `README.md` (`Отсканируйте QR ... или нажмите w для web`) возможность, для которой зависимость никогда не добавлялась. Без `--platform` явно не запрашивается, но `app.json` объявляет секцию `web`, и генерируемый проект недвусмысленно обещает пользователю рабочий web-запуск.
+
+**Версии** — не подобраны на глаз, а взяты из `bundledNativeModules.json` официального SDK 52 (`https://raw.githubusercontent.com/expo/expo/sdk-52/packages/expo/bundledNativeModules.json`) и дефолтного шаблона Expo (`templates/expo-template-default/package.json` на той же ветке): `expo-asset: ~11.0.5`, `react-native-web: ~0.19.13`. Для `query-string` ориентир — версия, которую `@react-navigation/core` пинил до 7.4 (`^7.1.3`, CommonJS-сборка — совместима с `require()` в `expo-router`; `query-string@8+` — pure ESM без CJS-экспорта, `require` её не найдёт).
+
+**Проверка — реальная сборка, не разбор дерева зависимостей на глаз.** Прогнано сквозь настоящий `npm install` (без единой ручной правки) и `npx expo export --platform <android|ios|web>` для: документа максимального покрытия (`tests/codegen/max_coverage_document.py`, 8 типов узлов) и всех пяти шаблонов из `tests/generation/template_fixtures.py`. До фикса — `expo-asset` валит любую сборку (все платформы, весь набор документов), `web`-экспорт падает отдельно на `react-native-web` даже после добавления `expo-asset`. После фикса — все комбинации документ×платформа экспортируются чисто, `npx tsc --noEmit` проходит без ошибок на всех пяти шаблонах.
+
+**Что не входит в этот фикс.** На документе максимального покрытия (не на шаблонах) `tsc --noEmit` даёт две ошибки `TS2769` — узел `Text` со стилем `animation: 'rise'` не проходит типы `TextStyle`, потому что `animation` в принципе не входит в тип стиля RN. Это не связано с недостающими зависимостями: код, дословно выписывающий все ключи `AppNodeStyle` в сырой RN-стиль (`_style_to_rn`), не трогался с самого первого коммита кодогена, задолго до Paper и до этой задачи, — и `animation` там и тогда был документирован как «инертно» (раздел 10.2, «Что уже сломано сегодня, до Paper»), но не как «ломает компиляцию». Затрагивает только узлы `Text`/`View`/… с непустым `style.animation` вне Paper-компонентов (`Button`/`TextInput` фильтруют `PAPER_PASSTHROUGH_KEYS`, у обычных узлов фильтра нет) — ни один из пяти шаблонов такого стиля не генерирует, только синтетическая фикстура. Отдельная задача, не эта.
+
 ---
 
 ## 11. Миграции
