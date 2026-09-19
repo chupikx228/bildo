@@ -99,7 +99,7 @@ function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean): string {
       if (bind) {
         return `${pad}<Text style={${style}}>{String(state['${esc(bind)}'] ?? '')}</Text>`;
       }
-      return `${pad}<Text style={${style}}>${esc(node.props?.text ?? "")}</Text>`;
+      return `${pad}<Text style={${style}}>{${JSON.stringify(node.props?.text ?? "")}}</Text>`;
     }
     case "Button": {
       const handler = actionsToHandler(node.props?.onPress, node.props?.href);

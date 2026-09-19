@@ -136,8 +136,8 @@ describe("codegenExpoProject — node rendering details", () => {
   const files = codegenExpoProject(coverageDoc());
   const index = files["app/index.tsx"]!;
 
-  it("escapes quotes, newlines and backslashes in text", () => {
-    expect(index).toContain("He said \\'hi\\'\\nnext\\\\end");
+  it("wraps text in a JSON-encoded JSX expression so quotes, newlines and backslashes render correctly", () => {
+    expect(index).toContain(`{${JSON.stringify("He said 'hi'\nnext\\end")}}`);
   });
 
   it("renders a hidden node as a null placeholder, not its text", () => {
