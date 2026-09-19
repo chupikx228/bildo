@@ -917,7 +917,7 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 
 #### 2–3. `Button` → Paper `<Button>`
 
-Генерируемый вид — `mode="contained"` (или `"elevated"`, см. `shadow`), всегда с `compact`, `buttonColor`, `textColor`, `style`, `contentStyle`, `labelStyle`, `onPress`, текст — `children`.
+Генерируемый вид — `mode="contained"` (или `"elevated"`, см. `shadow`), либо `mode="outlined"`, если `backgroundColor` не задан, а `color` задан (BIL-80, см. ниже), всегда с `compact`, `buttonColor`, `textColor`, `style`, `contentStyle`, `labelStyle`, `onPress`, текст — `children`.
 
 Как устроен Paper `Button` и почему это важно: снаружи `Surface` (к нему уходит `style`), в нём `TouchableRipple` (зона нажатия и ripple), в нём `View` контента (`contentStyle`, `flexDirection: 'row'`, центрирование) и `Text` лейбла (`labelStyle`, `numberOfLines={1}`, `labelLarge`: 14/20, вес 500, у V3 поля лейбла `marginVertical: 10`, `marginHorizontal: 24`). Высота кнопки сама по себе — 40px от лейбла; высота, заданная `Surface`, **не** растягивает контент — `TouchableRipple` не `flex: 1`. Документация Paper прямо говорит: высоту и отступы задавать через `contentStyle`.
 
@@ -928,9 +928,9 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 | `padding`, `paddingHorizontal` | `padding` на `Surface` сужает `TouchableRipple` (кольцо у края не нажимается) и сжимает контент; внутренние поля Paper остаются | в `style` не пишем; `labelStyle.marginHorizontal = paddingHorizontal ?? padding ?? 16` (16 — дефолтный `paddingHorizontal` кнопки в реестре) |
 | `paddingVertical` (и вертикальная часть `padding`) | то же + лейбл с `marginVertical: 10` не влезает в кнопки ниже 40px | **выбросить**; `labelStyle.marginVertical = 0` всегда — вертикаль центрирует `contentStyle` высотой из `layout` |
 | `margin`, `marginTop`, `marginBottom` | уходят во внешний слой `Surface`, ведут себя как у `View` | в `style` как есть |
-| `backgroundColor` | `style` перекрыл бы фон `Surface`, но в обход API: ripple и логика `disabled` считаются от `buttonColor` | проп `buttonColor = backgroundColor ?? theme.colorPrimary` — **всегда явно** (нужно для `elevated`, где дефолт другой) |
+| `backgroundColor` | `style` перекрыл бы фон `Surface`, но в обход API: ripple и логика `disabled` считаются от `buttonColor` | проп `buttonColor` — **всегда явно**. Задан `backgroundColor` → `buttonColor = backgroundColor`, режим `contained`/`elevated`. Не задан, но задан `color` → `buttonColor = 'transparent'`, режим переключается на `outlined` (BIL-80, см. ниже). Не заданы оба → `buttonColor = theme.colorPrimary`, `contained`/`elevated` — прежний дефолт |
 | `backgroundGradient` | инертно уже сейчас | **выбросить** |
-| `color` | `color` в `style` (ViewStyle) никуда не доходит; Paper красит лейбл сам: `onPrimary`, а в `elevated` — `primary` | проп `textColor = color ?? theme.colorPrimaryFg` — **всегда явно** |
+| `color` | `color` в `style` (ViewStyle) никуда не доходит; Paper красит лейбл сам: `onPrimary`, а в `elevated`/`outlined` — `primary` | проп `textColor = color ?? theme.colorPrimaryFg` — **всегда явно** |
 | `fontSize`, `fontWeight`, `letterSpacing`, `lineHeight` | в `style` инертны (это ViewStyle `Surface`), лейбл остаётся `labelLarge` | в `labelStyle`. `fontWeight = fontWeight ?? '600'` — так рисует превью редактора и так генерирует экспорт сейчас (у Paper по умолчанию 500). `lineHeight`: если задан — как есть; если задан только `fontSize` — `floor(fontSize × 1.4 + 0.5)` (иначе остаётся `labelLarge` 20px и крупный текст обрезается). В Python именно `math.floor(x + 0.5)`, не `round()`: у `round()` банковское округление, у JS `Math.round` — нет, и тест на равенство покраснеет |
 | `textAlign` | лейбл однострочный, шириной по тексту и отцентрирован контентом — `textAlign` не виден | маппим в `contentStyle.justifyContent`: `left` → `'flex-start'`, `center` → `'center'`, `right` → `'flex-end'` |
 | `borderRadius` | работает: Paper вынимает все `border*Radius` из `style` и применяет и к `Surface`, и к ripple. Без него — `5 × roundness` | `style.borderRadius = borderRadius ?? paperTheme.roundness` — **всегда явно** (в генерируемом коде — ссылка на `paperTheme.roundness`, не число: `radiusBase` разбирается в рантайме) |
@@ -939,6 +939,20 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 | `width`, `height` в `style` | уже пропускаются при наличии `layout` | без изменений |
 | `opacity` | внешний слой `Surface`, работает | в `style` |
 | `animation` | инертно уже сейчас | без изменений |
+
+#### `backgroundColor` отсутствует, а `color` задан → `outlined`, а не залитая `colorPrimary` (BIL-80)
+
+**Симптом.** До этой правки `buttonColor` всегда фоллбэчил на `theme.colorPrimary`, когда `style.backgroundColor` не задан, — независимо от того, задан ли `style.color`. Модель, оставляющая `backgroundColor` пустым и указывающая только `color` (обычный способ описать outline/ghost-кнопку — легитимный паттерн для второстепенного действия), получала не прозрачную кнопку с цветным текстом, а **залитую `colorPrimary`** с текстом заданного цвета поверх — в худшем случае тёмный текст на тёмной заливке, то есть невидимую кнопку. Баг не регрессия BIL-76: у дошедшего до Paper генератора была симметричная версия той же ошибки (в другую сторону), так что это старый класс бага, впервые закрытый здесь.
+
+**Решение.** `background_color is None and color is not None` → кнопка рендерится `mode="outlined"`, `buttonColor={'transparent'}`, `textColor` как обычно — заданным `color`. Разбор `getButtonColors` в исходниках `react-native-paper@5.15.3` (`src/components/Button/utils.tsx`) подтверждает, почему нельзя просто не передавать `buttonColor`, а обязательно передать `'transparent'` явно: `customButtonColor` проверяется первым и **перебивает вычисленный дефолт режима для любого mode**, включая `outlined`/`text` — значит, если бы код продолжил слать `theme.colorPrimary` безусловно, кнопка оставалась бы залитой даже в `outlined`. Рамку при этом можно не выписывать вовсе: если `style.borderWidth`/`style.borderColor` у узла не заданы, Paper сам применяет для `outlined` `borderWidth: 1`, `borderColor: theme.colors.outline` (= `colorBorder`) — то есть видимая обводка появляется без единой лишней строчки в `style`, ровно как ожидается от outline-кнопки.
+
+Остальные два случая не меняются: `backgroundColor` задан → как раньше, `contained`/`elevated` заливкой этим цветом; не задан ни `backgroundColor`, ни `color` → как раньше, `contained`/`elevated` заливкой `theme.colorPrimary` (это прежний дефолт для узлов вообще без цветовых пропов, а не признак outline-намерения).
+
+`shadow` в этой ветке игнорируется — переключения в `elevated` не происходит, даже если `shadow` задан: `elevated` — залитый режим, а без фона переключать тень не на что.
+
+**Проверка.** `tests/codegen/test_paper_codegen.py::test_button_text_color_without_background_renders_outlined_not_filled` и `::test_button_shadow_is_ignored_when_rendered_outlined`; живой прогон `generate_files` на документе с двумя кнопками (`color` без `backgroundColor` / без обоих) подтвердил вывод `mode="outlined"` + `buttonColor={'transparent'}` + заданный `textColor` для первой и прежний `mode="contained"` + `theme.colorPrimary` для второй.
+
+**Только бэкенд.** TS-генератор (`frontend/apps/web/src/entities/app-document/lib/codegen.ts`) ещё не портирован на Paper вообще (это BIL-77) — сравнивать не с чем, тест на равенство генераторов (§ 10.1) по кнопкам сейчас в любом случае не про паритет с Paper. Когда BIL-77 дойдёт до `Button`, то же правило (`backgroundColor` не задан + `color` задан → `outlined`/прозрачный `buttonColor`) обязано появиться и там — иначе панель кода в редакторе и экспортированный проект снова разойдутся по видимому результату для этого случая, просто на новом уровне (Paper vs Paper), а не как раньше (голый RN vs Paper).
 
 Ещё два свойства Paper-кнопки, которые меняют результат:
 
