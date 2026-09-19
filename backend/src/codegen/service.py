@@ -323,7 +323,7 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
         if bind:
             return pad + "<Text style={" + style + "}>{String(state['" + _esc(bind) + "'] ?? '')}</Text>"
         text = props.text if props is not None and props.text is not None else ""
-        return pad + "<Text style={" + style + "}>" + _esc(text) + "</Text>"
+        return pad + "<Text style={" + style + "}>{" + _json_compact(text) + "}</Text>"
 
     if node.type == "Button":
         return _render_button(node, pad, is_root)

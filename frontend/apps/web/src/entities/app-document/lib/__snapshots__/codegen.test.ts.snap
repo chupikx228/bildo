@@ -111,7 +111,7 @@ export default function IndexScreen() {
   zIndex: 3,
   color: '#fff',
   fontWeight: '600'
-}}>He said \\'hi\\'\\nnext\\\\end</Text>
+}}>{"He said 'hi'\\nnext\\\\end"}</Text>
       <Text style={{
   position: 'absolute',
   left: 8,
@@ -218,7 +218,7 @@ export default function ProfileScreen() {
   top: 8,
   width: 100,
   height: 20
-}}>Profile</Text>
+}}>{"Profile"}</Text>
     </ScrollView>
     </SafeAreaView>
   );

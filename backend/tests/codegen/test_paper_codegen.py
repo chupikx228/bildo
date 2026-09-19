@@ -285,6 +285,16 @@ def test_button_without_text_keeps_ok_fallback() -> None:
     assert "      >\n        OK\n      </Button>" in _screen(AppNode(id="button", type="Button"))
 
 
+def test_text_node_content_is_a_jsx_expression_so_newlines_and_quotes_render() -> None:
+    node = AppNode(id="text", type="Text", props=AppNodeProps(text="Кавычки 'внутри', слеш \\ и перенос \n хвост"))
+
+    assert "<Text style={{}}>{\"Кавычки 'внутри', слеш \\\\ и перенос \\n хвост\"}</Text>" in _screen(node)
+
+
+def test_text_node_without_bind_falls_back_to_empty_expression() -> None:
+    assert '<Text style={{}}>{""}</Text>' in _screen(AppNode(id="text", type="Text"))
+
+
 def test_text_input_defaults() -> None:
     screen = _screen(_input())
 
