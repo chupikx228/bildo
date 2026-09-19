@@ -187,6 +187,24 @@ def test_button_colors_are_mapped_to_props() -> None:
     assert "backgroundColor" not in _jsx_attribute(screen, "Button", "style")
 
 
+def test_button_text_color_without_background_renders_outlined_not_filled() -> None:
+    screen = _screen(_button(AppNodeStyle(color="#FFEEDD")))
+
+    assert 'mode="outlined"' in screen
+    assert 'mode="contained"' not in screen
+    assert 'mode="elevated"' not in screen
+    assert _jsx_attribute(screen, "Button", "buttonColor") == "buttonColor={'transparent'}"
+    assert _jsx_attribute(screen, "Button", "textColor") == "textColor={'#FFEEDD'}"
+    assert "theme.colorPrimary}" not in _jsx_attribute(screen, "Button", "buttonColor")
+
+
+def test_button_shadow_is_ignored_when_rendered_outlined() -> None:
+    screen = _screen(_button(AppNodeStyle(color="#FFEEDD", shadow="0 6px 16px rgba(0,0,0,.3)")))
+
+    assert 'mode="outlined"' in screen
+    assert "shadow" not in screen
+
+
 def test_button_typography_and_padding_go_to_label_style() -> None:
     style = AppNodeStyle(padding_horizontal=20, font_size=16, font_weight="700", letter_spacing=0.5, line_height=24)
     label = _jsx_attribute(_screen(_button(style)), "Button", "labelStyle")

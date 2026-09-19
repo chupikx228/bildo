@@ -238,12 +238,20 @@ def _render_button(node: AppNode, pad: str, is_root: bool) -> str:
     elif style.font_size is not None:
         label_entries.append(("lineHeight", _number(math.floor(style.font_size * BUTTON_LINE_HEIGHT_RATIO + 0.5))))
 
+    is_outline_intent = style.background_color is None and style.color is not None
+    if is_outline_intent:
+        mode_attr = 'mode="outlined"'
+        button_color_expr = _literal("transparent")
+    else:
+        mode_attr = 'mode="elevated"' if style.shadow else 'mode="contained"'
+        button_color_expr = (
+            _literal(style.background_color) if style.background_color is not None else "theme.colorPrimary"
+        )
+
     attributes = [
-        'mode="elevated"' if style.shadow else 'mode="contained"',
+        mode_attr,
         "compact",
-        "buttonColor={"
-        + (_literal(style.background_color) if style.background_color is not None else "theme.colorPrimary")
-        + "}",
+        "buttonColor={" + button_color_expr + "}",
         "textColor={" + (_literal(style.color) if style.color is not None else "theme.colorPrimaryFg") + "}",
         "style={" + _object_literal(style_entries) + "}",
         "contentStyle={" + _object_literal(content_entries) + "}",
