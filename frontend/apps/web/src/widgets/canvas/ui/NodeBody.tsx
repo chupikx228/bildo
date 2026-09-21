@@ -1,5 +1,5 @@
 import type { AppDocument, AppNode, AppThemeTokens } from "@bildo/api";
-import { resolveText } from "../lib/canvasNode";
+import { paperRoundness, resolveText } from "../lib/canvasNode";
 
 export function NodeBody({
   node,
@@ -24,6 +24,7 @@ export function NodeBody({
             fontWeight: weight,
             fontSize: "inherit",
             color: "inherit",
+            whiteSpace: "pre-wrap",
           }}
         >
           {resolveText(node, docState) || "Текст"}
@@ -51,7 +52,7 @@ export function NodeBody({
             width: "100%",
             height: "100%",
             border: `${node.style?.borderWidth ?? 1}px solid ${node.style?.borderColor ?? theme.colorBorder}`,
-            borderRadius: node.style?.borderRadius ?? 10,
+            borderRadius: node.style?.borderRadius ?? paperRoundness(theme),
             background: node.style?.backgroundGradient ?? node.style?.backgroundColor ?? theme.colorSurface,
             color: node.style?.color ?? theme.colorTextMuted,
             padding: node.style?.paddingHorizontal ?? node.style?.padding ?? 10,
