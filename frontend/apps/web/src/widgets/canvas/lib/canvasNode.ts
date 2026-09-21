@@ -76,6 +76,20 @@ export function animClass(animation: AppNodeAnimation | undefined): string | und
   return animation ? `app-anim app-anim--${animation}` : undefined;
 }
 
+export function paperRoundness(theme: AppThemeTokens): number {
+  const radius = parseFloat(theme.radiusBase);
+  return Number.isFinite(radius) && radius >= 0 ? radius : 12;
+}
+
+export function isOutlineButton(node: AppNode): boolean {
+  return (
+    node.type === "Button" &&
+    node.style?.backgroundColor == null &&
+    node.style?.backgroundGradient == null &&
+    node.style?.color != null
+  );
+}
+
 export function shellStyle(
   theme: AppThemeTokens,
   node: AppNode,
@@ -83,10 +97,13 @@ export function shellStyle(
   editMode: boolean,
 ): CSSProperties {
   const textual = node.type === "Text" || node.type === "Button";
-  const fill =
-    node.style?.backgroundGradient ??
-    node.style?.backgroundColor ??
-    (node.type === "Button" ? theme.colorPrimary : undefined);
+  const outlineButton = isOutlineButton(node);
+  const rounded = node.type === "Button" || node.type === "TextInput";
+  const fill = outlineButton
+    ? undefined
+    : (node.style?.backgroundGradient ??
+      node.style?.backgroundColor ??
+      (node.type === "Button" ? theme.colorPrimary : undefined));
   const ghostContainer = isContainer && !fill && !node.style?.borderWidth && editMode;
   const shadows = [ghostContainer ? "inset 0 0 0 1px rgba(92,108,245,0.22)" : null, node.style?.shadow ?? null]
     .filter(Boolean)
@@ -97,12 +114,14 @@ export function shellStyle(
     inset: 0,
     boxSizing: "border-box",
     overflow: "hidden",
-    borderRadius: node.style?.borderRadius,
+    borderRadius: node.style?.borderRadius ?? (rounded ? paperRoundness(theme) : undefined),
     opacity: node.style?.opacity,
     boxShadow: shadows || undefined,
     border: node.style?.borderWidth
       ? `${node.style.borderWidth}px solid ${node.style.borderColor ?? theme.colorBorder}`
-      : undefined,
+      : outlineButton
+        ? `1px solid ${node.style?.borderColor ?? theme.colorBorder}`
+        : undefined,
     background: fill,
     color: node.style?.color ?? theme.colorText,
     fontSize: node.style?.fontSize,

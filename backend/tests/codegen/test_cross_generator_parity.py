@@ -142,7 +142,6 @@ def test_generators_agree_outside_paper_files(paper_affected_outputs: tuple[str,
 
 
 @requires_node
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="BIL-77: TS codegen not yet updated for Paper")
 def test_generators_agree_on_paper_files(paper_affected_outputs: tuple[str, ExpoFileMap, ExpoFileMap]) -> None:
     label, python_affected, js_affected = paper_affected_outputs
     assert python_affected == js_affected, describe_difference(label, python_affected, js_affected)
