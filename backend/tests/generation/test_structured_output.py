@@ -83,6 +83,11 @@ async def run(case: Case, client: FakeLlmClient, max_attempts: int = 3) -> BaseM
     )
 
 
+def distinct_invalid_answers(case: Case, count: int) -> list[str]:
+    invalid = json.loads(case.invalid_answer)
+    return [json.dumps({**invalid, "attempt": attempt}, ensure_ascii=False) for attempt in range(count)]
+
+
 def validation_error_of(case: Case, answer: str) -> str:
     try:
         case.target_model.model_validate(json.loads(answer))
@@ -184,7 +189,7 @@ async def test_generate_structured_keeps_the_whole_dialog_across_retries(case: C
 
 @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
 async def test_generate_structured_fails_after_max_attempts_are_spent(case: Case) -> None:
-    client = FakeLlmClient([case.invalid_answer] * 3)
+    client = FakeLlmClient(distinct_invalid_answers(case, 3))
 
     with pytest.raises(GenerationError) as error:
         await run(case, client)
@@ -207,7 +212,7 @@ async def test_generate_structured_reports_the_last_validation_error(case: Case)
 @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
 @pytest.mark.parametrize("max_attempts", [1, 2, 5])
 async def test_generate_structured_spends_exactly_max_attempts(case: Case, max_attempts: int) -> None:
-    client = FakeLlmClient([case.invalid_answer] * max_attempts)
+    client = FakeLlmClient(distinct_invalid_answers(case, max_attempts))
 
     with pytest.raises(GenerationError):
         await run(case, client, max_attempts=max_attempts)
@@ -218,7 +223,7 @@ async def test_generate_structured_spends_exactly_max_attempts(case: Case, max_a
 @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
 @pytest.mark.parametrize("max_attempts", [1, 2, 5])
 async def test_generate_structured_still_succeeds_on_the_last_allowed_attempt(case: Case, max_attempts: int) -> None:
-    client = FakeLlmClient([*[case.invalid_answer] * (max_attempts - 1), case.valid_answer])
+    client = FakeLlmClient([*distinct_invalid_answers(case, max_attempts - 1), case.valid_answer])
 
     result = await run(case, client, max_attempts=max_attempts)
 
@@ -235,3 +240,28 @@ async def test_generate_structured_propagates_client_errors_without_retrying(cas
 
     assert len(client.calls) == 1
     assert "RouterAI отклонил запрос генерации" in error.value.message
+
+
+@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+async def test_generate_structured_fails_fast_when_the_model_repeats_the_same_invalid_answer(case: Case) -> None:
+    client = FakeLlmClient([case.invalid_answer, case.invalid_answer, case.valid_answer])
+
+    with pytest.raises(GenerationError) as error:
+        await run(case, client)
+
+    assert len(client.calls) == 2
+    assert "повторила тот же некорректный" in error.value.message
+    assert validation_error_of(case, case.invalid_answer) in error.value.message
+
+
+@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+@pytest.mark.parametrize("empty_answer", ["{}", "  {}  ", "```json\n{}\n```"])
+async def test_generate_structured_fails_fast_on_an_empty_object(case: Case, empty_answer: str) -> None:
+    client = FakeLlmClient([empty_answer, case.valid_answer])
+
+    with pytest.raises(GenerationError) as error:
+        await run(case, client)
+
+    assert len(client.calls) == 1
+    assert "пустой JSON-объект" in error.value.message
+    assert case.subject in error.value.message

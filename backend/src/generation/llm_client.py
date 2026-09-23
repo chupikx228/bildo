@@ -12,7 +12,7 @@ from openai.types.chat import (
 )
 from openai.types.chat.completion_create_params import ResponseFormat
 
-from src.generation.exceptions import GenerationError, GenerationNotConfiguredError
+from src.generation.exceptions import GenerationError, GenerationNotConfiguredError, StrictSchemaUnsupportedError
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,11 @@ JsonSchema = dict[str, Any]
 
 ChatRole = Literal["system", "user", "assistant"]
 
-ResponseFormatMode = Literal["json_schema", "json_object", "text"]
+ResponseFormatMode = Literal["json_schema", "text"]
 
-RESPONSE_FORMAT_DOWNGRADE: dict[ResponseFormatMode, ResponseFormatMode | None] = {
-    "json_schema": "json_object",
-    "json_object": "text",
-    "text": None,
-}
+MAX_OUTPUT_TOKENS = 64000
+
+UNCONSTRAINED_MODEL_PREFIXES = ("anthropic/",)
 
 
 class ChatMessage(TypedDict):
@@ -52,7 +50,6 @@ class RouterAiLlmClient:
         self._api_key = api_key
         self._base_url = base_url
         self._client: AsyncOpenAI | None = None
-        self._modes: dict[str, ResponseFormatMode] = {}
 
     async def complete(
         self,
@@ -63,28 +60,24 @@ class RouterAiLlmClient:
         model: str,
     ) -> str:
         client = self._ensure_client()
-        payload = [_to_message_param(message) for message in messages]
+        mode = _response_format_mode(model)
+        try:
+            completion = await client.chat.completions.create(
+                model=model,
+                messages=[_to_message_param(message) for message in messages],
+                response_format=_response_format(mode, schema_name, schema),
+                max_tokens=MAX_OUTPUT_TOKENS,
+            )
+        except (BadRequestError, UnprocessableEntityError) as error:
+            raise _rejection(model, mode, str(error)) from error
+        except APIError as error:
+            raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
 
-        while True:
-            mode = self._modes.get(model, "json_schema")
-            try:
-                completion = await client.chat.completions.create(
-                    model=model,
-                    messages=payload,
-                    response_format=_response_format(mode, schema_name, schema),
-                )
-            except (BadRequestError, UnprocessableEntityError) as error:
-                self._downgrade_response_format(model, mode, str(error))
-                continue
-            except APIError as error:
-                raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
+        provider_error = _extract_provider_error(completion)
+        if provider_error is not None:
+            raise _rejection(model, mode, provider_error)
 
-            provider_error = _extract_provider_error(completion)
-            if provider_error is not None:
-                self._downgrade_response_format(model, mode, provider_error)
-                continue
-
-            return _extract_content(completion)
+        return _extract_content(completion)
 
     async def aclose(self) -> None:
         if self._client is not None:
@@ -99,20 +92,18 @@ class RouterAiLlmClient:
             logger.info("RouterAI client ready: base_url=%s", self._base_url)
         return self._client
 
-    def _downgrade_response_format(self, model: str, observed_mode: ResponseFormatMode, detail: str) -> None:
-        if self._modes.get(model, "json_schema") != observed_mode:
-            return
-        downgraded = RESPONSE_FORMAT_DOWNGRADE[observed_mode]
-        if downgraded is None:
-            raise GenerationError(f"RouterAI отклонил запрос генерации: {detail}")
-        logger.warning(
-            "RouterAI rejected response_format=%s for model %s, falling back to %s: %s",
-            observed_mode,
-            model,
-            downgraded,
-            detail,
-        )
-        self._modes[model] = downgraded
+
+def _response_format_mode(model: str) -> ResponseFormatMode:
+    if model.startswith(UNCONSTRAINED_MODEL_PREFIXES):
+        return "text"
+    return "json_schema"
+
+
+def _rejection(model: str, mode: ResponseFormatMode, detail: str) -> GenerationError:
+    if mode == "json_schema":
+        logger.error("RouterAI rejected strict response_format=json_schema for model %s: %s", model, detail)
+        return StrictSchemaUnsupportedError(model, detail)
+    return GenerationError(f"RouterAI отклонил запрос генерации: {detail}")
 
 
 def _response_format(mode: ResponseFormatMode, schema_name: str, schema: JsonSchema) -> ResponseFormat | Omit:
@@ -121,8 +112,6 @@ def _response_format(mode: ResponseFormatMode, schema_name: str, schema: JsonSch
             "type": "json_schema",
             "json_schema": {"name": schema_name, "schema": schema, "strict": True},
         }
-    if mode == "json_object":
-        return {"type": "json_object"}
     return omit
 
 
@@ -146,7 +135,10 @@ def _extract_provider_error(completion: ChatCompletion) -> str | None:
 def _extract_content(completion: ChatCompletion) -> str:
     if not completion.choices:
         raise GenerationError("RouterAI вернул пустой ответ")
-    content = completion.choices[0].message.content
+    choice = completion.choices[0]
+    if choice.finish_reason == "length":
+        raise GenerationError(f"Ответ модели обрезан по лимиту в {MAX_OUTPUT_TOKENS} токенов")
+    content = choice.message.content
     if content is None or not content.strip():
         raise GenerationError("RouterAI вернул ответ без текста")
     return content

@@ -1,4 +1,3 @@
-import asyncio
 import json
 from collections.abc import Callable
 from typing import Any
@@ -8,11 +7,12 @@ import pytest
 from openai import AsyncOpenAI
 
 from src.generation import llm_client as llm_client_module
-from src.generation.exceptions import GenerationError, GenerationNotConfiguredError
-from src.generation.llm_client import ChatMessage, JsonSchema, RouterAiLlmClient
+from src.generation.exceptions import GenerationError, GenerationNotConfiguredError, StrictSchemaUnsupportedError
+from src.generation.llm_client import MAX_OUTPUT_TOKENS, ChatMessage, JsonSchema, RouterAiLlmClient
 
 BASE_URL = "https://routerai.test/api/v1"
 MODEL = "deepseek/deepseek-v4-flash"
+ANTHROPIC_MODEL = "anthropic/claude-sonnet-5"
 SCHEMA_NAME = "AppDocument"
 SCHEMA: JsonSchema = {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}
 MESSAGES: list[ChatMessage] = [
@@ -81,8 +81,8 @@ def build_client(monkeypatch: pytest.MonkeyPatch) -> BuildClient:
     return build
 
 
-async def complete(client: RouterAiLlmClient) -> str:
-    return await client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=MODEL)
+async def complete(client: RouterAiLlmClient, model: str = MODEL) -> str:
+    return await client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=model)
 
 
 async def test_first_attempt_asks_for_a_json_schema(build_client: BuildClient) -> None:
@@ -98,15 +98,43 @@ async def test_first_attempt_asks_for_a_json_schema(build_client: BuildClient) -
     assert gateway.payloads[0]["messages"] == MESSAGES
 
 
-async def test_downgrades_to_json_object_when_json_schema_is_rejected(build_client: BuildClient) -> None:
-    gateway = StubGateway(rejected={"json_schema"})
+async def test_every_request_sets_the_output_token_limit(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
     client = build_client(gateway)
 
-    assert await complete(client) == ANSWER
+    await complete(client)
+    await complete(client, model=ANTHROPIC_MODEL)
     await client.aclose()
 
-    assert gateway.modes == ["json_schema", "json_object"]
-    assert gateway.payloads[1]["response_format"] == {"type": "json_object"}
+    assert [payload["max_tokens"] for payload in gateway.payloads] == [MAX_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS]
+
+
+@pytest.mark.parametrize("model", ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5"])
+async def test_anthropic_models_get_no_response_format_from_the_first_call(
+    build_client: BuildClient, model: str
+) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway)
+
+    assert await complete(client, model=model) == ANSWER
+    await client.aclose()
+
+    assert gateway.modes == [NO_FORMAT]
+    assert "response_format" not in gateway.payloads[0]
+
+
+@pytest.mark.parametrize("status", [400, 422])
+async def test_rejected_strict_schema_fails_fast_instead_of_downgrading(build_client: BuildClient, status: int) -> None:
+    gateway = StubGateway(rejected={"json_schema"}, status=status)
+    client = build_client(gateway)
+
+    with pytest.raises(StrictSchemaUnsupportedError) as error:
+        await complete(client)
+    await client.aclose()
+
+    assert gateway.modes == ["json_schema"]
+    assert MODEL in error.value.message
+    assert "response_format json_schema is not supported" in error.value.message
 
 
 def embedded_error_body(mode: str) -> dict[str, Any]:
@@ -138,74 +166,40 @@ def embedded_error_body(mode: str) -> dict[str, Any]:
     }
 
 
-class EmbeddedErrorGateway:
-    def __init__(self, rejected: set[str]) -> None:
-        self._rejected = rejected
-        self.modes: list[str] = []
-
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        payload: dict[str, Any] = json.loads(request.content)
-        response_format = payload.get("response_format")
-        mode = NO_FORMAT if response_format is None else str(response_format["type"])
-        self.modes.append(mode)
-        if mode in self._rejected:
-            return httpx.Response(200, json=embedded_error_body(mode))
-        return httpx.Response(200, json=completion_body(ANSWER))
-
-
-async def test_downgrades_when_gateway_embeds_the_error_in_a_200_response(build_client: BuildClient) -> None:
-    gateway = EmbeddedErrorGateway(rejected={"json_schema"})
+async def test_strict_schema_rejection_embedded_in_a_200_response_fails_fast(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set(), body=embedded_error_body("json_schema"))
     client = build_client(gateway)
 
-    assert await complete(client) == ANSWER
+    with pytest.raises(StrictSchemaUnsupportedError) as error:
+        await complete(client)
     await client.aclose()
 
-    assert gateway.modes == ["json_schema", "json_object"]
+    assert gateway.modes == ["json_schema"]
+    assert "not supported" in error.value.message
 
 
-async def test_downgrades_on_unprocessable_entity_too(build_client: BuildClient) -> None:
-    gateway = StubGateway(rejected={"json_schema"}, status=422)
+async def test_rejected_unconstrained_request_is_a_plain_generation_error(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected={NO_FORMAT})
     client = build_client(gateway)
 
-    assert await complete(client) == ANSWER
+    with pytest.raises(GenerationError) as error:
+        await complete(client, model=ANTHROPIC_MODEL)
     await client.aclose()
 
-    assert gateway.modes == ["json_schema", "json_object"]
+    assert not isinstance(error.value, StrictSchemaUnsupportedError)
+    assert "отклонил" in error.value.message
 
 
-async def test_drops_response_format_entirely_when_both_json_modes_are_rejected(build_client: BuildClient) -> None:
-    gateway = StubGateway(rejected={"json_schema", "json_object"})
-    client = build_client(gateway)
-
-    assert await complete(client) == ANSWER
-    await client.aclose()
-
-    assert gateway.modes == ["json_schema", "json_object", NO_FORMAT]
-    assert "response_format" not in gateway.payloads[2]
-
-
-async def test_fails_when_every_response_format_is_rejected(build_client: BuildClient) -> None:
-    gateway = StubGateway(rejected={"json_schema", "json_object", NO_FORMAT})
-    client = build_client(gateway)
+async def test_answer_cut_off_by_the_token_limit_becomes_a_generation_error(build_client: BuildClient) -> None:
+    body = completion_body('{"name": "Трекер')
+    body["choices"][0]["finish_reason"] = "length"
+    client = build_client(StubGateway(rejected=set(), body=body))
 
     with pytest.raises(GenerationError) as error:
         await complete(client)
     await client.aclose()
 
-    assert gateway.modes == ["json_schema", "json_object", NO_FORMAT]
-    assert "отклонил" in error.value.message
-
-
-async def test_remembers_the_accepted_response_format_between_calls(build_client: BuildClient) -> None:
-    gateway = StubGateway(rejected={"json_schema"})
-    client = build_client(gateway)
-
-    await complete(client)
-    await complete(client)
-    await complete(client)
-    await client.aclose()
-
-    assert gateway.modes == ["json_schema", "json_object", "json_object", "json_object"]
+    assert "обрезан" in error.value.message
 
 
 async def test_network_failure_becomes_a_generation_error(build_client: BuildClient) -> None:
@@ -250,166 +244,3 @@ async def test_missing_api_key_is_reported_before_any_request(monkeypatch: pytes
 
     with pytest.raises(GenerationNotConfiguredError):
         await complete(client)
-
-
-async def test_concurrent_completions_converge_on_the_response_format_without_racing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    concurrency = 8
-    barrier = asyncio.Barrier(concurrency)
-
-    class ConcurrentRejectGateway:
-        def __init__(self, rejected: set[str]) -> None:
-            self._rejected = rejected
-            self.modes: list[str] = []
-
-        async def __call__(self, request: httpx.Request) -> httpx.Response:
-            payload: dict[str, Any] = json.loads(request.content)
-            response_format = payload.get("response_format")
-            mode = NO_FORMAT if response_format is None else str(response_format["type"])
-            self.modes.append(mode)
-            await barrier.wait()
-            if mode in self._rejected:
-                return httpx.Response(400, json={"error": {"message": f"response_format {mode} is not supported"}})
-            return httpx.Response(200, json=completion_body(ANSWER))
-
-    gateway = ConcurrentRejectGateway(rejected={"json_schema"})
-
-    def make_openai(*, api_key: str, base_url: str) -> AsyncOpenAI:
-        return AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            max_retries=0,
-            http_client=httpx.AsyncClient(transport=httpx.MockTransport(gateway)),
-        )
-
-    monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
-    client = RouterAiLlmClient("test-key", BASE_URL)
-
-    results = await asyncio.gather(*(complete(client) for _ in range(concurrency)))
-    await client.aclose()
-
-    assert results == [ANSWER] * concurrency
-    assert client._modes[MODEL] == "json_object"
-    assert gateway.modes.count("json_schema") == concurrency
-    assert gateway.modes.count("json_object") == concurrency
-
-
-async def test_concurrent_completions_on_different_models_keep_their_modes_isolated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    concurrency = 4
-    rejected_by_model: dict[str, set[str]] = {
-        "vendor/strict": set(),
-        "vendor/no-schema": {"json_schema"},
-        "vendor/no-json": {"json_schema", "json_object"},
-    }
-    barriers = {model: asyncio.Barrier(concurrency) for model in rejected_by_model}
-
-    class PerModelGateway:
-        def __init__(self) -> None:
-            self.modes: dict[str, list[str]] = {model: [] for model in rejected_by_model}
-
-        async def __call__(self, request: httpx.Request) -> httpx.Response:
-            payload: dict[str, Any] = json.loads(request.content)
-            model = str(payload["model"])
-            response_format = payload.get("response_format")
-            mode = NO_FORMAT if response_format is None else str(response_format["type"])
-            self.modes[model].append(mode)
-            await barriers[model].wait()
-            if mode in rejected_by_model[model]:
-                return httpx.Response(400, json={"error": {"message": f"response_format {mode} is not supported"}})
-            return httpx.Response(200, json=completion_body(ANSWER))
-
-    gateway = PerModelGateway()
-
-    def make_openai(*, api_key: str, base_url: str) -> AsyncOpenAI:
-        return AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            max_retries=0,
-            http_client=httpx.AsyncClient(transport=httpx.MockTransport(gateway)),
-        )
-
-    monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
-    client = RouterAiLlmClient("test-key", BASE_URL)
-
-    results = await asyncio.gather(
-        *(
-            client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=model)
-            for model in rejected_by_model
-            for _ in range(concurrency)
-        )
-    )
-    await client.aclose()
-
-    assert results == [ANSWER] * (len(rejected_by_model) * concurrency)
-    assert client._modes == {"vendor/no-schema": "json_object", "vendor/no-json": "text"}
-    assert gateway.modes["vendor/strict"] == ["json_schema"] * concurrency
-    assert gateway.modes["vendor/no-schema"] == ["json_schema"] * concurrency + ["json_object"] * concurrency
-    assert gateway.modes["vendor/no-json"] == (
-        ["json_schema"] * concurrency + ["json_object"] * concurrency + [NO_FORMAT] * concurrency
-    )
-
-
-async def test_a_stale_rejection_does_not_rewind_a_model_already_downgraded_further(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    stale_model = "vendor/no-json"
-    other_model = "vendor/strict"
-    followers = 3
-    rejected = {"json_schema", "json_object"}
-    barrier = asyncio.Barrier(followers)
-    text_reached = asyncio.Event()
-
-    class StragglerGateway:
-        def __init__(self) -> None:
-            self.modes: dict[str, list[str]] = {stale_model: [], other_model: []}
-            self._straggler_seen = False
-
-        async def __call__(self, request: httpx.Request) -> httpx.Response:
-            payload: dict[str, Any] = json.loads(request.content)
-            model = str(payload["model"])
-            response_format = payload.get("response_format")
-            mode = NO_FORMAT if response_format is None else str(response_format["type"])
-            self.modes[model].append(mode)
-
-            if model == other_model:
-                return httpx.Response(200, json=completion_body(ANSWER))
-
-            if not self._straggler_seen:
-                self._straggler_seen = True
-                await text_reached.wait()
-            elif not text_reached.is_set():
-                await barrier.wait()
-
-            if mode in rejected:
-                return httpx.Response(400, json={"error": {"message": f"response_format {mode} is not supported"}})
-            text_reached.set()
-            return httpx.Response(200, json=completion_body(ANSWER))
-
-    gateway = StragglerGateway()
-
-    def make_openai(*, api_key: str, base_url: str) -> AsyncOpenAI:
-        return AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            max_retries=0,
-            http_client=httpx.AsyncClient(transport=httpx.MockTransport(gateway)),
-        )
-
-    monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
-    client = RouterAiLlmClient("test-key", BASE_URL)
-
-    results = await asyncio.gather(
-        *(client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=stale_model) for _ in range(followers + 1)),
-        *(client.complete(MESSAGES, SCHEMA_NAME, SCHEMA, model=other_model) for _ in range(2)),
-    )
-    await client.aclose()
-
-    assert results == [ANSWER] * (followers + 3)
-    assert client._modes == {stale_model: "text"}
-    assert gateway.modes[other_model] == ["json_schema", "json_schema"]
-    assert gateway.modes[stale_model].count("json_schema") == followers + 1
-    assert gateway.modes[stale_model].count("json_object") == followers
-    assert gateway.modes[stale_model].count(NO_FORMAT) == followers + 1

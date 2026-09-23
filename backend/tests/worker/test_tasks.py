@@ -367,7 +367,7 @@ async def test_generate_app_document_marks_app_failed_when_model_answer_is_inval
     sessions: list[FakeSession],
 ) -> None:
     app_id = await create_pending_app(repository)
-    answers: list[str | Exception] = ["не json"] * settings.routerai_max_retries
+    answers: list[str | Exception] = [f"не json {attempt}" for attempt in range(settings.routerai_max_retries)]
     ctx = context(answers)
 
     with pytest.raises(GenerationError):
@@ -557,7 +557,7 @@ async def test_chat_turn_does_not_create_an_assistant_message_when_generation_fa
 ) -> None:
     app_id = await create_ready_app(repository)
     user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
-    answers: list[str | Exception] = ["не json"] * settings.routerai_max_retries
+    answers: list[str | Exception] = [f"не json {attempt}" for attempt in range(settings.routerai_max_retries)]
 
     with pytest.raises(GenerationError):
         await worker_tasks.chat_turn(context(answers), str(app_id), str(user_message.id))

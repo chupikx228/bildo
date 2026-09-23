@@ -16,9 +16,9 @@ def to_strict_json_schema(schema: JsonSchema) -> JsonSchema:
     first time it finds one missing `additionalProperties: false` or a `required` list that
     doesn't cover all of that object's `properties`. Pydantic itself never sets either of
     those for a plain model, so a schema built straight from `model_json_schema()` fails on
-    the first nested object it contains (BIL-69): RouterAI treats that rejection as "this
-    model doesn't support json_schema" and permanently downgrades to `json_object` for it —
-    silently turning off schema enforcement for the rest of the process's lifetime.
+    the first nested object it contains (BIL-69). Such a rejection fails the generation
+    outright with `StrictSchemaUnsupportedError` (BIL-83) — it used to silently downgrade the
+    model to `json_object`, which is how the BIL-69 schema bug went unnoticed.
 
     Nullable/optional fields stay optional the way OpenAI's strict mode represents
     optionality: through their `anyOf: [..., {"type": "null"}]` branch, not through being
