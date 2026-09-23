@@ -27,11 +27,17 @@ async def generate_structured[ModelT: BaseModel](
 ) -> ModelT:
     history = list(messages)
     last_error = ""
+    previous_raw: str | None = None
 
     for attempt in range(1, max_attempts + 1):
         raw = await client.complete(history, schema_name, schema, model=model)
+        if raw == previous_raw:
+            raise GenerationError(
+                f"Модель RouterAI повторила тот же некорректный {subject} после исправления: {last_error}"
+            )
+        previous_raw = raw
         try:
-            return _parse(raw, target_model)
+            return _parse(raw, target_model, subject)
         except (ValueError, ValidationError) as error:
             last_error = _describe(error)
             logger.warning(
@@ -46,8 +52,11 @@ async def generate_structured[ModelT: BaseModel](
     raise GenerationError(f"Модель RouterAI не вернула корректный {subject} за {max_attempts} попыток: {last_error}")
 
 
-def _parse[ModelT: BaseModel](raw: str, target_model: type[ModelT]) -> ModelT:
-    return target_model.model_validate(json.loads(_extract_json(raw)))
+def _parse[ModelT: BaseModel](raw: str, target_model: type[ModelT], subject: str) -> ModelT:
+    data = json.loads(_extract_json(raw))
+    if data == {}:
+        raise GenerationError(f"Модель RouterAI вернула пустой JSON-объект, {subject} не сгенерирован")
+    return target_model.model_validate(data)
 
 
 def _extract_json(raw: str) -> str:

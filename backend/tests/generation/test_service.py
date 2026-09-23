@@ -123,7 +123,7 @@ async def test_generate_document_fails_after_max_attempts() -> None:
 
 @pytest.mark.parametrize("max_attempts", [1, 2, 3, 5])
 async def test_generate_document_spends_exactly_max_attempts(max_attempts: int) -> None:
-    client = FakeLlmClient(["не json"] * max_attempts)
+    client = FakeLlmClient([f"не json {attempt}" for attempt in range(max_attempts)])
 
     with pytest.raises(GenerationError):
         await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=max_attempts)
@@ -133,7 +133,7 @@ async def test_generate_document_spends_exactly_max_attempts(max_attempts: int) 
 
 @pytest.mark.parametrize("max_attempts", [1, 2, 3, 5])
 async def test_generate_document_still_succeeds_on_the_last_allowed_attempt(max_attempts: int) -> None:
-    client = FakeLlmClient([*["не json"] * (max_attempts - 1), valid_answer()])
+    client = FakeLlmClient([*[f"не json {attempt}" for attempt in range(max_attempts - 1)], valid_answer()])
 
     document = await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=max_attempts)
 

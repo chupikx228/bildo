@@ -17,3 +17,8 @@ class GenerationNotConfiguredError(GenerationError):
 class GenerationTimeoutError(GenerationError):
     def __init__(self, timeout_seconds: float, subject: str = "приложение") -> None:
         super().__init__(f"Модель не успела сгенерировать {subject} за {timeout_seconds:g} секунд")
+
+
+class StrictSchemaUnsupportedError(GenerationError):
+    def __init__(self, model: str, detail: str) -> None:
+        super().__init__(f"Модель {model} не принимает строгую JSON-схему документа: {detail}")
