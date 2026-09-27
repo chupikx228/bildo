@@ -1,0 +1,1765 @@
+{
+  "id": "1a6f4d31-1d92-419f-b377-7ddbce347c59",
+  "name": "Соседи — соцсеть сообществ",
+  "slug": "sosedi-social",
+  "prompt": "Социальная сеть для закрытых сообществ по интересам — не публичная лента на миллионы, а маленькие группы вроде «бегуны района» или «клуб комнатных растений», где люди делятся процессом, а не глянцевыми кадрами: короткий апдейт с фото и парой слов о том, что сейчас происходит. Реакции — не универсальное сердечко, а 3-4 эмодзи, специфичных для темы группы (для бега — 🔥💪, для растений — 🌱💧).\n\nДизайн-система: фон #F5F3FA (мягкий сиренево-белый, не кремовый), поверхность карточек #FFFFFF, основной текст #1E1B2E, вторичный текст #6E6580, акцент — малиново-розовый #E23F7D (выбран из слова «сообщество» — тёплый, живой цвет соединения, а не строгий корпоративный синий и не выжженный orange-клише), текст на акценте #FFFFFF, разделители #E7E3F0, success #4CAF7D, error #E24F4F.\n\nLayout: сверху — горизонтальная лента кружков-аватарок групп, каждая своим акцентным цветом (teal, янтарный, малиновый) — это первое, что видно, потому что переключение между группами это главное действие. Ниже — плотная вертикальная лента карточек-постов с фото, автором и рядом эмодзи-реакций снизу.\n\nПлотность — насыщенная: карточки близко друг к другу, минимум пустого пространства, потому что ощущение \"тут много всего происходит\" — часть ценности продукта.\n\nТипографика — тёплая, слегка округлая, дружелюбная, без строгой геометрии.\n\nЭкраны: 1) Лента — доминанта: ряд групп-аватарок сверху + карточки постов. 2) Группа — доминанта: список участников и их последние апдейты. 3) Новый пост — доминанта: поле фото.\n\nТон: живой, без формальностей. Кнопка публикации — «Го, покажи!». Пустая лента — «Тут пока тихо — начни с апдейта».\n",
+  "theme": {
+    "colorBg": "#F5F3FA",
+    "colorSurface": "#FFFFFF",
+    "colorBorder": "#E7E3F0",
+    "colorText": "#1E1B2E",
+    "colorTextMuted": "#6E6580",
+    "colorPrimary": "#E23F7D",
+    "colorPrimaryFg": "#FFFFFF",
+    "radiusBase": "18px",
+    "fontBody": "System",
+    "fontHeading": "System"
+  },
+  "navigation": {
+    "type": "tabs",
+    "roots": [
+      "scr-feed",
+      "scr-group",
+      "scr-new"
+    ]
+  },
+  "screens": [
+    {
+      "id": "scr-feed",
+      "name": "Лента",
+      "route": "/",
+      "icon": "feed",
+      "root": {
+        "id": "root-feed",
+        "type": "ScrollView",
+        "style": {
+          "backgroundColor": "#F5F3FA"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 370,
+          "height": 640
+        },
+        "children": [
+          {
+            "id": "feed-title",
+            "type": "Text",
+            "props": {
+              "text": "Соседи"
+            },
+            "style": {
+              "fontSize": 20,
+              "color": "#1E1B2E",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 20,
+              "width": 200,
+              "height": 26
+            }
+          },
+          {
+            "id": "grp-0",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#E23F7D",
+              "borderRadius": 26.0
+            },
+            "layout": {
+              "x": 24,
+              "y": 54,
+              "width": 52,
+              "height": 52
+            },
+            "children": [
+              {
+                "id": "grp-0-glyph",
+                "type": "Text",
+                "props": {
+                  "text": "★"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#FFFFFF",
+                  "fontWeight": "700",
+                  "textAlign": "center"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 17.0,
+                  "width": 52,
+                  "height": 18
+                }
+              }
+            ]
+          },
+          {
+            "id": "grp-0-label",
+            "type": "Text",
+            "props": {
+              "text": "Все"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E6580",
+              "fontWeight": "600",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 18,
+              "y": 108,
+              "width": 64,
+              "height": 14
+            }
+          },
+          {
+            "id": "grp-1",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#2E9E8F",
+              "borderRadius": 26.0
+            },
+            "layout": {
+              "x": 88,
+              "y": 54,
+              "width": 52,
+              "height": 52
+            },
+            "children": [
+              {
+                "id": "grp-1-glyph",
+                "type": "Text",
+                "props": {
+                  "text": "🏃"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#FFFFFF",
+                  "fontWeight": "700",
+                  "textAlign": "center"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 17.0,
+                  "width": 52,
+                  "height": 18
+                }
+              }
+            ]
+          },
+          {
+            "id": "grp-1-label",
+            "type": "Text",
+            "props": {
+              "text": "Бегуны"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E6580",
+              "fontWeight": "600",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 82,
+              "y": 108,
+              "width": 64,
+              "height": 14
+            }
+          },
+          {
+            "id": "grp-2",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#D99A2B",
+              "borderRadius": 26.0
+            },
+            "layout": {
+              "x": 152,
+              "y": 54,
+              "width": 52,
+              "height": 52
+            },
+            "children": [
+              {
+                "id": "grp-2-glyph",
+                "type": "Text",
+                "props": {
+                  "text": "🌱"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#FFFFFF",
+                  "fontWeight": "700",
+                  "textAlign": "center"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 17.0,
+                  "width": 52,
+                  "height": 18
+                }
+              }
+            ]
+          },
+          {
+            "id": "grp-2-label",
+            "type": "Text",
+            "props": {
+              "text": "Растения"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E6580",
+              "fontWeight": "600",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 146,
+              "y": 108,
+              "width": 64,
+              "height": 14
+            }
+          },
+          {
+            "id": "grp-3",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#E23F7D",
+              "borderRadius": 26.0
+            },
+            "layout": {
+              "x": 216,
+              "y": 54,
+              "width": 52,
+              "height": 52
+            },
+            "children": [
+              {
+                "id": "grp-3-glyph",
+                "type": "Text",
+                "props": {
+                  "text": "🍳"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#FFFFFF",
+                  "fontWeight": "700",
+                  "textAlign": "center"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 17.0,
+                  "width": 52,
+                  "height": 18
+                }
+              }
+            ]
+          },
+          {
+            "id": "grp-3-label",
+            "type": "Text",
+            "props": {
+              "text": "Готовим"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E6580",
+              "fontWeight": "600",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 210,
+              "y": 108,
+              "width": 64,
+              "height": 14
+            }
+          },
+          {
+            "id": "grp-4",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#2E9E8F",
+              "borderRadius": 26.0
+            },
+            "layout": {
+              "x": 280,
+              "y": 54,
+              "width": 52,
+              "height": 52
+            },
+            "children": [
+              {
+                "id": "grp-4-glyph",
+                "type": "Text",
+                "props": {
+                  "text": "🧘"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#FFFFFF",
+                  "fontWeight": "700",
+                  "textAlign": "center"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 17.0,
+                  "width": 52,
+                  "height": 18
+                }
+              }
+            ]
+          },
+          {
+            "id": "grp-4-label",
+            "type": "Text",
+            "props": {
+              "text": "Йога"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E6580",
+              "fontWeight": "600",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 274,
+              "y": 108,
+              "width": 64,
+              "height": 14
+            }
+          },
+          {
+            "id": "feed-divider",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#E7E3F0"
+            },
+            "layout": {
+              "x": 0,
+              "y": 138,
+              "width": 370,
+              "height": 1
+            }
+          },
+          {
+            "id": "post-1",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 18
+            },
+            "layout": {
+              "x": 16,
+              "y": 150,
+              "width": 338,
+              "height": 242
+            },
+            "children": [
+              {
+                "id": "post-1-photo",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#2E9E8F",
+                  "borderRadius": 18,
+                  "opacity": 0.85
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 338,
+                  "height": 150
+                },
+                "children": [
+                  {
+                    "id": "post-1-photo-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "🏃"
+                    },
+                    "style": {
+                      "fontSize": 32,
+                      "color": "#1E1B2E",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 55.0,
+                      "width": 338,
+                      "height": 40
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-1-avatar",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#2E9E8F",
+                  "borderRadius": 14.0
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 160,
+                  "width": 28,
+                  "height": 28
+                },
+                "children": [
+                  {
+                    "id": "post-1-avatar-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "Н"
+                    },
+                    "style": {
+                      "fontSize": 15,
+                      "color": "#FFFFFF",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5.0,
+                      "width": 28,
+                      "height": 18
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-1-author",
+                "type": "Text",
+                "props": {
+                  "text": "Настя"
+                },
+                "style": {
+                  "fontSize": 13,
+                  "color": "#1E1B2E",
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 36,
+                  "y": 162,
+                  "width": 150,
+                  "height": 16
+                }
+              },
+              {
+                "id": "post-1-time",
+                "type": "Text",
+                "props": {
+                  "text": "8 мин назад"
+                },
+                "style": {
+                  "fontSize": 10,
+                  "color": "#6E6580"
+                },
+                "layout": {
+                  "x": 36,
+                  "y": 179,
+                  "width": 150,
+                  "height": 14
+                }
+              },
+              {
+                "id": "post-1-caption",
+                "type": "Text",
+                "props": {
+                  "text": "5 км по набережной — до дождя чуть-чуть не успела"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#1E1B2E"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 194,
+                  "width": 338,
+                  "height": 34
+                }
+              },
+              {
+                "id": "post-1-r0",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#F5F3FA",
+                  "borderRadius": 13
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 216,
+                  "width": 46,
+                  "height": 26
+                },
+                "children": [
+                  {
+                    "id": "post-1-r0-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "🔥 12"
+                    },
+                    "style": {
+                      "fontSize": 11,
+                      "color": "#1E1B2E",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5,
+                      "width": 46,
+                      "height": 16
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-1-r1",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#F5F3FA",
+                  "borderRadius": 13
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 216,
+                  "width": 46,
+                  "height": 26
+                },
+                "children": [
+                  {
+                    "id": "post-1-r1-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "💪 4"
+                    },
+                    "style": {
+                      "fontSize": 11,
+                      "color": "#1E1B2E",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5,
+                      "width": 46,
+                      "height": 16
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "post-2",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 18
+            },
+            "layout": {
+              "x": 16,
+              "y": 402,
+              "width": 338,
+              "height": 242
+            },
+            "children": [
+              {
+                "id": "post-2-photo",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#D99A2B",
+                  "borderRadius": 18,
+                  "opacity": 0.85
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 338,
+                  "height": 150
+                },
+                "children": [
+                  {
+                    "id": "post-2-photo-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "🌱"
+                    },
+                    "style": {
+                      "fontSize": 32,
+                      "color": "#1E1B2E",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 55.0,
+                      "width": 338,
+                      "height": 40
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-2-avatar",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#D99A2B",
+                  "borderRadius": 14.0
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 160,
+                  "width": 28,
+                  "height": 28
+                },
+                "children": [
+                  {
+                    "id": "post-2-avatar-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "И"
+                    },
+                    "style": {
+                      "fontSize": 15,
+                      "color": "#FFFFFF",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5.0,
+                      "width": 28,
+                      "height": 18
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-2-author",
+                "type": "Text",
+                "props": {
+                  "text": "Игорь"
+                },
+                "style": {
+                  "fontSize": 13,
+                  "color": "#1E1B2E",
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 36,
+                  "y": 162,
+                  "width": 150,
+                  "height": 16
+                }
+              },
+              {
+                "id": "post-2-time",
+                "type": "Text",
+                "props": {
+                  "text": "34 мин назад"
+                },
+                "style": {
+                  "fontSize": 10,
+                  "color": "#6E6580"
+                },
+                "layout": {
+                  "x": 36,
+                  "y": 179,
+                  "width": 150,
+                  "height": 14
+                }
+              },
+              {
+                "id": "post-2-caption",
+                "type": "Text",
+                "props": {
+                  "text": "Монстера наконец выпустила новый лист!"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#1E1B2E"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 194,
+                  "width": 338,
+                  "height": 34
+                }
+              },
+              {
+                "id": "post-2-r0",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#F5F3FA",
+                  "borderRadius": 13
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 216,
+                  "width": 46,
+                  "height": 26
+                },
+                "children": [
+                  {
+                    "id": "post-2-r0-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "🌱 18"
+                    },
+                    "style": {
+                      "fontSize": 11,
+                      "color": "#1E1B2E",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5,
+                      "width": 46,
+                      "height": 16
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-2-r1",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#F5F3FA",
+                  "borderRadius": 13
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 216,
+                  "width": 46,
+                  "height": 26
+                },
+                "children": [
+                  {
+                    "id": "post-2-r1-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "💧 2"
+                    },
+                    "style": {
+                      "fontSize": 11,
+                      "color": "#1E1B2E",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5,
+                      "width": 46,
+                      "height": 16
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "post-3",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 18
+            },
+            "layout": {
+              "x": 16,
+              "y": 654,
+              "width": 338,
+              "height": 242
+            },
+            "children": [
+              {
+                "id": "post-3-photo",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#E23F7D",
+                  "borderRadius": 18,
+                  "opacity": 0.85
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 338,
+                  "height": 150
+                },
+                "children": [
+                  {
+                    "id": "post-3-photo-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "🍳"
+                    },
+                    "style": {
+                      "fontSize": 32,
+                      "color": "#1E1B2E",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 55.0,
+                      "width": 338,
+                      "height": 40
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-3-avatar",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#E23F7D",
+                  "borderRadius": 14.0
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 160,
+                  "width": 28,
+                  "height": 28
+                },
+                "children": [
+                  {
+                    "id": "post-3-avatar-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "Л"
+                    },
+                    "style": {
+                      "fontSize": 15,
+                      "color": "#FFFFFF",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5.0,
+                      "width": 28,
+                      "height": 18
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-3-author",
+                "type": "Text",
+                "props": {
+                  "text": "Лена"
+                },
+                "style": {
+                  "fontSize": 13,
+                  "color": "#1E1B2E",
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 36,
+                  "y": 162,
+                  "width": 150,
+                  "height": 16
+                }
+              },
+              {
+                "id": "post-3-time",
+                "type": "Text",
+                "props": {
+                  "text": "1 ч назад"
+                },
+                "style": {
+                  "fontSize": 10,
+                  "color": "#6E6580"
+                },
+                "layout": {
+                  "x": 36,
+                  "y": 179,
+                  "width": 150,
+                  "height": 14
+                }
+              },
+              {
+                "id": "post-3-caption",
+                "type": "Text",
+                "props": {
+                  "text": "Первый раз испекла хлеб на закваске, живая!"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#1E1B2E"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 194,
+                  "width": 338,
+                  "height": 34
+                }
+              },
+              {
+                "id": "post-3-r0",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#F5F3FA",
+                  "borderRadius": 13
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 216,
+                  "width": 46,
+                  "height": 26
+                },
+                "children": [
+                  {
+                    "id": "post-3-r0-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "👏 9"
+                    },
+                    "style": {
+                      "fontSize": 11,
+                      "color": "#1E1B2E",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5,
+                      "width": 46,
+                      "height": 16
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "post-3-r1",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#F5F3FA",
+                  "borderRadius": 13
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 216,
+                  "width": 46,
+                  "height": 26
+                },
+                "children": [
+                  {
+                    "id": "post-3-r1-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "🔥 3"
+                    },
+                    "style": {
+                      "fontSize": 11,
+                      "color": "#1E1B2E",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 5,
+                      "width": 46,
+                      "height": 16
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr-group",
+      "name": "Группа",
+      "route": "group",
+      "icon": "user",
+      "root": {
+        "id": "root-group",
+        "type": "ScrollView",
+        "style": {
+          "backgroundColor": "#F5F3FA"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 370,
+          "height": 640
+        },
+        "children": [
+          {
+            "id": "group-banner",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#2E9E8F",
+              "borderRadius": 0
+            },
+            "layout": {
+              "x": 0,
+              "y": 0,
+              "width": 370,
+              "height": 150
+            }
+          },
+          {
+            "id": "group-avatar",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 32.0
+            },
+            "layout": {
+              "x": 24,
+              "y": 90,
+              "width": 64,
+              "height": 64
+            },
+            "children": [
+              {
+                "id": "group-avatar-glyph",
+                "type": "Text",
+                "props": {
+                  "text": "🏃"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#FFFFFF",
+                  "fontWeight": "700",
+                  "textAlign": "center"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 23.0,
+                  "width": 64,
+                  "height": 18
+                }
+              }
+            ]
+          },
+          {
+            "id": "group-name",
+            "type": "Text",
+            "props": {
+              "text": "Бегуны района"
+            },
+            "style": {
+              "fontSize": 20,
+              "color": "#FFFFFF",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 100,
+              "y": 108,
+              "width": 240,
+              "height": 26
+            }
+          },
+          {
+            "id": "group-meta",
+            "type": "Text",
+            "props": {
+              "text": "24 участника · сегодня 6 апдейтов"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#FFFFFF",
+              "opacity": 0.85
+            },
+            "layout": {
+              "x": 100,
+              "y": 134,
+              "width": 250,
+              "height": 16
+            }
+          },
+          {
+            "id": "group-heading",
+            "type": "Text",
+            "props": {
+              "text": "Участники"
+            },
+            "style": {
+              "fontSize": 15,
+              "color": "#1E1B2E",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 170,
+              "width": 200,
+              "height": 22
+            }
+          },
+          {
+            "id": "mem-0",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 14
+            },
+            "layout": {
+              "x": 16,
+              "y": 202,
+              "width": 338,
+              "height": 56
+            },
+            "children": [
+              {
+                "id": "mem-0-av",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#2E9E8F",
+                  "borderRadius": 20.0
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 8,
+                  "width": 40,
+                  "height": 40
+                },
+                "children": [
+                  {
+                    "id": "mem-0-av-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "Н"
+                    },
+                    "style": {
+                      "fontSize": 15,
+                      "color": "#FFFFFF",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 11.0,
+                      "width": 40,
+                      "height": 18
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "mem-0-name",
+                "type": "Text",
+                "props": {
+                  "text": "Настя"
+                },
+                "style": {
+                  "fontSize": 14,
+                  "color": "#1E1B2E",
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 6,
+                  "width": 180,
+                  "height": 18
+                }
+              },
+              {
+                "id": "mem-0-sub",
+                "type": "Text",
+                "props": {
+                  "text": "5 км сегодня утром"
+                },
+                "style": {
+                  "fontSize": 11,
+                  "color": "#6E6580"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 26,
+                  "width": 260,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "mem-1",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 14
+            },
+            "layout": {
+              "x": 16,
+              "y": 266,
+              "width": 338,
+              "height": 56
+            },
+            "children": [
+              {
+                "id": "mem-1-av",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#2E9E8F",
+                  "borderRadius": 20.0
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 8,
+                  "width": 40,
+                  "height": 40
+                },
+                "children": [
+                  {
+                    "id": "mem-1-av-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "Д"
+                    },
+                    "style": {
+                      "fontSize": 15,
+                      "color": "#FFFFFF",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 11.0,
+                      "width": 40,
+                      "height": 18
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "mem-1-name",
+                "type": "Text",
+                "props": {
+                  "text": "Данил"
+                },
+                "style": {
+                  "fontSize": 14,
+                  "color": "#1E1B2E",
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 6,
+                  "width": 180,
+                  "height": 18
+                }
+              },
+              {
+                "id": "mem-1-sub",
+                "type": "Text",
+                "props": {
+                  "text": "стрик 12 пробежек подряд"
+                },
+                "style": {
+                  "fontSize": 11,
+                  "color": "#6E6580"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 26,
+                  "width": 260,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "mem-2",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 14
+            },
+            "layout": {
+              "x": 16,
+              "y": 330,
+              "width": 338,
+              "height": 56
+            },
+            "children": [
+              {
+                "id": "mem-2-av",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#E7E3F0",
+                  "borderRadius": 20.0
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 8,
+                  "width": 40,
+                  "height": 40
+                },
+                "children": [
+                  {
+                    "id": "mem-2-av-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "О"
+                    },
+                    "style": {
+                      "fontSize": 15,
+                      "color": "#FFFFFF",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 11.0,
+                      "width": 40,
+                      "height": 18
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "mem-2-name",
+                "type": "Text",
+                "props": {
+                  "text": "Оля"
+                },
+                "style": {
+                  "fontSize": 14,
+                  "color": "#1E1B2E",
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 6,
+                  "width": 180,
+                  "height": 18
+                }
+              },
+              {
+                "id": "mem-2-sub",
+                "type": "Text",
+                "props": {
+                  "text": "вышла из отпуска, возвращается"
+                },
+                "style": {
+                  "fontSize": 11,
+                  "color": "#6E6580"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 26,
+                  "width": 260,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "mem-3",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 14
+            },
+            "layout": {
+              "x": 16,
+              "y": 394,
+              "width": 338,
+              "height": 56
+            },
+            "children": [
+              {
+                "id": "mem-3-av",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#2E9E8F",
+                  "borderRadius": 20.0
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 8,
+                  "width": 40,
+                  "height": 40
+                },
+                "children": [
+                  {
+                    "id": "mem-3-av-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "Т"
+                    },
+                    "style": {
+                      "fontSize": 15,
+                      "color": "#FFFFFF",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 11.0,
+                      "width": 40,
+                      "height": 18
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "mem-3-name",
+                "type": "Text",
+                "props": {
+                  "text": "Тимур"
+                },
+                "style": {
+                  "fontSize": 14,
+                  "color": "#1E1B2E",
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 6,
+                  "width": 180,
+                  "height": 18
+                }
+              },
+              {
+                "id": "mem-3-sub",
+                "type": "Text",
+                "props": {
+                  "text": "10 км — личный рекорд!"
+                },
+                "style": {
+                  "fontSize": 11,
+                  "color": "#6E6580"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 26,
+                  "width": 260,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "mem-4",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 14
+            },
+            "layout": {
+              "x": 16,
+              "y": 458,
+              "width": 338,
+              "height": 56
+            },
+            "children": [
+              {
+                "id": "mem-4-av",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#E7E3F0",
+                  "borderRadius": 20.0
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 8,
+                  "width": 40,
+                  "height": 40
+                },
+                "children": [
+                  {
+                    "id": "mem-4-av-glyph",
+                    "type": "Text",
+                    "props": {
+                      "text": "Ж"
+                    },
+                    "style": {
+                      "fontSize": 15,
+                      "color": "#FFFFFF",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 11.0,
+                      "width": 40,
+                      "height": 18
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "mem-4-name",
+                "type": "Text",
+                "props": {
+                  "text": "Женя"
+                },
+                "style": {
+                  "fontSize": 14,
+                  "color": "#1E1B2E",
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 6,
+                  "width": 180,
+                  "height": 18
+                }
+              },
+              {
+                "id": "mem-4-sub",
+                "type": "Text",
+                "props": {
+                  "text": "пока молчит уже неделю"
+                },
+                "style": {
+                  "fontSize": 11,
+                  "color": "#6E6580"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 26,
+                  "width": 260,
+                  "height": 16
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr-new",
+      "name": "Новый пост",
+      "route": "new",
+      "icon": "form",
+      "root": {
+        "id": "root-new",
+        "type": "ScrollView",
+        "style": {
+          "backgroundColor": "#F5F3FA"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 370,
+          "height": 640
+        },
+        "children": [
+          {
+            "id": "new-title",
+            "type": "Text",
+            "props": {
+              "text": "Новый пост"
+            },
+            "style": {
+              "fontSize": 20,
+              "color": "#1E1B2E",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 24,
+              "width": 240,
+              "height": 26
+            }
+          },
+          {
+            "id": "new-photo-box",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 20,
+              "borderWidth": 2,
+              "borderColor": "#E7E3F0"
+            },
+            "layout": {
+              "x": 24,
+              "y": 66,
+              "width": 322,
+              "height": 260
+            },
+            "children": [
+              {
+                "id": "new-photo-plus",
+                "type": "Text",
+                "props": {
+                  "text": "+"
+                },
+                "style": {
+                  "fontSize": 48,
+                  "color": "#E23F7D",
+                  "fontWeight": "700",
+                  "textAlign": "center"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 80,
+                  "width": 322,
+                  "height": 60
+                }
+              },
+              {
+                "id": "new-photo-label",
+                "type": "Text",
+                "props": {
+                  "text": "Добавить фото"
+                },
+                "style": {
+                  "fontSize": 14,
+                  "color": "#6E6580",
+                  "fontWeight": "600",
+                  "textAlign": "center"
+                },
+                "layout": {
+                  "x": 0,
+                  "y": 150,
+                  "width": 322,
+                  "height": 20
+                }
+              }
+            ]
+          },
+          {
+            "id": "new-caption-input",
+            "type": "TextInput",
+            "props": {
+              "placeholder": "Что сейчас происходит?"
+            },
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 16,
+              "borderWidth": 0,
+              "color": "#1E1B2E",
+              "fontSize": 14
+            },
+            "layout": {
+              "x": 24,
+              "y": 340,
+              "width": 322,
+              "height": 64
+            }
+          },
+          {
+            "id": "new-group-label",
+            "type": "Text",
+            "props": {
+              "text": "В какую группу?"
+            },
+            "style": {
+              "fontSize": 11,
+              "color": "#6E6580",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 420,
+              "width": 220,
+              "height": 16
+            }
+          },
+          {
+            "id": "new-grp-0",
+            "type": "Button",
+            "props": {
+              "text": "🏃 Бегуны"
+            },
+            "style": {
+              "backgroundColor": "#2E9E8F",
+              "color": "#FFFFFF",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 444,
+              "width": 94,
+              "height": 34
+            }
+          },
+          {
+            "id": "new-grp-1",
+            "type": "Button",
+            "props": {
+              "text": "🌱 Растения"
+            },
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "color": "#6E6580",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 126,
+              "y": 444,
+              "width": 110,
+              "height": 34
+            }
+          },
+          {
+            "id": "new-grp-2",
+            "type": "Button",
+            "props": {
+              "text": "🍳 Готовим"
+            },
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "color": "#6E6580",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 244,
+              "y": 444,
+              "width": 102,
+              "height": 34
+            }
+          },
+          {
+            "id": "new-grp-3",
+            "type": "Button",
+            "props": {
+              "text": "🧘 Йога"
+            },
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "color": "#6E6580",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 354,
+              "y": 444,
+              "width": 78,
+              "height": 34
+            }
+          },
+          {
+            "id": "new-publish",
+            "type": "Button",
+            "props": {
+              "text": "Го, покажи!"
+            },
+            "style": {
+              "backgroundColor": "#E23F7D",
+              "color": "#FFFFFF",
+              "borderRadius": 20,
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 570,
+              "width": 322,
+              "height": 52
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "state": {},
+  "revision": 1,
+  "createdAt": "2026-09-26T22:18:00.000Z",
+  "updatedAt": "2026-09-26T22:18:00.000Z"
+}

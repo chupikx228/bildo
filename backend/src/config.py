@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     routerai_api_key: str | None = None
     routerai_base_url: str = "https://routerai.ru/api/v1"
     routerai_model: str = "deepseek/deepseek-v4-flash"
+    routerai_enricher_model: str = "deepseek/deepseek-v4-flash"
     routerai_max_retries: int = 3
 
 

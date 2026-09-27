@@ -1,0 +1,2221 @@
+{
+  "id": "7fcbb998-865f-49c3-9a99-9190ce6edc92",
+  "name": "Ритм v2 — уточнённый промпт",
+  "slug": "ritm-v2-prompt-expansion",
+  "prompt": "Мобильное приложение — трекер привычек для тех, кто выстраивает ежедневные рутины (утренние ритуалы, здоровье, обучение). Основная ценность: быстро увидеть прогресс за сегодня и не потерять серию (streak).\n\nКлючевые сценарии:\n1. Главный экран — сразу видно, сколько привычек выполнено сегодня и какой сейчас streak; отметить привычку выполненной — одно действие.\n2. Список всех привычек с историей за последние дни, разбитых по категориям (здоровье, продуктивность, обучение) — виден не только статус \"сегодня\", но и паттерн по времени.\n3. Экран добавления/редактирования привычки: название, категория, частота по дням недели, время напоминания.\n4. Экран прогресса: сводка за неделю, лучший streak, разбивка выполнения по категориям.\n\nТон: без давления и \"гилта\" — акцент на прогресс, а не на пропуски. Не детский, но и не строго-корпоративный визуал.\n\nТехнически: 370x640, табы, кнопки называются по действию, данные правдоподобные, не lorem ipsum.",
+  "theme": {
+    "colorBg": "#F3F6F1",
+    "colorSurface": "#FFFFFF",
+    "colorBorder": "#DCE6DC",
+    "colorText": "#1C2420",
+    "colorTextMuted": "#6E7A70",
+    "colorPrimary": "#245C46",
+    "colorPrimaryFg": "#FFFFFF",
+    "radiusBase": "16px",
+    "fontBody": "System",
+    "fontHeading": "System"
+  },
+  "navigation": {
+    "type": "tabs",
+    "roots": [
+      "scr-today",
+      "scr-habits",
+      "scr-form",
+      "scr-stats"
+    ]
+  },
+  "screens": [
+    {
+      "id": "scr-today",
+      "name": "Сегодня",
+      "route": "/",
+      "icon": "today",
+      "root": {
+        "id": "root-today",
+        "type": "ScrollView",
+        "style": {
+          "backgroundColor": "#F3F6F1"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 370,
+          "height": 640
+        },
+        "children": [
+          {
+            "id": "hero-panel",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 0
+            },
+            "layout": {
+              "x": 0,
+              "y": 0,
+              "width": 370,
+              "height": 220
+            }
+          },
+          {
+            "id": "hero-date",
+            "type": "Text",
+            "props": {
+              "text": "Вторник, 24 сентября"
+            },
+            "style": {
+              "fontSize": 13,
+              "color": "#CFE3D7"
+            },
+            "layout": {
+              "x": 24,
+              "y": 28,
+              "width": 260,
+              "height": 18
+            }
+          },
+          {
+            "id": "hero-flame",
+            "type": "Text",
+            "props": {
+              "text": "🔥"
+            },
+            "style": {
+              "fontSize": 26,
+              "color": "#1C2420"
+            },
+            "layout": {
+              "x": 312,
+              "y": 22,
+              "width": 40,
+              "height": 40
+            }
+          },
+          {
+            "id": "hero-number",
+            "type": "Text",
+            "props": {
+              "text": "9"
+            },
+            "style": {
+              "fontSize": 68,
+              "color": "#FFFFFF",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 22,
+              "y": 62,
+              "width": 160,
+              "height": 80
+            }
+          },
+          {
+            "id": "hero-caption",
+            "type": "Text",
+            "props": {
+              "text": "дней подряд — продолжаешь двигаться"
+            },
+            "style": {
+              "fontSize": 14,
+              "color": "#CFE3D7"
+            },
+            "layout": {
+              "x": 24,
+              "y": 150,
+              "width": 240,
+              "height": 36
+            }
+          },
+          {
+            "id": "today-heading",
+            "type": "Text",
+            "props": {
+              "text": "Сегодня"
+            },
+            "style": {
+              "fontSize": 18,
+              "color": "#1C2420",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 236,
+              "width": 260,
+              "height": 24
+            }
+          },
+          {
+            "id": "today-subheading",
+            "type": "Text",
+            "props": {
+              "text": "3 из 4 уже сделано — отличный день"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#6E7A70"
+            },
+            "layout": {
+              "x": 24,
+              "y": 262,
+              "width": 300,
+              "height": 16
+            }
+          },
+          {
+            "id": "row-water",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 16
+            },
+            "layout": {
+              "x": 16,
+              "y": 296,
+              "width": 338,
+              "height": 64
+            },
+            "children": [
+              {
+                "id": "row-water-toggle",
+                "type": "Button",
+                "props": {
+                  "text": ""
+                },
+                "style": {
+                  "backgroundColor": "transparent",
+                  "borderWidth": 1.5,
+                  "borderColor": "#DCE6DC",
+                  "borderRadius": 14
+                },
+                "layout": {
+                  "x": 12,
+                  "y": 18.0,
+                  "width": 28,
+                  "height": 28
+                }
+              },
+              {
+                "id": "row-water-name",
+                "type": "Text",
+                "props": {
+                  "text": "💧 Выпить 2 л воды"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#1C2420",
+                  "fontWeight": "600"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 14,
+                  "width": 260,
+                  "height": 20
+                }
+              },
+              {
+                "id": "row-water-sub",
+                "type": "Text",
+                "props": {
+                  "text": "Здоровье · осталось 3 стакана"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#6E7A70"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 36,
+                  "width": 270,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "row-read",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 16,
+              "opacity": 0.6
+            },
+            "layout": {
+              "x": 16,
+              "y": 372,
+              "width": 338,
+              "height": 64
+            },
+            "children": [
+              {
+                "id": "row-read-toggle",
+                "type": "Button",
+                "props": {
+                  "text": "✓"
+                },
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 14,
+                  "color": "#FFFFFF",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 12,
+                  "y": 18.0,
+                  "width": 28,
+                  "height": 28
+                }
+              },
+              {
+                "id": "row-read-name",
+                "type": "Text",
+                "props": {
+                  "text": "📖 Читать 15 минут"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#1C2420",
+                  "fontWeight": "600"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 14,
+                  "width": 260,
+                  "height": 20
+                }
+              },
+              {
+                "id": "row-read-sub",
+                "type": "Text",
+                "props": {
+                  "text": "Обучение · стрик 5 дней"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#6E7A70"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 36,
+                  "width": 270,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "row-meditate",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 16,
+              "opacity": 0.6
+            },
+            "layout": {
+              "x": 16,
+              "y": 448,
+              "width": 338,
+              "height": 78
+            },
+            "children": [
+              {
+                "id": "row-meditate-toggle",
+                "type": "Button",
+                "props": {
+                  "text": "✓"
+                },
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 14,
+                  "color": "#FFFFFF",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 12,
+                  "y": 25.0,
+                  "width": 28,
+                  "height": 28
+                }
+              },
+              {
+                "id": "row-meditate-name",
+                "type": "Text",
+                "props": {
+                  "text": "🧘 Медитация"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#1C2420",
+                  "fontWeight": "600"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 14,
+                  "width": 260,
+                  "height": 20
+                }
+              },
+              {
+                "id": "row-meditate-sub",
+                "type": "Text",
+                "props": {
+                  "text": "Здоровье · каждое утро 07:00 · стрик 12"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#6E7A70"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 36,
+                  "width": 270,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "row-workout",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 16,
+              "opacity": 0.6
+            },
+            "layout": {
+              "x": 16,
+              "y": 538,
+              "width": 338,
+              "height": 64
+            },
+            "children": [
+              {
+                "id": "row-workout-toggle",
+                "type": "Button",
+                "props": {
+                  "text": "✓"
+                },
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 14,
+                  "color": "#FFFFFF",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                },
+                "layout": {
+                  "x": 12,
+                  "y": 18.0,
+                  "width": 28,
+                  "height": 28
+                }
+              },
+              {
+                "id": "row-workout-name",
+                "type": "Text",
+                "props": {
+                  "text": "🏃 Тренировка"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#1C2420",
+                  "fontWeight": "600"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 14,
+                  "width": 260,
+                  "height": 20
+                }
+              },
+              {
+                "id": "row-workout-sub",
+                "type": "Text",
+                "props": {
+                  "text": "Продуктивность · Пн / Ср / Пт"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#6E7A70"
+                },
+                "layout": {
+                  "x": 52,
+                  "y": 36,
+                  "width": 270,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "btn-add-habit",
+            "type": "Button",
+            "props": {
+              "text": "+ Добавить привычку"
+            },
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "color": "#1C2420",
+              "borderRadius": 24,
+              "fontSize": 14,
+              "fontWeight": "600",
+              "borderWidth": 1.5,
+              "borderColor": "#DCE6DC"
+            },
+            "layout": {
+              "x": 16,
+              "y": 618,
+              "width": 338,
+              "height": 48
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr-habits",
+      "name": "Привычки",
+      "route": "habits",
+      "icon": "check",
+      "root": {
+        "id": "root-habits",
+        "type": "ScrollView",
+        "style": {
+          "backgroundColor": "#F3F6F1"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 370,
+          "height": 640
+        },
+        "children": [
+          {
+            "id": "habits-heading",
+            "type": "Text",
+            "props": {
+              "text": "Мои привычки"
+            },
+            "style": {
+              "fontSize": 24,
+              "color": "#1C2420",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 28,
+              "width": 260,
+              "height": 30
+            }
+          },
+          {
+            "id": "habits-sub",
+            "type": "Text",
+            "props": {
+              "text": "4 активные · 3 категории"
+            },
+            "style": {
+              "fontSize": 13,
+              "color": "#6E7A70"
+            },
+            "layout": {
+              "x": 24,
+              "y": 62,
+              "width": 240,
+              "height": 18
+            }
+          },
+          {
+            "id": "hc-workout",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 20
+            },
+            "layout": {
+              "x": 16,
+              "y": 96,
+              "width": 338,
+              "height": 122
+            },
+            "children": [
+              {
+                "id": "hc-workout-name",
+                "type": "Text",
+                "props": {
+                  "text": "🏃 Тренировка"
+                },
+                "style": {
+                  "fontSize": 16,
+                  "color": "#1C2420",
+                  "fontWeight": "600"
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 14,
+                  "width": 200,
+                  "height": 22
+                }
+              },
+              {
+                "id": "hc-workout-tag",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#C98A3B",
+                  "borderRadius": 11,
+                  "opacity": 0.14
+                },
+                "layout": {
+                  "x": 200,
+                  "y": 14,
+                  "width": 112,
+                  "height": 22
+                },
+                "children": [
+                  {
+                    "id": "hc-workout-tag-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "Продуктивность"
+                    },
+                    "style": {
+                      "fontSize": 10,
+                      "color": "#C98A3B",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 4,
+                      "width": 112,
+                      "height": 14
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "hc-workout-streak",
+                "type": "Text",
+                "props": {
+                  "text": "Стрик 21 · лучший результат"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#6E7A70"
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 40,
+                  "width": 260,
+                  "height": 16
+                }
+              },
+              {
+                "id": "hc-workout-dot-0",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-workout-dot-1",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 38,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-workout-dot-2",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 60,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-workout-dot-3",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#DCE6DC",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 82,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-workout-dot-4",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 104,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-workout-dot-5",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 126,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-workout-dot-6",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 148,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              }
+            ]
+          },
+          {
+            "id": "hc-water",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 20
+            },
+            "layout": {
+              "x": 16,
+              "y": 230,
+              "width": 338,
+              "height": 102
+            },
+            "children": [
+              {
+                "id": "hc-water-name",
+                "type": "Text",
+                "props": {
+                  "text": "💧 Пить воду"
+                },
+                "style": {
+                  "fontSize": 16,
+                  "color": "#1C2420",
+                  "fontWeight": "600"
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 14,
+                  "width": 140,
+                  "height": 22
+                }
+              },
+              {
+                "id": "hc-water-tag",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 11,
+                  "opacity": 0.14
+                },
+                "layout": {
+                  "x": 156,
+                  "y": 14,
+                  "width": 70,
+                  "height": 22
+                },
+                "children": [
+                  {
+                    "id": "hc-water-tag-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "Здоровье"
+                    },
+                    "style": {
+                      "fontSize": 10,
+                      "color": "#245C46",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 4,
+                      "width": 70,
+                      "height": 14
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "hc-water-streak",
+                "type": "Text",
+                "props": {
+                  "text": "Стрик 12 дней"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#6E7A70"
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 40,
+                  "width": 200,
+                  "height": 16
+                }
+              },
+              {
+                "id": "hc-water-dot-0",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-water-dot-1",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 38,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-water-dot-2",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#DCE6DC",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 60,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-water-dot-3",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 82,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-water-dot-4",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 104,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-water-dot-5",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 126,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              },
+              {
+                "id": "hc-water-dot-6",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 4
+                },
+                "layout": {
+                  "x": 148,
+                  "y": 68,
+                  "width": 14,
+                  "height": 14
+                }
+              }
+            ]
+          },
+          {
+            "id": "hc-read",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 16
+            },
+            "layout": {
+              "x": 16,
+              "y": 344,
+              "width": 338,
+              "height": 78
+            },
+            "children": [
+              {
+                "id": "hc-read-name",
+                "type": "Text",
+                "props": {
+                  "text": "📖 Читать"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#1C2420",
+                  "fontWeight": "600"
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 16,
+                  "width": 100,
+                  "height": 20
+                }
+              },
+              {
+                "id": "hc-read-tag",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#5B6EA8",
+                  "borderRadius": 11,
+                  "opacity": 0.14
+                },
+                "layout": {
+                  "x": 116,
+                  "y": 16,
+                  "width": 70,
+                  "height": 22
+                },
+                "children": [
+                  {
+                    "id": "hc-read-tag-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "Обучение"
+                    },
+                    "style": {
+                      "fontSize": 10,
+                      "color": "#5B6EA8",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 4,
+                      "width": 70,
+                      "height": 14
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "hc-read-streak",
+                "type": "Text",
+                "props": {
+                  "text": "Стрик 5 дней"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#6E7A70"
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 42,
+                  "width": 200,
+                  "height": 16
+                }
+              },
+              {
+                "id": "hc-read-pct",
+                "type": "Text",
+                "props": {
+                  "text": "71%"
+                },
+                "style": {
+                  "fontSize": 22,
+                  "color": "#245C46",
+                  "fontWeight": "700",
+                  "textAlign": "right"
+                },
+                "layout": {
+                  "x": 270,
+                  "y": 16,
+                  "width": 60,
+                  "height": 30
+                }
+              }
+            ]
+          },
+          {
+            "id": "hc-meditate",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 16,
+              "borderWidth": 1,
+              "borderColor": "#DCE6DC",
+              "opacity": 0.75
+            },
+            "layout": {
+              "x": 16,
+              "y": 434,
+              "width": 338,
+              "height": 78
+            },
+            "children": [
+              {
+                "id": "hc-meditate-name",
+                "type": "Text",
+                "props": {
+                  "text": "🧘 Медитация"
+                },
+                "style": {
+                  "fontSize": 15,
+                  "color": "#6E7A70",
+                  "fontWeight": "600"
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 16,
+                  "width": 140,
+                  "height": 20
+                }
+              },
+              {
+                "id": "hc-meditate-tag",
+                "type": "View",
+                "style": {
+                  "backgroundColor": "#245C46",
+                  "borderRadius": 11,
+                  "opacity": 0.14
+                },
+                "layout": {
+                  "x": 156,
+                  "y": 16,
+                  "width": 70,
+                  "height": 22
+                },
+                "children": [
+                  {
+                    "id": "hc-meditate-tag-t",
+                    "type": "Text",
+                    "props": {
+                      "text": "Здоровье"
+                    },
+                    "style": {
+                      "fontSize": 10,
+                      "color": "#245C46",
+                      "fontWeight": "700",
+                      "textAlign": "center"
+                    },
+                    "layout": {
+                      "x": 0,
+                      "y": 4,
+                      "width": 70,
+                      "height": 14
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "hc-meditate-streak",
+                "type": "Text",
+                "props": {
+                  "text": "Стрик прерван — можно начать снова"
+                },
+                "style": {
+                  "fontSize": 12,
+                  "color": "#6E7A70"
+                },
+                "layout": {
+                  "x": 16,
+                  "y": 42,
+                  "width": 280,
+                  "height": 16
+                }
+              }
+            ]
+          },
+          {
+            "id": "btn-add-habit-2",
+            "type": "Button",
+            "props": {
+              "text": "+ Новая привычка"
+            },
+            "style": {
+              "backgroundColor": "#245C46",
+              "color": "#FFFFFF",
+              "borderRadius": 24,
+              "fontSize": 14,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 16,
+              "y": 528,
+              "width": 338,
+              "height": 48
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr-form",
+      "name": "Новая привычка",
+      "route": "new",
+      "icon": "form",
+      "root": {
+        "id": "root-form",
+        "type": "ScrollView",
+        "style": {
+          "backgroundColor": "#F3F6F1"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 370,
+          "height": 640
+        },
+        "children": [
+          {
+            "id": "form-heading",
+            "type": "Text",
+            "props": {
+              "text": "Новая привычка"
+            },
+            "style": {
+              "fontSize": 24,
+              "color": "#1C2420",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 28,
+              "width": 260,
+              "height": 30
+            }
+          },
+          {
+            "id": "form-sub",
+            "type": "Text",
+            "props": {
+              "text": "Без дедлайна — просто то, к чему возвращаешься"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#6E7A70"
+            },
+            "layout": {
+              "x": 24,
+              "y": 62,
+              "width": 320,
+              "height": 18
+            }
+          },
+          {
+            "id": "form-label-name",
+            "type": "Text",
+            "props": {
+              "text": "НАЗВАНИЕ"
+            },
+            "style": {
+              "fontSize": 11,
+              "color": "#6E7A70",
+              "fontWeight": "700",
+              "letterSpacing": 0.5
+            },
+            "layout": {
+              "x": 24,
+              "y": 100,
+              "width": 200,
+              "height": 14
+            }
+          },
+          {
+            "id": "form-input-name",
+            "type": "TextInput",
+            "props": {
+              "placeholder": "Например, Пить воду"
+            },
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 14,
+              "borderWidth": 1,
+              "borderColor": "#DCE6DC",
+              "color": "#1C2420",
+              "fontSize": 15
+            },
+            "layout": {
+              "x": 24,
+              "y": 120,
+              "width": 322,
+              "height": 52
+            }
+          },
+          {
+            "id": "form-label-category",
+            "type": "Text",
+            "props": {
+              "text": "КАТЕГОРИЯ"
+            },
+            "style": {
+              "fontSize": 11,
+              "color": "#6E7A70",
+              "fontWeight": "700",
+              "letterSpacing": 0.5
+            },
+            "layout": {
+              "x": 24,
+              "y": 190,
+              "width": 200,
+              "height": 14
+            }
+          },
+          {
+            "id": "form-cat-0",
+            "type": "Button",
+            "props": {
+              "text": "Здоровье"
+            },
+            "style": {
+              "backgroundColor": "#245C46",
+              "color": "#FFFFFF",
+              "borderRadius": 20,
+              "fontSize": 13,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 24,
+              "y": 210,
+              "width": 84,
+              "height": 36
+            }
+          },
+          {
+            "id": "form-cat-1",
+            "type": "Button",
+            "props": {
+              "text": "Продуктивность"
+            },
+            "style": {
+              "backgroundColor": "transparent",
+              "borderWidth": 1.5,
+              "borderColor": "#DCE6DC",
+              "color": "#1C2420",
+              "borderRadius": 20,
+              "fontSize": 13,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 116,
+              "y": 210,
+              "width": 132,
+              "height": 36
+            }
+          },
+          {
+            "id": "form-cat-2",
+            "type": "Button",
+            "props": {
+              "text": "Обучение"
+            },
+            "style": {
+              "backgroundColor": "transparent",
+              "borderWidth": 1.5,
+              "borderColor": "#DCE6DC",
+              "color": "#1C2420",
+              "borderRadius": 20,
+              "fontSize": 13,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 256,
+              "y": 210,
+              "width": 84,
+              "height": 36
+            }
+          },
+          {
+            "id": "form-cat-3",
+            "type": "Button",
+            "props": {
+              "text": "Своё"
+            },
+            "style": {
+              "backgroundColor": "transparent",
+              "borderWidth": 1.5,
+              "borderColor": "#DCE6DC",
+              "color": "#1C2420",
+              "borderRadius": 20,
+              "fontSize": 13,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 348,
+              "y": 210,
+              "width": 52,
+              "height": 36
+            }
+          },
+          {
+            "id": "form-label-freq",
+            "type": "Text",
+            "props": {
+              "text": "ЧАСТОТА"
+            },
+            "style": {
+              "fontSize": 11,
+              "color": "#6E7A70",
+              "fontWeight": "700",
+              "letterSpacing": 0.5
+            },
+            "layout": {
+              "x": 24,
+              "y": 262,
+              "width": 200,
+              "height": 14
+            }
+          },
+          {
+            "id": "form-day-0",
+            "type": "Button",
+            "props": {
+              "text": "Пн"
+            },
+            "style": {
+              "backgroundColor": "#245C46",
+              "color": "#FFFFFF",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 282,
+              "width": 40,
+              "height": 40
+            }
+          },
+          {
+            "id": "form-day-1",
+            "type": "Button",
+            "props": {
+              "text": "Вт"
+            },
+            "style": {
+              "backgroundColor": "#245C46",
+              "color": "#FFFFFF",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 70,
+              "y": 282,
+              "width": 40,
+              "height": 40
+            }
+          },
+          {
+            "id": "form-day-2",
+            "type": "Button",
+            "props": {
+              "text": "Ср"
+            },
+            "style": {
+              "backgroundColor": "#245C46",
+              "color": "#FFFFFF",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 116,
+              "y": 282,
+              "width": 40,
+              "height": 40
+            }
+          },
+          {
+            "id": "form-day-3",
+            "type": "Button",
+            "props": {
+              "text": "Чт"
+            },
+            "style": {
+              "backgroundColor": "#245C46",
+              "color": "#FFFFFF",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 162,
+              "y": 282,
+              "width": 40,
+              "height": 40
+            }
+          },
+          {
+            "id": "form-day-4",
+            "type": "Button",
+            "props": {
+              "text": "Пт"
+            },
+            "style": {
+              "backgroundColor": "#245C46",
+              "color": "#FFFFFF",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 208,
+              "y": 282,
+              "width": 40,
+              "height": 40
+            }
+          },
+          {
+            "id": "form-day-5",
+            "type": "Button",
+            "props": {
+              "text": "Сб"
+            },
+            "style": {
+              "backgroundColor": "transparent",
+              "borderWidth": 1.5,
+              "borderColor": "#DCE6DC",
+              "color": "#6E7A70",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 254,
+              "y": 282,
+              "width": 40,
+              "height": 40
+            }
+          },
+          {
+            "id": "form-day-6",
+            "type": "Button",
+            "props": {
+              "text": "Вс"
+            },
+            "style": {
+              "backgroundColor": "transparent",
+              "borderWidth": 1.5,
+              "borderColor": "#DCE6DC",
+              "color": "#6E7A70",
+              "borderRadius": 18,
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 300,
+              "y": 282,
+              "width": 40,
+              "height": 40
+            }
+          },
+          {
+            "id": "form-label-time",
+            "type": "Text",
+            "props": {
+              "text": "ВРЕМЯ НАПОМИНАНИЯ"
+            },
+            "style": {
+              "fontSize": 11,
+              "color": "#6E7A70",
+              "fontWeight": "700",
+              "letterSpacing": 0.5
+            },
+            "layout": {
+              "x": 24,
+              "y": 344,
+              "width": 260,
+              "height": 14
+            }
+          },
+          {
+            "id": "form-input-time",
+            "type": "TextInput",
+            "props": {
+              "placeholder": "07:00"
+            },
+            "style": {
+              "backgroundColor": "#FFFFFF",
+              "borderRadius": 14,
+              "borderWidth": 1,
+              "borderColor": "#DCE6DC",
+              "color": "#1C2420",
+              "fontSize": 15
+            },
+            "layout": {
+              "x": 24,
+              "y": 364,
+              "width": 150,
+              "height": 52
+            }
+          },
+          {
+            "id": "form-time-hint",
+            "type": "Text",
+            "props": {
+              "text": "Можно пропустить — напомним позже"
+            },
+            "style": {
+              "fontSize": 11,
+              "color": "#6E7A70"
+            },
+            "layout": {
+              "x": 190,
+              "y": 380,
+              "width": 160,
+              "height": 32
+            }
+          },
+          {
+            "id": "form-save",
+            "type": "Button",
+            "props": {
+              "text": "Сохранить привычку"
+            },
+            "style": {
+              "backgroundColor": "#245C46",
+              "color": "#FFFFFF",
+              "borderRadius": 26,
+              "fontSize": 15,
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 24,
+              "y": 460,
+              "width": 322,
+              "height": 52
+            }
+          },
+          {
+            "id": "form-cancel",
+            "type": "Button",
+            "props": {
+              "text": "Отмена"
+            },
+            "style": {
+              "backgroundColor": "transparent",
+              "color": "#6E7A70",
+              "borderRadius": 26,
+              "fontSize": 14,
+              "fontWeight": "500"
+            },
+            "layout": {
+              "x": 24,
+              "y": 522,
+              "width": 322,
+              "height": 44
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "scr-stats",
+      "name": "Прогресс",
+      "route": "stats",
+      "icon": "chart",
+      "root": {
+        "id": "root-stats",
+        "type": "ScrollView",
+        "style": {
+          "backgroundColor": "#F3F6F1"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 370,
+          "height": 640
+        },
+        "children": [
+          {
+            "id": "stats-heading",
+            "type": "Text",
+            "props": {
+              "text": "Прогресс"
+            },
+            "style": {
+              "fontSize": 24,
+              "color": "#1C2420",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 24,
+              "y": 28,
+              "width": 200,
+              "height": 30
+            }
+          },
+          {
+            "id": "stats-sub",
+            "type": "Text",
+            "props": {
+              "text": "Сентябрь 2026"
+            },
+            "style": {
+              "fontSize": 13,
+              "color": "#6E7A70"
+            },
+            "layout": {
+              "x": 24,
+              "y": 62,
+              "width": 200,
+              "height": 18
+            }
+          },
+          {
+            "id": "stats-hero-num",
+            "type": "Text",
+            "props": {
+              "text": "68%"
+            },
+            "style": {
+              "fontSize": 56,
+              "color": "#245C46",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 22,
+              "y": 92,
+              "width": 180,
+              "height": 66
+            }
+          },
+          {
+            "id": "stats-hero-cap",
+            "type": "Text",
+            "props": {
+              "text": "привычек выполнено вовремя"
+            },
+            "style": {
+              "fontSize": 13,
+              "color": "#6E7A70"
+            },
+            "layout": {
+              "x": 24,
+              "y": 164,
+              "width": 190,
+              "height": 34
+            }
+          },
+          {
+            "id": "stats-best-num",
+            "type": "Text",
+            "props": {
+              "text": "21"
+            },
+            "style": {
+              "fontSize": 28,
+              "color": "#1C2420",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 280,
+              "y": 92,
+              "width": 70,
+              "height": 34
+            }
+          },
+          {
+            "id": "stats-best-cap",
+            "type": "Text",
+            "props": {
+              "text": "лучший стрик"
+            },
+            "style": {
+              "fontSize": 11,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 260,
+              "y": 128,
+              "width": 100,
+              "height": 16
+            }
+          },
+          {
+            "id": "stats-count-num",
+            "type": "Text",
+            "props": {
+              "text": "4"
+            },
+            "style": {
+              "fontSize": 28,
+              "color": "#1C2420",
+              "fontWeight": "700"
+            },
+            "layout": {
+              "x": 280,
+              "y": 166,
+              "width": 70,
+              "height": 34
+            }
+          },
+          {
+            "id": "stats-count-cap",
+            "type": "Text",
+            "props": {
+              "text": "привычки"
+            },
+            "style": {
+              "fontSize": 11,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 260,
+              "y": 200,
+              "width": 100,
+              "height": 16
+            }
+          },
+          {
+            "id": "stats-divider",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#DCE6DC"
+            },
+            "layout": {
+              "x": 24,
+              "y": 232,
+              "width": 322,
+              "height": 1
+            }
+          },
+          {
+            "id": "stats-chart-heading",
+            "type": "Text",
+            "props": {
+              "text": "Эта неделя"
+            },
+            "style": {
+              "fontSize": 15,
+              "color": "#1C2420",
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 24,
+              "y": 252,
+              "width": 200,
+              "height": 22
+            }
+          },
+          {
+            "id": "bar-0",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 8,
+              "opacity": 0.55
+            },
+            "layout": {
+              "x": 24,
+              "y": 384,
+              "width": 28,
+              "height": 40
+            }
+          },
+          {
+            "id": "bar-label-0",
+            "type": "Text",
+            "props": {
+              "text": "Пн"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 21,
+              "y": 432,
+              "width": 34,
+              "height": 14
+            }
+          },
+          {
+            "id": "bar-1",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 8,
+              "opacity": 1.0
+            },
+            "layout": {
+              "x": 73,
+              "y": 334,
+              "width": 28,
+              "height": 90
+            }
+          },
+          {
+            "id": "bar-label-1",
+            "type": "Text",
+            "props": {
+              "text": "Вт"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 70,
+              "y": 432,
+              "width": 34,
+              "height": 14
+            }
+          },
+          {
+            "id": "bar-2",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 8,
+              "opacity": 0.55
+            },
+            "layout": {
+              "x": 122,
+              "y": 364,
+              "width": 28,
+              "height": 60
+            }
+          },
+          {
+            "id": "bar-label-2",
+            "type": "Text",
+            "props": {
+              "text": "Ср"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 119,
+              "y": 432,
+              "width": 34,
+              "height": 14
+            }
+          },
+          {
+            "id": "bar-3",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 8,
+              "opacity": 1.0
+            },
+            "layout": {
+              "x": 171,
+              "y": 284,
+              "width": 28,
+              "height": 140
+            }
+          },
+          {
+            "id": "bar-label-3",
+            "type": "Text",
+            "props": {
+              "text": "Чт"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 168,
+              "y": 432,
+              "width": 34,
+              "height": 14
+            }
+          },
+          {
+            "id": "bar-4",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 8,
+              "opacity": 0.55
+            },
+            "layout": {
+              "x": 220,
+              "y": 404,
+              "width": 28,
+              "height": 20
+            }
+          },
+          {
+            "id": "bar-label-4",
+            "type": "Text",
+            "props": {
+              "text": "Пт"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 217,
+              "y": 432,
+              "width": 34,
+              "height": 14
+            }
+          },
+          {
+            "id": "bar-5",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 8,
+              "opacity": 1.0
+            },
+            "layout": {
+              "x": 269,
+              "y": 314,
+              "width": 28,
+              "height": 110
+            }
+          },
+          {
+            "id": "bar-label-5",
+            "type": "Text",
+            "props": {
+              "text": "Сб"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 266,
+              "y": 432,
+              "width": 34,
+              "height": 14
+            }
+          },
+          {
+            "id": "bar-6",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 8,
+              "opacity": 0.55
+            },
+            "layout": {
+              "x": 318,
+              "y": 354,
+              "width": 28,
+              "height": 70
+            }
+          },
+          {
+            "id": "bar-label-6",
+            "type": "Text",
+            "props": {
+              "text": "Вс"
+            },
+            "style": {
+              "fontSize": 10,
+              "color": "#6E7A70",
+              "textAlign": "center"
+            },
+            "layout": {
+              "x": 315,
+              "y": 432,
+              "width": 34,
+              "height": 14
+            }
+          },
+          {
+            "id": "stats-cat-heading",
+            "type": "Text",
+            "props": {
+              "text": "По категориям"
+            },
+            "style": {
+              "fontSize": 15,
+              "color": "#1C2420",
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 24,
+              "y": 452,
+              "width": 220,
+              "height": 20
+            }
+          },
+          {
+            "id": "cat-label-0",
+            "type": "Text",
+            "props": {
+              "text": "Здоровье"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#1C2420",
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 24,
+              "y": 480,
+              "width": 140,
+              "height": 16
+            }
+          },
+          {
+            "id": "cat-pct-0",
+            "type": "Text",
+            "props": {
+              "text": "82%"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#245C46",
+              "fontWeight": "700",
+              "textAlign": "right"
+            },
+            "layout": {
+              "x": 320,
+              "y": 480,
+              "width": 26,
+              "height": 16
+            }
+          },
+          {
+            "id": "cat-track-0",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#DCE6DC",
+              "borderRadius": 3
+            },
+            "layout": {
+              "x": 24,
+              "y": 500,
+              "width": 322,
+              "height": 6
+            }
+          },
+          {
+            "id": "cat-fill-0",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#245C46",
+              "borderRadius": 3
+            },
+            "layout": {
+              "x": 24,
+              "y": 500,
+              "width": 264,
+              "height": 6
+            }
+          },
+          {
+            "id": "cat-label-1",
+            "type": "Text",
+            "props": {
+              "text": "Продуктивность"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#1C2420",
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 24,
+              "y": 520,
+              "width": 140,
+              "height": 16
+            }
+          },
+          {
+            "id": "cat-pct-1",
+            "type": "Text",
+            "props": {
+              "text": "64%"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#C98A3B",
+              "fontWeight": "700",
+              "textAlign": "right"
+            },
+            "layout": {
+              "x": 320,
+              "y": 520,
+              "width": 26,
+              "height": 16
+            }
+          },
+          {
+            "id": "cat-track-1",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#DCE6DC",
+              "borderRadius": 3
+            },
+            "layout": {
+              "x": 24,
+              "y": 540,
+              "width": 322,
+              "height": 6
+            }
+          },
+          {
+            "id": "cat-fill-1",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#C98A3B",
+              "borderRadius": 3
+            },
+            "layout": {
+              "x": 24,
+              "y": 540,
+              "width": 206,
+              "height": 6
+            }
+          },
+          {
+            "id": "cat-label-2",
+            "type": "Text",
+            "props": {
+              "text": "Обучение"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#1C2420",
+              "fontWeight": "600"
+            },
+            "layout": {
+              "x": 24,
+              "y": 560,
+              "width": 140,
+              "height": 16
+            }
+          },
+          {
+            "id": "cat-pct-2",
+            "type": "Text",
+            "props": {
+              "text": "55%"
+            },
+            "style": {
+              "fontSize": 12,
+              "color": "#5B6EA8",
+              "fontWeight": "700",
+              "textAlign": "right"
+            },
+            "layout": {
+              "x": 320,
+              "y": 560,
+              "width": 26,
+              "height": 16
+            }
+          },
+          {
+            "id": "cat-track-2",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#DCE6DC",
+              "borderRadius": 3
+            },
+            "layout": {
+              "x": 24,
+              "y": 580,
+              "width": 322,
+              "height": 6
+            }
+          },
+          {
+            "id": "cat-fill-2",
+            "type": "View",
+            "style": {
+              "backgroundColor": "#5B6EA8",
+              "borderRadius": 3
+            },
+            "layout": {
+              "x": 24,
+              "y": 580,
+              "width": 177,
+              "height": 6
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "state": {},
+  "revision": 1,
+  "createdAt": "2026-09-25T22:33:39.000Z",
+  "updatedAt": "2026-09-25T22:33:39.000Z"
+}

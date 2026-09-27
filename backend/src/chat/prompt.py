@@ -6,7 +6,7 @@ from src.chat.models import ChatMessage as ChatMessageRecord
 from src.chat.schemas import ChatTurnResponse
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
-from src.generation.prompt import DESIGN_RULES, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.generation.prompt import DESIGN_RULES, EXPORT_RULES, SCREEN_HEIGHT, SCREEN_WIDTH
 
 SCHEMA_NAME = "chat_turn_response"
 
@@ -45,6 +45,7 @@ def build_system_prompt(document: AppDocument) -> str:
     document_json = json.dumps(document.model_dump(mode="json", by_alias=True, exclude_none=True), ensure_ascii=False)
     return (
         f"{DESIGN_RULES}\n\n"
+        f"{EXPORT_RULES}\n\n"
         f"{RULES}\n\n"
         f"Текущий документ приложения:\n{document_json}\n\n"
         f"JSON Schema ответа `ChatTurnResponse` (схема `AppDocument` — внутри неё):\n{RESPONSE_SCHEMA_JSON}"

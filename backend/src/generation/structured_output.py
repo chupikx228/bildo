@@ -1,6 +1,6 @@
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from pydantic import BaseModel, ValidationError
 
@@ -24,6 +24,7 @@ async def generate_structured[ModelT: BaseModel](
     target_model: type[ModelT],
     max_attempts: int,
     subject: str = "документ",
+    check: Callable[[ModelT], None] | None = None,
 ) -> ModelT:
     history = list(messages)
     last_error = ""
@@ -37,7 +38,10 @@ async def generate_structured[ModelT: BaseModel](
             )
         previous_raw = raw
         try:
-            return _parse(raw, target_model, subject)
+            result = _parse(raw, target_model, subject)
+            if check is not None:
+                check(result)
+            return result
         except (ValueError, ValidationError) as error:
             last_error = _describe(error)
             logger.warning(

@@ -143,6 +143,7 @@ source_modules = [
     "src.generation.llm_client",
     "src.generation.model_catalog",
     "src.generation.prompt",
+    "src.generation.prompt_enricher",
     "src.generation.structured_output",
     "src.tasks.service",
 ]

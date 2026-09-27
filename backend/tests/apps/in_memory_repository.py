@@ -58,6 +58,10 @@ class InMemoryAppRepository:
         app.generation_error = error
         return app
 
+    async def set_enriched_prompt(self, app: App, enriched_prompt: str) -> App:
+        app.enriched_prompt = enriched_prompt
+        return app
+
     async def delete(self, app_id: UUID) -> bool:
         if app_id not in self._apps:
             return False

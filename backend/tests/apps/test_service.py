@@ -247,6 +247,25 @@ async def test_save_document_reports_the_pending_generation_before_the_stale_rev
     assert AppDocument.model_validate(app.document).name == "New app"
 
 
+async def test_record_enriched_prompt_keeps_the_raw_prompt(
+    service: AppService, repository: InMemoryAppRepository
+) -> None:
+    app_id = await service.create_from_prompt("a habit tracker", None)
+
+    await service.record_enriched_prompt(app_id, "A habit tracker for night-shift nurses")
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.enriched_prompt == "A habit tracker for night-shift nurses"
+    assert app.prompt == "a habit tracker"
+    assert AppDocument.model_validate(app.document).prompt == "a habit tracker"
+
+
+async def test_record_enriched_prompt_raises_not_found_for_unknown_id(service: AppService) -> None:
+    with pytest.raises(AppNotFound):
+        await service.record_enriched_prompt(uuid4(), "бриф")
+
+
 async def test_delete_raises_not_found_for_unknown_id(service: AppService) -> None:
     with pytest.raises(AppNotFound):
         await service.delete(uuid4())

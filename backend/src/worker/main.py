@@ -7,6 +7,7 @@ from arq.worker import Function
 from src.database import engine
 from src.generation.dependencies import build_llm_client
 from src.generation.llm_client import LlmClient
+from src.generation.prompt_enricher import ENRICHER_TIMEOUT_SECONDS
 from src.queue.arq_queue import get_redis_settings
 from src.queue.jobs import BUILD_EXPORT_ZIP_JOB, CHAT_TURN_JOB, GENERATE_APP_DOCUMENT_JOB
 from src.worker.tasks import (
@@ -19,7 +20,9 @@ from src.worker.tasks import (
 
 EXPORT_RESULT_TTL_SECONDS = 5
 GENERATION_JOB_TIMEOUT_GRACE_SECONDS = 30
-GENERATION_JOB_TIMEOUT_SECONDS = GENERATION_TIMEOUT_SECONDS + GENERATION_JOB_TIMEOUT_GRACE_SECONDS
+GENERATION_JOB_TIMEOUT_SECONDS = (
+    ENRICHER_TIMEOUT_SECONDS + GENERATION_TIMEOUT_SECONDS + GENERATION_JOB_TIMEOUT_GRACE_SECONDS
+)
 CHAT_TURN_JOB_TIMEOUT_GRACE_SECONDS = 30
 CHAT_TURN_JOB_TIMEOUT_SECONDS = CHAT_TURN_TIMEOUT_SECONDS + CHAT_TURN_JOB_TIMEOUT_GRACE_SECONDS
 

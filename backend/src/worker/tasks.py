@@ -23,6 +23,7 @@ from src.exceptions import DomainError
 from src.generation.dependencies import get_model_catalog
 from src.generation.exceptions import GenerationTimeoutError
 from src.generation.llm_client import LlmClient
+from src.generation.prompt_enricher import enrich_prompt
 from src.generation.service import generate_document
 from src.generation.structured_output import generate_structured
 from src.queue.arq_queue import ArqTaskQueue
@@ -42,6 +43,10 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
     try:
         async with async_session_factory() as session:
             service = _app_service(session, redis)
+            brief = await enrich_prompt(prompt, client=llm_client, model=settings.routerai_enricher_model)
+            if brief is not None:
+                await service.record_enriched_prompt(UUID(app_id), brief)
+                await session.commit()
             deadline = asyncio.timeout(GENERATION_TIMEOUT_SECONDS)
             try:
                 async with deadline:
@@ -51,6 +56,7 @@ async def generate_app_document(ctx: dict[Any, Any], app_id: str, prompt: str, n
                         client=llm_client,
                         model=model,
                         max_attempts=settings.routerai_max_retries,
+                        brief=brief,
                     )
             except TimeoutError as error:
                 if not deadline.expired():

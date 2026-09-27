@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import pytest
@@ -265,3 +266,57 @@ async def test_generate_structured_fails_fast_on_an_empty_object(case: Case, emp
     assert len(client.calls) == 1
     assert "пустой JSON-объект" in error.value.message
     assert case.subject in error.value.message
+
+
+def reject_first(seen: list[AppDocument]) -> Callable[[AppDocument], None]:
+    def check(document: AppDocument) -> None:
+        seen.append(document)
+        if len(seen) == 1:
+            raise ValueError("нет экрана `index`")
+
+    return check
+
+
+async def test_a_failed_check_goes_through_the_same_retry_path_as_a_validation_error() -> None:
+    first = document_answer()
+    client = FakeLlmClient([first, document_answer()])
+    seen: list[AppDocument] = []
+
+    await generate_structured(
+        MESSAGES,
+        client=client,
+        model=MODEL,
+        schema_name=DOCUMENT_SCHEMA_NAME,
+        schema=app_document_schema(),
+        target_model=AppDocument,
+        max_attempts=2,
+        check=reject_first(seen),
+    )
+
+    assert len(seen) == 2
+    retry = client.calls[1][-1]["content"]
+    assert "нет экрана `index`" in retry
+    assert client.calls[1][-2] == {"role": "assistant", "content": first}
+
+
+async def test_a_check_that_never_passes_exhausts_the_attempts() -> None:
+    def always_fails(document: AppDocument) -> None:
+        raise ValueError("нет экрана `index`")
+
+    answers: list[str | Exception] = [document_answer() for _ in range(3)]
+    client = FakeLlmClient(answers)
+
+    with pytest.raises(GenerationError) as error:
+        await generate_structured(
+            MESSAGES,
+            client=client,
+            model=MODEL,
+            schema_name=DOCUMENT_SCHEMA_NAME,
+            schema=app_document_schema(),
+            target_model=AppDocument,
+            max_attempts=3,
+            check=always_fails,
+        )
+
+    assert len(client.calls) == 3
+    assert "нет экрана `index`" in error.value.message

@@ -169,6 +169,27 @@ async def test_set_generation_status_updates_status_and_error(repository: SqlAlc
     assert failed.generation_error == "Ошибка генерации"
 
 
+async def test_set_enriched_prompt_persists_the_brief(
+    repository: SqlAlchemyAppRepository,
+    session: AsyncSession,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    document = build_document()
+    app = await repository.create(document.name, document.prompt, document, "pending", None)
+    assert app.enriched_prompt is None
+
+    await repository.set_enriched_prompt(app, "Трекер привычек для студентов в сессию")
+    await session.commit()
+
+    async with db_session_factory() as read_session:
+        fetched = await SqlAlchemyAppRepository(read_session).get(UUID(document.id))
+
+    assert fetched is not None
+    assert fetched.enriched_prompt == "Трекер привычек для студентов в сессию"
+    assert fetched.prompt == document.prompt
+    assert fetched.revision == document.revision
+
+
 async def test_delete_removes_app(repository: SqlAlchemyAppRepository, session: AsyncSession) -> None:
     document = build_document()
     app = await repository.create(document.name, document.prompt, document, "ready", None)
