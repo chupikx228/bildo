@@ -28,3 +28,4 @@ backend/.coverage
 backend/htmlcov/
 
 docker-compose.override.yml
+.claude-scratch/

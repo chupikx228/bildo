@@ -113,6 +113,12 @@ class AppService:
         app = await self._repository.update_document(app, generated)
         await self._repository.set_generation_status(app, "ready", None)
 
+    async def record_enriched_prompt(self, app_id: UUID, enriched_prompt: str) -> None:
+        app = await self._repository.get(app_id)
+        if app is None:
+            raise AppNotFound(app_id)
+        await self._repository.set_enriched_prompt(app, enriched_prompt)
+
     async def mark_generation_failed(self, app_id: UUID, error: str) -> None:
         app = await self._repository.get(app_id)
         if app is None:

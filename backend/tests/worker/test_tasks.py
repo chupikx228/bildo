@@ -17,6 +17,8 @@ from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService
 from src.config import settings
 from src.generation.exceptions import GenerationError, GenerationNotConfiguredError, GenerationTimeoutError
 from src.generation.json_schema import to_strict_json_schema
+from src.generation.prompt import build_system_prompt
+from src.generation.prompt_enricher import ENRICHER_TIMEOUT_SECONDS, enrich_prompt
 from src.queue.base import JobStatusInfo
 from src.queue.jobs import CHAT_TURN_JOB, GENERATE_APP_DOCUMENT_JOB
 from src.tasks.service import TASK_FAILURE_MESSAGE, TaskService
@@ -34,6 +36,7 @@ from tests.tasks.fake_job import FakeJobStatusReader
 MODEL = "test/model"
 INTERNAL_FAILURE_DETAIL = "connection refused to internal-host:5432"
 PROMPT = "трекер привычек и серии дней"
+BRIEF = "Трекер привычек для студентов, которые готовятся к сессии: палитра #F3F6F4, #1D3B2F, #E07A1F."
 
 
 def generated_answer() -> str:
@@ -49,8 +52,12 @@ def chat_answer(reply: str, *, with_document: bool, document_revision: int = 1) 
     return json.dumps(payload, ensure_ascii=False)
 
 
-def context(answers: list[str | Exception] | None = None) -> dict[Any, Any]:
-    return {"redis": object(), "llm_client": FakeLlmClient(answers or [generated_answer()])}
+def context(
+    answers: list[str | Exception] | None = None,
+    briefs: list[str | Exception] | None = None,
+) -> dict[Any, Any]:
+    llm_client = FakeLlmClient(answers or [generated_answer()], briefs if briefs is not None else [BRIEF])
+    return {"redis": object(), "llm_client": llm_client}
 
 
 class FakeSession:
@@ -143,7 +150,7 @@ async def test_generate_app_document_marks_app_ready(
     assert app.generation_status == "ready"
     assert app.generation_error is None
     assert len(sessions) == 1
-    assert sessions[0].commits == 1
+    assert sessions[0].commits == 2
     assert sessions[0].rollbacks == 0
 
 
@@ -209,8 +216,9 @@ async def test_generate_app_document_marks_app_failed(
     assert app is not None
     assert app.generation_status == "failed"
     assert app.generation_error == worker_tasks.GENERATION_FAILURE_MESSAGE
+    assert app.enriched_prompt == BRIEF
     assert len(sessions) == 2
-    assert sessions[0].commits == 0
+    assert sessions[0].commits == 1
     assert sessions[1].commits == 1
 
 
@@ -253,11 +261,121 @@ async def test_generate_app_document_does_not_relabel_a_timeout_raised_inside_ge
     assert app.generation_error == worker_tasks.GENERATION_FAILURE_MESSAGE
 
 
-def test_generation_job_timeout_outlives_the_generation_deadline() -> None:
+def test_generation_job_timeout_outlives_the_enricher_and_generation_deadlines() -> None:
     job = next(function for function in WorkerSettings.functions if function.name == GENERATE_APP_DOCUMENT_JOB)
 
     assert job.timeout_s is not None
-    assert job.timeout_s > worker_tasks.GENERATION_TIMEOUT_SECONDS
+    assert job.timeout_s > ENRICHER_TIMEOUT_SECONDS + worker_tasks.GENERATION_TIMEOUT_SECONDS
+
+
+async def test_generate_app_document_enriches_the_prompt_with_the_enricher_model_first(
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_pending_app(repository)
+    ctx = context()
+
+    await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert llm_client.text_models == [settings.routerai_enricher_model]
+    assert llm_client.text_calls[0][-1]["content"] == PROMPT
+
+
+async def test_generate_app_document_sends_the_brief_instead_of_the_raw_prompt(
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_pending_app(repository)
+    ctx = context()
+
+    await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    request = llm_client.calls[0][-1]["content"]
+    assert BRIEF in request
+    assert PROMPT not in request
+
+
+async def test_generate_app_document_keeps_the_raw_prompt_and_stores_the_brief(
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_pending_app(repository)
+
+    await worker_tasks.generate_app_document(context(), str(app_id), PROMPT, None, MODEL)
+
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.prompt == PROMPT
+    assert app.enriched_prompt == BRIEF
+    assert AppDocument.model_validate(app.document).prompt == PROMPT
+
+
+async def test_generate_app_document_uses_the_rules_only_prompt_when_the_enricher_returned_a_brief(
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_pending_app(repository)
+    ctx = context()
+
+    await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert llm_client.calls[0][0]["content"] == build_system_prompt(has_brief=True)
+
+
+async def test_generate_app_document_uses_the_full_design_prompt_when_the_enricher_fell_back(
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_pending_app(repository)
+    ctx = context(briefs=[GenerationError("RouterAI не ответил на запрос генерации")])
+
+    await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert llm_client.calls[0][0]["content"] == build_system_prompt(has_brief=False)
+
+
+async def test_generate_app_document_falls_back_to_the_raw_prompt_when_the_enricher_fails(
+    repository: InMemoryAppRepository,
+    sessions: list[FakeSession],
+) -> None:
+    app_id = await create_pending_app(repository)
+    ctx = context(briefs=[GenerationError("RouterAI не ответил на запрос генерации")])
+
+    await worker_tasks.generate_app_document(ctx, str(app_id), PROMPT, None, MODEL)
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert PROMPT in llm_client.calls[0][-1]["content"]
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.generation_status == "ready"
+    assert app.enriched_prompt is None
+    assert sessions[0].commits == 1
+
+
+async def test_generate_app_document_falls_back_to_the_raw_prompt_when_the_enricher_times_out(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+) -> None:
+    async def slow_enrichment(prompt: str, **kwargs: Any) -> str | None:
+        return await enrich_prompt(prompt, **kwargs, timeout_seconds=0.01)
+
+    class SlowTextClient(FakeLlmClient):
+        async def complete_text(self, messages: Any, *, model: str, max_tokens: int) -> str:
+            await asyncio.sleep(1)
+            return BRIEF
+
+    monkeypatch.setattr(worker_tasks, "enrich_prompt", slow_enrichment)
+    app_id = await create_pending_app(repository)
+    llm_client = SlowTextClient([generated_answer()])
+
+    await worker_tasks.generate_app_document(
+        {"redis": object(), "llm_client": llm_client}, str(app_id), PROMPT, None, MODEL
+    )
+
+    assert PROMPT in llm_client.calls[0][-1]["content"]
+    app = await repository.get(app_id)
+    assert app is not None
+    assert app.generation_status == "ready"
+    assert app.enriched_prompt is None
 
 
 async def test_generate_app_document_hides_details_of_a_non_domain_failure(
@@ -382,8 +500,9 @@ async def test_generate_app_document_marks_app_failed_when_model_answer_is_inval
     assert str(settings.routerai_max_retries) in app.generation_error
     assert app.generation_error.startswith("Ошибка генерации приложения:")
     assert AppDocument.model_validate(app.document).screens == []
+    assert app.enriched_prompt == BRIEF
     assert len(sessions) == 2
-    assert sessions[0].commits == 0
+    assert sessions[0].commits == 1
     assert sessions[1].commits == 1
 
 

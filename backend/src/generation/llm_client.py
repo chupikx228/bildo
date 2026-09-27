@@ -42,6 +42,14 @@ class LlmClient(Protocol):
         model: str,
     ) -> str: ...
 
+    async def complete_text(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        model: str,
+        max_tokens: int,
+    ) -> str: ...
+
     async def aclose(self) -> None: ...
 
 
@@ -59,14 +67,40 @@ class RouterAiLlmClient:
         *,
         model: str,
     ) -> str:
-        client = self._ensure_client()
         mode = _response_format_mode(model)
+        return await self._request(
+            messages,
+            model=model,
+            mode=mode,
+            response_format=_response_format(mode, schema_name, schema),
+            max_tokens=MAX_OUTPUT_TOKENS,
+        )
+
+    async def complete_text(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        model: str,
+        max_tokens: int,
+    ) -> str:
+        return await self._request(messages, model=model, mode="text", response_format=omit, max_tokens=max_tokens)
+
+    async def _request(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        model: str,
+        mode: ResponseFormatMode,
+        response_format: ResponseFormat | Omit,
+        max_tokens: int,
+    ) -> str:
+        client = self._ensure_client()
         try:
             completion = await client.chat.completions.create(
                 model=model,
                 messages=[_to_message_param(message) for message in messages],
-                response_format=_response_format(mode, schema_name, schema),
-                max_tokens=MAX_OUTPUT_TOKENS,
+                response_format=response_format,
+                max_tokens=max_tokens,
             )
         except (BadRequestError, UnprocessableEntityError) as error:
             raise _rejection(model, mode, str(error)) from error
@@ -77,7 +111,7 @@ class RouterAiLlmClient:
         if provider_error is not None:
             raise _rejection(model, mode, provider_error)
 
-        return _extract_content(completion)
+        return _extract_content(completion, max_tokens)
 
     async def aclose(self) -> None:
         if self._client is not None:
@@ -132,12 +166,12 @@ def _extract_provider_error(completion: ChatCompletion) -> str | None:
     return str(error)
 
 
-def _extract_content(completion: ChatCompletion) -> str:
+def _extract_content(completion: ChatCompletion, max_tokens: int) -> str:
     if not completion.choices:
         raise GenerationError("RouterAI вернул пустой ответ")
     choice = completion.choices[0]
     if choice.finish_reason == "length":
-        raise GenerationError(f"Ответ модели обрезан по лимиту в {MAX_OUTPUT_TOKENS} токенов")
+        raise GenerationError(f"Ответ модели обрезан по лимиту в {max_tokens} токенов")
     content = choice.message.content
     if content is None or not content.strip():
         raise GenerationError("RouterAI вернул ответ без текста")

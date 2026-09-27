@@ -235,6 +235,41 @@ async def test_answer_without_choices_becomes_a_generation_error(build_client: B
     assert "пустой ответ" in error.value.message
 
 
+async def test_text_request_has_no_response_format_and_uses_the_given_token_limit(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set(), body=completion_body("бриф приложения"))
+    client = build_client(gateway)
+
+    assert await client.complete_text(MESSAGES, model=MODEL, max_tokens=1234) == "бриф приложения"
+    await client.aclose()
+
+    assert gateway.modes == [NO_FORMAT]
+    assert gateway.payloads[0]["max_tokens"] == 1234
+    assert gateway.payloads[0]["messages"] == MESSAGES
+
+
+async def test_rejected_text_request_is_a_plain_generation_error(build_client: BuildClient) -> None:
+    client = build_client(StubGateway(rejected={NO_FORMAT}))
+
+    with pytest.raises(GenerationError) as error:
+        await client.complete_text(MESSAGES, model=MODEL, max_tokens=1234)
+    await client.aclose()
+
+    assert not isinstance(error.value, StrictSchemaUnsupportedError)
+    assert "отклонил" in error.value.message
+
+
+async def test_text_answer_cut_off_reports_the_limit_it_was_given(build_client: BuildClient) -> None:
+    body = completion_body("бриф при")
+    body["choices"][0]["finish_reason"] = "length"
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    with pytest.raises(GenerationError) as error:
+        await client.complete_text(MESSAGES, model=MODEL, max_tokens=1234)
+    await client.aclose()
+
+    assert "1234" in error.value.message
+
+
 async def test_missing_api_key_is_reported_before_any_request(monkeypatch: pytest.MonkeyPatch) -> None:
     def forbidden_openai(**kwargs: Any) -> AsyncOpenAI:
         raise AssertionError("Без ключа клиент RouterAI создаваться не должен")

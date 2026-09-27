@@ -33,6 +33,8 @@ class AppRepository(Protocol):
         error: str | None,
     ) -> App: ...
 
+    async def set_enriched_prompt(self, app: App, enriched_prompt: str) -> App: ...
+
     async def delete(self, app_id: UUID) -> bool: ...
 
 
@@ -85,6 +87,11 @@ class SqlAlchemyAppRepository:
     ) -> App:
         app.generation_status = status
         app.generation_error = error
+        await self._flush(app.id)
+        return app
+
+    async def set_enriched_prompt(self, app: App, enriched_prompt: str) -> App:
+        app.enriched_prompt = enriched_prompt
         await self._flush(app.id)
         return app
 

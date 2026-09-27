@@ -6,7 +6,8 @@ from pydantic import ValidationError
 from src.apps.schemas import AppDocument
 from src.generation.exceptions import GenerationError
 from src.generation.json_schema import to_strict_json_schema
-from src.generation.service import generate_document
+from src.generation.prompt import build_system_prompt
+from src.generation.service import check_navigation, generate_document
 from tests.generation.fake_llm_client import FakeLlmClient
 from tests.generation.template_fixtures import build_template_document
 
@@ -158,3 +159,104 @@ async def test_generate_document_never_falls_back_to_a_template() -> None:
         await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=1)
 
     assert "RouterAI" in error.value.message
+
+
+async def test_generate_document_asks_for_the_brief_instead_of_the_prompt() -> None:
+    brief = "Трекер привычек для студентов в сессию, палитра #F3F6F4 и #1D3B2F"
+    client = FakeLlmClient([valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=1, brief=brief)
+
+    request = client.calls[0][-1]["content"]
+    assert brief in request
+    assert PROMPT not in request
+
+
+async def test_generate_document_keeps_the_raw_prompt_on_the_document_when_given_a_brief() -> None:
+    client = FakeLlmClient([valid_answer()])
+
+    document = await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=1, brief="бриф")
+
+    assert document.prompt == PROMPT
+
+
+def answer_with_routes_named_by_meaning() -> str:
+    document = build_template_document(PROMPT, "Трекер привычек")
+    screens = [
+        screen.model_copy(update={"id": "today", "route": "today"}) if screen.route == "index" else screen
+        for screen in document.screens
+    ]
+    roots = ["today" if root == "index" else root for root in document.navigation.roots]
+    navigation = document.navigation.model_copy(update={"roots": roots})
+    renamed = document.model_copy(update={"screens": screens, "navigation": navigation})
+    return json.dumps(renamed.model_dump(mode="json", by_alias=True), ensure_ascii=False)
+
+
+async def test_generate_document_retries_a_brief_that_named_the_start_screen_by_meaning() -> None:
+    client = FakeLlmClient([answer_with_routes_named_by_meaning(), valid_answer()])
+
+    document = await generate_document(
+        PROMPT,
+        None,
+        client=client,
+        model=MODEL,
+        max_attempts=2,
+        brief="Трекер привычек. Экраны: «Сегодня» — главный, «Прогресс» — статистика.",
+    )
+
+    assert "index" in [screen.route for screen in document.screens]
+    assert len(client.calls) == 2
+    retry = client.calls[1][-1]["content"]
+    assert "`index`" in retry
+    assert "today" in retry
+
+
+async def test_generate_document_fails_when_the_start_screen_never_becomes_index() -> None:
+    answers: list[str | Exception] = [answer_with_routes_named_by_meaning() for _ in range(2)]
+    client = FakeLlmClient(answers)
+
+    with pytest.raises(GenerationError) as error:
+        await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=2)
+
+    assert "`index`" in error.value.message
+
+
+def test_check_navigation_accepts_a_document_with_an_index_route() -> None:
+    check_navigation(build_template_document(PROMPT, None))
+
+
+def test_check_navigation_rejects_empty_roots() -> None:
+    document = build_template_document(PROMPT, None)
+    document = document.model_copy(update={"navigation": document.navigation.model_copy(update={"roots": []})})
+
+    with pytest.raises(ValueError) as error:
+        check_navigation(document)
+
+    assert "`navigation.roots` пуст" in str(error.value)
+
+
+def test_check_navigation_rejects_roots_pointing_at_missing_routes() -> None:
+    document = build_template_document(PROMPT, None)
+    roots = [*document.navigation.roots, "settings"]
+    document = document.model_copy(update={"navigation": document.navigation.model_copy(update={"roots": roots})})
+
+    with pytest.raises(ValueError) as error:
+        check_navigation(document)
+
+    assert "несуществующие `route`: settings" in str(error.value)
+
+
+async def test_generate_document_with_a_brief_sends_the_rules_only_prompt() -> None:
+    client = FakeLlmClient([valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=1, brief="бриф")
+
+    assert client.calls[0][0]["content"] == build_system_prompt(has_brief=True)
+
+
+async def test_generate_document_without_a_brief_sends_the_full_design_prompt() -> None:
+    client = FakeLlmClient([valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=1)
+
+    assert client.calls[0][0]["content"] == build_system_prompt(has_brief=False)

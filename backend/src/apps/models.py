@@ -20,6 +20,7 @@ class App(Base):
     name: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
     prompt: Mapped[str | None] = mapped_column(nullable=True)
+    enriched_prompt: Mapped[str | None] = mapped_column(nullable=True)
     document: Mapped[dict[str, object]] = mapped_column(JSONB)
     model: Mapped[str | None] = mapped_column(String(200), nullable=True)
     revision: Mapped[int] = mapped_column(server_default="1")
