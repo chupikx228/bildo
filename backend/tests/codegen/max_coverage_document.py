@@ -22,11 +22,12 @@ THEME = AppThemeTokens(
     color_primary="#5C6CF5",
     color_primary_fg="#FFFFFF",
     radius_base="14",
-    font_body="Inter",
-    font_heading="Syne",
+    font_body="System",
+    font_heading="System",
 )
 
 # TODO(BIL-92): add an Icon node here once the TS codegen renders Icon, so parity covers it too.
+# TODO(BIL-94): switch fontBody/fontHeading to Google Fonts once the TS codegen loads them, so parity covers it too.
 TRICKY_TEXT = "Кавычки 'внутри', слеш \\ и перенос \n хвост"
 
 

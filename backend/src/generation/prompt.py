@@ -1,6 +1,8 @@
 import json
+from typing import get_args
 
-from src.apps.schemas import AppDocument
+from src.apps.schemas import AppDocument, AppFontFamily
+from src.codegen.service import HEADING_MIN_FONT_SIZE, SYSTEM_FONT
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
 
@@ -34,10 +36,14 @@ NODE_TYPE_RULES = """- Девять типов узлов: View, Text, Button, I
 - `Icon` — иконка из фиксированного набора Lucide: имя задаётся только в `props.icon` и только значением из перечня в JSON Schema, других полей для выбора иконки нет. Иконка — отдельный узел, как `Text`: для пары «иконка + подпись» клади `Icon` и `Text` рядом внутри одного `View`.
 - Не изображай иконки эмодзи, символами Юникода или буквами в `Text` (❤️, ★, ✓, →, ☰, «+» вместо иконки и т.п.) и не рисуй их из `View` — для любой иконки используй узел `Icon`."""
 
-EXPORT_RULES = """- У каждого цветового токена темы — ровно его роль, других ролей у токенов нет: `colorBg` — фон экрана, `colorSurface` — фон поверхности/карточки и заливка полей ввода, `colorBorder` — обводка полей ввода и разделители, `colorText` — основной текст, `colorTextMuted` — вторичный текст и плейсхолдеры, `colorPrimary` — акцент, `colorPrimaryFg` — текст на залитых акцентом кнопках (обязан контрастировать с `colorPrimary`).
+FONT_FAMILIES = ", ".join(f"`{family}`" for family in get_args(AppFontFamily) if family != SYSTEM_FONT)
+
+EXPORT_RULES = f"""- У каждого цветового токена темы — ровно его роль, других ролей у токенов нет: `colorBg` — фон экрана, `colorSurface` — фон поверхности/карточки и заливка полей ввода, `colorBorder` — обводка полей ввода и разделители, `colorText` — основной текст, `colorTextMuted` — вторичный текст и плейсхолдеры, `colorPrimary` — акцент, `colorPrimaryFg` — текст на залитых акцентом кнопках (обязан контрастировать с `colorPrimary`).
 - На `Button` и `TextInput` `borderRadius` не задавай вовсе, если он не должен отличаться от `radiusBase` — экспорт уже применяет `radiusBase` к ним по умолчанию.
 - `shadow` в экспорте работает только как переключатель на `Button` (любое непустое значение даёт приподнятый вид, сам цвет и размытие не учитываются) — на `TextInput` и на остальных типах узлов `shadow` в экспорт не попадает вовсе.
-- `Icon` в экспорте: размер иконки — меньшая сторона `layout` (иконка квадратная и центрируется в прямоугольнике `layout`), цвет — `style.color` (без него — `colorText`). Из остальных полей `style` у `Icon` работает только `opacity`: фон, рамка, радиус, отступы, шрифт, тень и анимация игнорируются, `onPress` тоже не работает. Иконку в цветном кружке делай как `Icon` внутри `View` с фоном и радиусом."""
+- `Icon` в экспорте: размер иконки — меньшая сторона `layout` (иконка квадратная и центрируется в прямоугольнике `layout`), цвет — `style.color` (без него — `colorText`). Из остальных полей `style` у `Icon` работает только `opacity`: фон, рамка, радиус, отступы, шрифт, тень и анимация игнорируются, `onPress` тоже не работает. Иконку в цветном кружке делай как `Icon` внутри `View` с фоном и радиусом.
+- `fontBody` и `fontHeading` — только значения из перечня в JSON Schema: `{SYSTEM_FONT}` (системный шрифт платформы) или одно из семейств Google Fonts: {FONT_FAMILIES}. Других семейств, начертаний в имени («Inter Bold», «Roboto-Bold»), списков через запятую и другого регистра не бывает. Шрифт выбирай под характер приложения, семейства различаются стилем: гротески, округлые, широкий акцидентный `Unbounded`, антиква `Lora`/`PT Serif`, моноширинный `JetBrains Mono`.
+- `fontHeading` получают узлы `Text` с `fontSize` от {HEADING_MIN_FONT_SIZE} и больше, `fontBody` — остальные `Text`, подписи `Button` и `TextInput`; узел, которому нужен шрифт заголовка, делай крупным. У семейств Google Fonts два начертания: `fontWeight` `400`/`500` рисуется обычным, `600`/`700` — жирным."""
 
 DESIGN_SELF_CHECK = """Перед тем как вернуть JSON, мысленно проверь: если бы я сгенерировал экран для другого запроса на эту же тему, получился бы тот же layout и та же палитра? Если да — измени."""
 
