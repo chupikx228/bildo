@@ -12,6 +12,7 @@ from src.apps.schemas import (
     AppNode,
     AppNodeStyle,
     AppScreen,
+    AppThemeTokens,
     NavigateAction,
     OpenUrlAction,
     SetVarAction,
@@ -101,7 +102,58 @@ ICON_PASSTHROUGH_KEYS = frozenset({"width", "height", "opacity"})
 ICON_DEFAULT_SIZE = 24
 
 
-def _style_to_rn(node: AppNode, is_root: bool) -> str:
+@dataclass(frozen=True)
+class GoogleFont:
+    package: str
+    version: str
+    export_prefix: str
+
+
+SYSTEM_FONT = "System"
+GOOGLE_FONTS: dict[str, GoogleFont] = {
+    "Inter": GoogleFont("@expo-google-fonts/inter", "~0.4.2", "Inter"),
+    "Manrope": GoogleFont("@expo-google-fonts/manrope", "~0.4.2", "Manrope"),
+    "Montserrat": GoogleFont("@expo-google-fonts/montserrat", "~0.4.2", "Montserrat"),
+    "Rubik": GoogleFont("@expo-google-fonts/rubik", "~0.4.2", "Rubik"),
+    "Nunito": GoogleFont("@expo-google-fonts/nunito", "~0.4.2", "Nunito"),
+    "Comfortaa": GoogleFont("@expo-google-fonts/comfortaa", "~0.4.2", "Comfortaa"),
+    "Unbounded": GoogleFont("@expo-google-fonts/unbounded", "~0.4.1", "Unbounded"),
+    "Lora": GoogleFont("@expo-google-fonts/lora", "~0.4.2", "Lora"),
+    "PT Serif": GoogleFont("@expo-google-fonts/pt-serif", "~0.4.1", "PTSerif"),
+    "JetBrains Mono": GoogleFont("@expo-google-fonts/jetbrains-mono", "~0.4.1", "JetBrainsMono"),
+}
+FONT_WEIGHT_FILES = ("400Regular", "700Bold")
+BOLD_FONT_WEIGHTS = frozenset({"600", "700"})
+HEADING_MIN_FONT_SIZE = 20
+BUTTON_DEFAULT_FONT_WEIGHT = "600"
+
+
+def _font_family(family: str, font_weight: str | None) -> str | None:
+    if family == SYSTEM_FONT:
+        return None
+    weight_file = FONT_WEIGHT_FILES[1] if font_weight in BOLD_FONT_WEIGHTS else FONT_WEIGHT_FILES[0]
+    return f"{GOOGLE_FONTS[family].export_prefix}_{weight_file}"
+
+
+def _text_font_family(node: AppNode, theme: AppThemeTokens) -> str | None:
+    style = node.style if node.style is not None else AppNodeStyle()
+    is_heading = style.font_size is not None and style.font_size >= HEADING_MIN_FONT_SIZE
+    return _font_family(theme.font_heading if is_heading else theme.font_body, style.font_weight)
+
+
+def _font_entries(font_family: str) -> list[tuple[str, str]]:
+    return [("fontFamily", _literal(font_family)), ("fontWeight", "'normal'")]
+
+
+def _theme_font_families(theme: AppThemeTokens) -> list[str]:
+    families: list[str] = []
+    for family in (theme.font_body, theme.font_heading):
+        if family != SYSTEM_FONT and family not in families:
+            families.append(family)
+    return families
+
+
+def _style_to_rn(node: AppNode, is_root: bool, font_family: str | None = None) -> str:
     parts: list[str] = []
     if is_root:
         parts.append("  flex: 1")
@@ -117,10 +169,14 @@ def _style_to_rn(node: AppNode, is_root: bool) -> str:
         for key, value in node.style.model_dump(by_alias=True, exclude_none=True).items():
             if not is_root and node.layout is not None and key in {"width", "height"}:
                 continue
+            if font_family is not None and key == "fontWeight":
+                continue
             if isinstance(value, str):
                 parts.append(f"  {key}: '{_esc(value)}'")
             else:
                 parts.append(f"  {key}: {_number(value)}")
+    if font_family is not None:
+        parts.extend(f"  {key}: {value}" for key, value in _font_entries(font_family))
     if not parts:
         return "{}"
     return "{\n" + ",\n".join(parts) + "\n}"
@@ -201,7 +257,7 @@ def _jsx_element(pad: str, tag: str, attributes: list[str], children: str | None
     return "\n".join([*lines, pad + ">", pad + "  " + children, pad + "</" + tag + ">"])
 
 
-def _render_button(node: AppNode, pad: str, is_root: bool) -> str:
+def _render_button(node: AppNode, pad: str, is_root: bool, theme: AppThemeTokens) -> str:
     props = node.props
     style = node.style if node.style is not None else AppNodeStyle()
     handler = _actions_to_handler(props.on_press if props else None, props.href if props else None)
@@ -240,7 +296,12 @@ def _render_button(node: AppNode, pad: str, is_root: bool) -> str:
     label_entries = [("marginHorizontal", _number(label_margin)), ("marginVertical", "0")]
     if style.font_size is not None:
         label_entries.append(("fontSize", _number(style.font_size)))
-    label_entries.append(("fontWeight", _literal(style.font_weight or "600")))
+    font_weight = style.font_weight or BUTTON_DEFAULT_FONT_WEIGHT
+    font_family = _font_family(theme.font_body, font_weight)
+    if font_family is not None:
+        label_entries.extend(_font_entries(font_family))
+    else:
+        label_entries.append(("fontWeight", _literal(font_weight)))
     if style.letter_spacing is not None:
         label_entries.append(("letterSpacing", _number(style.letter_spacing)))
     if style.line_height is not None:
@@ -271,13 +332,15 @@ def _render_button(node: AppNode, pad: str, is_root: bool) -> str:
     return _jsx_element(pad, "Button", attributes, label)
 
 
-def _render_text_input(node: AppNode, pad: str, is_root: bool) -> str:
+def _render_text_input(node: AppNode, pad: str, is_root: bool, theme: AppThemeTokens) -> str:
     props = node.props
     style = node.style if node.style is not None else AppNodeStyle()
     bind = props.value_bind if props else None
     placeholder = "{" + _json_compact(props.placeholder) + "}" if props and props.placeholder else '""'
 
-    style_entries = _position_entries(node, is_root) + _passthrough_entries(node, is_root, PAPER_TEXT_INPUT_KEYS)
+    font_family = _font_family(theme.font_body, style.font_weight)
+    text_input_keys = PAPER_TEXT_INPUT_KEYS - {"fontWeight"} if font_family is not None else PAPER_TEXT_INPUT_KEYS
+    style_entries = _position_entries(node, is_root) + _passthrough_entries(node, is_root, text_input_keys)
     style_entries.append(
         ("fontSize", _number(style.font_size if style.font_size is not None else TEXT_INPUT_DEFAULT_FONT_SIZE))
     )
@@ -298,6 +361,8 @@ def _render_text_input(node: AppNode, pad: str, is_root: bool) -> str:
     content_entries = [("paddingHorizontal", _number(padding))]
     if style.letter_spacing is not None:
         content_entries.append(("letterSpacing", _number(style.letter_spacing)))
+    if font_family is not None:
+        content_entries.extend(_font_entries(font_family))
 
     outline_entries = [
         ("borderRadius", _number(style.border_radius) if style.border_radius is not None else "paperTheme.roundness")
@@ -341,11 +406,11 @@ def _render_icon(node: AppNode, pad: str, is_root: bool) -> str:
     return pad + "<View style={" + _object_literal(style_entries) + "}>\n" + icon_element + "\n" + pad + "</View>"
 
 
-def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
+def _render_node_tsx(node: AppNode, indent: int, is_root: bool, theme: AppThemeTokens) -> str:
     pad = " " * indent
     if node.hidden:
         return f"{pad}{{null}}"
-    style = _style_to_rn(node, is_root)
+    style = _style_to_rn(node, is_root, _text_font_family(node, theme) if node.type == "Text" else None)
     props = node.props
 
     if node.type == "Text":
@@ -356,7 +421,7 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
         return pad + "<Text style={" + style + "}>{" + _json_compact(text) + "}</Text>"
 
     if node.type == "Button":
-        return _render_button(node, pad, is_root)
+        return _render_button(node, pad, is_root, theme)
 
     if node.type == "Image":
         source = props.source if props else None
@@ -371,7 +436,7 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
         return pad + "<Image source={{ uri: '" + _esc(source) + "' }} style={" + style + "} />"
 
     if node.type == "TextInput":
-        return _render_text_input(node, pad, is_root)
+        return _render_text_input(node, pad, is_root, theme)
 
     if node.type == "Spacer":
         return pad + "<View style={" + style + "} />"
@@ -410,7 +475,7 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
 
     if node.type in {"ScrollView", "View"}:
         tag = "ScrollView" if node.type == "ScrollView" else "View"
-        kids = "\n".join(_render_node_tsx(child, indent + 2, False) for child in node.children)
+        kids = "\n".join(_render_node_tsx(child, indent + 2, False, theme) for child in node.children)
         scroll_extra = " contentContainerStyle={{ flexGrow: 1 }}" if node.type == "ScrollView" else ""
         return pad + "<" + tag + " style={" + style + "}" + scroll_extra + ">\n" + kids + "\n" + pad + "</" + tag + ">"
 
@@ -423,7 +488,7 @@ def _route_to_component(route: str) -> str:
     return "".join(part[:1].upper() + part[1:] for part in re.split(r"[-_]", route)) + "Screen"
 
 
-def _screen_file(screen: AppScreen) -> str:
+def _screen_file(screen: AppScreen, theme: AppThemeTokens) -> str:
     needs = _ScreenNeeds()
     _collect_needs(screen.root, needs)
     imports = {"View"}
@@ -435,7 +500,7 @@ def _screen_file(screen: AppScreen) -> str:
     if needs.linking:
         imports.add("Linking")
     unique = sorted(imports)
-    body = _render_node_tsx(screen.root, 4, True)
+    body = _render_node_tsx(screen.root, 4, True, theme)
 
     hooks: list[str] = []
     if needs.router:
@@ -510,6 +575,8 @@ def _package_json(document: AppDocument) -> str:
     if any(_uses_icons(screen.root) for screen in document.screens):
         dependencies["lucide-react-native"] = "~1.48.0"
         dependencies["react-native-svg"] = "15.8.0"
+    for family in _theme_font_families(document.theme):
+        dependencies[GOOGLE_FONTS[family].package] = GOOGLE_FONTS[family].version
     return _json_pretty(
         {
             "name": slugify(document.name),
@@ -588,7 +655,40 @@ def _state_file(document: AppDocument) -> str:
     )
 
 
-def _tabs_layout(roots: list[AppScreen]) -> str:
+def _font_exports(families: list[str]) -> list[str]:
+    return [
+        f"{GOOGLE_FONTS[family].export_prefix}_{weight_file}"
+        for family in families
+        for weight_file in FONT_WEIGHT_FILES
+    ]
+
+
+def _font_imports(families: list[str]) -> str:
+    if not families:
+        return ""
+    lines = ["import { useFonts } from 'expo-font';"]
+    for family in families:
+        font = GOOGLE_FONTS[family]
+        lines.extend(
+            f"import {{ {font.export_prefix}_{weight_file} }} from '{font.package}/{weight_file}';"
+            for weight_file in FONT_WEIGHT_FILES
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _font_gate(families: list[str]) -> str:
+    if not families:
+        return ""
+    names = "".join(f"    {name},\n" for name in _font_exports(families))
+    return (
+        "  const [fontsLoaded, fontError] = useFonts({\n"
+        + names
+        + "  });\n"
+        + "  if (!fontsLoaded && !fontError) return null;\n"
+    )
+
+
+def _tabs_layout(roots: list[AppScreen], families: list[str]) -> str:
     screens = "\n".join(
         '              <Tabs.Screen name="'
         + ("index" if screen.route == "index" else screen.route)
@@ -604,9 +704,9 @@ def _tabs_layout(roots: list[AppScreen]) -> str:
         "import { SafeAreaProvider } from 'react-native-safe-area-context';\n"
         "import { AppStateProvider } from './state';\n"
         "import { paperTheme, theme } from '../theme';\n"
-        "\n"
+        f"{_font_imports(families)}\n"
         "export default function Layout() {\n"
-        "  return (\n"
+        f"{_font_gate(families)}  return (\n"
         "    <GestureHandlerRootView style={{ flex: 1 }}>\n"
         "      <SafeAreaProvider>\n"
         "        <PaperProvider theme={paperTheme}>\n"
@@ -632,7 +732,7 @@ def _tabs_layout(roots: list[AppScreen]) -> str:
     )
 
 
-def _stack_layout(screens_list: list[AppScreen]) -> str:
+def _stack_layout(screens_list: list[AppScreen], families: list[str]) -> str:
     screens = "\n".join(
         '              <Stack.Screen name="'
         + ("index" if screen.route == "index" else screen.route)
@@ -648,9 +748,9 @@ def _stack_layout(screens_list: list[AppScreen]) -> str:
         "import { SafeAreaProvider } from 'react-native-safe-area-context';\n"
         "import { AppStateProvider } from './state';\n"
         "import { paperTheme, theme } from '../theme';\n"
-        "\n"
+        f"{_font_imports(families)}\n"
         "export default function Layout() {\n"
-        "  return (\n"
+        f"{_font_gate(families)}  return (\n"
         "    <GestureHandlerRootView style={{ flex: 1 }}>\n"
         "      <SafeAreaProvider>\n"
         "        <PaperProvider theme={paperTheme}>\n"
@@ -818,17 +918,18 @@ def generate_files(document: AppDocument) -> ExpoFileMap:
     files["theme.ts"] = _theme_file(document)
     files["app/state.tsx"] = _state_file(document)
 
+    families = _theme_font_families(document.theme)
     screens_by_id = {screen.id: screen for screen in document.screens}
     roots = [screens_by_id[root_id] for root_id in document.navigation.roots if root_id in screens_by_id]
 
     if document.navigation.type == "tabs":
-        files["app/_layout.tsx"] = _tabs_layout(roots)
+        files["app/_layout.tsx"] = _tabs_layout(roots, families)
     else:
-        files["app/_layout.tsx"] = _stack_layout(document.screens)
+        files["app/_layout.tsx"] = _stack_layout(document.screens, families)
 
     for screen in document.screens:
         file_name = "app/index.tsx" if screen.route == "index" else f"app/{screen.route}.tsx"
-        files[file_name] = _screen_file(screen)
+        files[file_name] = _screen_file(screen, document.theme)
 
     files["README.md"] = _readme(document)
 

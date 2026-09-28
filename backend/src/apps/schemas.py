@@ -135,6 +135,20 @@ AppIconName = Literal[
     "briefcase",
 ]
 
+AppFontFamily = Literal[
+    "System",
+    "Inter",
+    "Manrope",
+    "Montserrat",
+    "Rubik",
+    "Nunito",
+    "Comfortaa",
+    "Unbounded",
+    "Lora",
+    "PT Serif",
+    "JetBrains Mono",
+]
+
 AppNodeAnimation = Literal["float", "pulse", "breathe", "shimmer", "rise", "drift"]
 
 AppStateValue = str | int | bool
@@ -149,8 +163,8 @@ class AppThemeTokens(CamelModel):
     color_primary: str
     color_primary_fg: str
     radius_base: str
-    font_body: str
-    font_heading: str
+    font_body: AppFontFamily
+    font_heading: AppFontFamily
 
 
 class AppNodeLayout(OmitNoneModel):

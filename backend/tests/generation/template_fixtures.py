@@ -101,8 +101,8 @@ def _theme(bg: str, surface: str, border: str, text: str, muted: str, primary: s
         color_primary=primary,
         color_primary_fg=primary_fg,
         radius_base="14",
-        font_body="Inter",
-        font_heading="Inter",
+        font_body="System",
+        font_heading="System",
     )
 
 
