@@ -19,7 +19,7 @@
 
 Узел (`AppNode`) — элемент на экране: `type`, `props`, `style`, `layout`, `children`, флаги `hidden`/`locked`.
 
-Восемь типов узлов: `View` (контейнер), `Text`, `Button`, `Image`, `TextInput`, `ScrollView`, `FlatList`, `Spacer`.
+Девять типов узлов: `View` (контейнер), `Text`, `Button`, `Image`, `TextInput`, `ScrollView`, `FlatList`, `Spacer`, `Icon` (иконка Lucide из курируемого списка, имя в `props.icon`; BIL-87 — бэкенд, BIL-92 — фронт).
 
 Позиционирование абсолютное: `x`, `y`, `width`, `height`, опционально `zIndex`. Логическая сцена экрана — **370 × 640** точек, всё внутри рамки телефона считается в этих координатах.
 

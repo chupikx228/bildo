@@ -97,6 +97,8 @@ TEXT_INPUT_DEFAULT_PADDING = 10
 TEXT_INPUT_DEFAULT_FONT_SIZE = 14
 BUTTON_LINE_HEIGHT_RATIO = 1.4
 TEXT_ALIGN_TO_JUSTIFY = {"left": "flex-start", "center": "center", "right": "flex-end"}
+ICON_PASSTHROUGH_KEYS = frozenset({"width", "height", "opacity"})
+ICON_DEFAULT_SIZE = 24
 
 
 def _style_to_rn(node: AppNode, is_root: bool) -> str:
@@ -169,9 +171,17 @@ def _collect_needs(node: AppNode, needs: _ScreenNeeds) -> None:
         _collect_needs(child, needs)
 
 
-def _collect_imports(node: AppNode, names: set[str], paper_names: set[str]) -> None:
+def _icon_component(icon: str) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in icon.split("-")) + "Icon"
+
+
+def _collect_imports(node: AppNode, names: set[str], paper_names: set[str], icon_names: set[str]) -> None:
     if node.type in {"Button", "TextInput"}:
         paper_names.add(node.type)
+    elif node.type == "Icon":
+        names.add("View")
+        if node.props is not None and node.props.icon is not None:
+            icon_names.add(_icon_component(node.props.icon))
     elif node.type == "Spacer":
         names.add("View")
     elif node.type == "Image":
@@ -181,7 +191,7 @@ def _collect_imports(node: AppNode, names: set[str], paper_names: set[str]) -> N
     else:
         names.add(node.type)
     for child in node.children:
-        _collect_imports(child, names, paper_names)
+        _collect_imports(child, names, paper_names, icon_names)
 
 
 def _jsx_element(pad: str, tag: str, attributes: list[str], children: str | None) -> str:
@@ -311,6 +321,26 @@ def _render_text_input(node: AppNode, pad: str, is_root: bool) -> str:
     return _jsx_element(pad, "TextInput", attributes, None)
 
 
+def _render_icon(node: AppNode, pad: str, is_root: bool) -> str:
+    style_entries = [
+        *_position_entries(node, is_root),
+        ("alignItems", "'center'"),
+        ("justifyContent", "'center'"),
+        *_passthrough_entries(node, is_root, ICON_PASSTHROUGH_KEYS),
+    ]
+    icon = node.props.icon if node.props is not None else None
+    if icon is None:
+        return pad + "<View style={" + _object_literal(style_entries) + "} />"
+    size = min(node.layout.width, node.layout.height) if not is_root and node.layout is not None else ICON_DEFAULT_SIZE
+    color = node.style.color if node.style is not None else None
+    attributes = [
+        "size={" + _number(size) + "}",
+        "color={" + (_literal(color) if color is not None else "theme.colorText") + "}",
+    ]
+    icon_element = _jsx_element(pad + "  ", _icon_component(icon), attributes, None)
+    return pad + "<View style={" + _object_literal(style_entries) + "}>\n" + icon_element + "\n" + pad + "</View>"
+
+
 def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
     pad = " " * indent
     if node.hidden:
@@ -345,6 +375,9 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool) -> str:
 
     if node.type == "Spacer":
         return pad + "<View style={" + style + "} />"
+
+    if node.type == "Icon":
+        return _render_icon(node, pad, is_root)
 
     if node.type == "FlatList":
         data = _json_compact(props.data if props and props.data is not None else ["Item"])
@@ -395,7 +428,8 @@ def _screen_file(screen: AppScreen) -> str:
     _collect_needs(screen.root, needs)
     imports = {"View"}
     paper_imports: set[str] = set()
-    _collect_imports(screen.root, imports, paper_imports)
+    icon_imports: set[str] = set()
+    _collect_imports(screen.root, imports, paper_imports, icon_imports)
     if needs.alert:
         imports.add("Alert")
     if needs.linking:
@@ -412,6 +446,9 @@ def _screen_file(screen: AppScreen) -> str:
     paper_import = (
         "import { " + ", ".join(sorted(paper_imports)) + " } from 'react-native-paper';\n" if paper_imports else ""
     )
+    icon_import = (
+        "import { " + ", ".join(sorted(icon_imports)) + " } from 'lucide-react-native';\n" if icon_imports else ""
+    )
     router_import = "import { useRouter } from 'expo-router';\n" if needs.router else ""
     state_import = "import { useAppState } from './state';\n" if needs.state else ""
     hooks_block = "\n".join(hooks) + "\n" if hooks else ""
@@ -423,6 +460,7 @@ def _screen_file(screen: AppScreen) -> str:
         + ", ".join(unique)
         + " } from 'react-native';\n"
         + paper_import
+        + icon_import
         + "import { SafeAreaView } from 'react-native-safe-area-context';\n"
         + "import { StatusBar } from 'expo-status-bar';\n"
         + router_import
@@ -444,7 +482,34 @@ def _screen_file(screen: AppScreen) -> str:
     )
 
 
+def _uses_icons(node: AppNode) -> bool:
+    if node.type == "Icon" and node.props is not None and node.props.icon is not None:
+        return True
+    return any(_uses_icons(child) for child in node.children)
+
+
 def _package_json(document: AppDocument) -> str:
+    dependencies = {
+        "expo": "~52.0.46",
+        "expo-asset": "~11.0.5",
+        "expo-router": "~4.0.20",
+        "expo-status-bar": "~2.0.1",
+        "expo-linking": "~7.0.5",
+        "expo-constants": "~17.0.8",
+        "react": "18.3.1",
+        "react-native": "0.76.9",
+        "react-native-safe-area-context": "4.12.0",
+        "react-native-screens": "~4.4.0",
+        "react-native-gesture-handler": "~2.20.2",
+        "react-native-paper": "~5.15.3",
+        "react-native-web": "~0.19.13",
+        "@expo/vector-icons": "~14.0.4",
+        "expo-font": "~13.0.4",
+        "query-string": "^7.1.3",
+    }
+    if any(_uses_icons(screen.root) for screen in document.screens):
+        dependencies["lucide-react-native"] = "~1.48.0"
+        dependencies["react-native-svg"] = "15.8.0"
     return _json_pretty(
         {
             "name": slugify(document.name),
@@ -456,24 +521,7 @@ def _package_json(document: AppDocument) -> str:
                 "ios": "expo start --ios",
                 "web": "expo start --web",
             },
-            "dependencies": {
-                "expo": "~52.0.46",
-                "expo-asset": "~11.0.5",
-                "expo-router": "~4.0.20",
-                "expo-status-bar": "~2.0.1",
-                "expo-linking": "~7.0.5",
-                "expo-constants": "~17.0.8",
-                "react": "18.3.1",
-                "react-native": "0.76.9",
-                "react-native-safe-area-context": "4.12.0",
-                "react-native-screens": "~4.4.0",
-                "react-native-gesture-handler": "~2.20.2",
-                "react-native-paper": "~5.15.3",
-                "react-native-web": "~0.19.13",
-                "@expo/vector-icons": "~14.0.4",
-                "expo-font": "~13.0.4",
-                "query-string": "^7.1.3",
-            },
+            "dependencies": dependencies,
             "devDependencies": {
                 "@babel/core": "^7.25.0",
                 "babel-preset-expo": "~12.0.0",
