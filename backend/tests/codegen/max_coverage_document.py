@@ -26,6 +26,7 @@ THEME = AppThemeTokens(
     font_heading="Syne",
 )
 
+# TODO(BIL-92): add an Icon node here once the TS codegen renders Icon, so parity covers it too.
 TRICKY_TEXT = "Кавычки 'внутри', слеш \\ и перенос \n хвост"
 
 

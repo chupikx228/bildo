@@ -6,7 +6,7 @@ from src.chat.models import ChatMessage as ChatMessageRecord
 from src.chat.schemas import ChatTurnResponse
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
-from src.generation.prompt import DESIGN_RULES, EXPORT_RULES, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.generation.prompt import DESIGN_RULES, EXPORT_RULES, NODE_TYPE_RULES, SCREEN_HEIGHT, SCREEN_WIDTH
 
 SCHEMA_NAME = "chat_turn_response"
 
@@ -27,7 +27,7 @@ RULES = f"""Ты ассистент редактора мобильных при
   что просит пользователь, сохранив всё остальное как было.
 - Не меняй `id`, `createdAt` документа и не трогай `revision` — сервер их всё равно перезапишет.
 - Сцена экрана — {SCREEN_WIDTH} x {SCREEN_HEIGHT} точек, позиционирование абсолютное (`layout.x/y/width/height`).
-- Восемь типов узлов: View, Text, Button, Image, TextInput, ScrollView, FlatList, Spacer.
+{NODE_TYPE_RULES}
 - `navigation.roots` и действия `navigate` ссылаются только на существующие `route` экранов.
 - `textBind`, `valueBind` и действие `setVar` ссылаются только на переменные, объявленные в `state`.
 - Сохраняй дизайн-направление, которое уже сложилось в документе: палитру темы, layout-архетип экранов и их плотность.

@@ -983,7 +983,7 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 - **`npm install` не нужен.** И обёртка, и `codegen.ts` тянут из `@bildo/api` только типы (`import type`), а они стираются вместе с остальной типовой разметкой — в рантайме алиас `@bildo/api` не резолвится. Поэтому в коде обёртки и генератора не должно появиться рантайм-импорта из `@bildo/api` (или любого другого пакета workspace) — тест сразу упадёт на резолве модуля. По той же причине в них нельзя использовать нестираемый TS-синтаксис (`enum`, `namespace`, параметры-свойства конструктора).
 - **Путь к скрипту вычисляется от расположения теста** (`Path(__file__).resolve().parents[3]` — корень репозитория, где рядом лежат `backend/` и `frontend/`), абсолютные пути конкретной машины не хардкодятся.
 - **На вход node уходит ровно то представление, которое отдаёт API**: `document.model_dump(mode="json", by_alias=True)`, то есть camelCase и без незаданных опциональных полей (`OmitNoneModel`). Гонять через node что-то другое бессмысленно — тест перестанет проверять реальный формат.
-- **Документы для сверки**: все пять шаблонов из `tests/generation/template_fixtures.py` плюс собранный вручную документ максимального покрытия (`tests/codegen/max_coverage_document.py`) — все 8 типов узлов, все 4 действия, `textBind`/`valueBind`/`href`, вложенность, `hidden`/`locked`, `zIndex`, экранирование кавычек и переносов строк. Шаблоны сами по себе покрывают только `View`/`Text`/`Button`/`TextInput` и три действия из четырёх, поэтому одних их мало.
+- **Документы для сверки**: все пять шаблонов из `tests/generation/template_fixtures.py` плюс собранный вручную документ максимального покрытия (`tests/codegen/max_coverage_document.py`) — все типы узлов, кроме `Icon` (он добавится вместе с BIL-92, см. § 10.4), все 4 действия, `textBind`/`valueBind`/`href`, вложенность, `hidden`/`locked`, `zIndex`, экранирование кавычек и переносов строк. Шаблоны сами по себе покрывают только `View`/`Text`/`Button`/`TextInput` и три действия из четырёх, поэтому одних их мало.
 - **Нет Node в `PATH` — тест пропускается** (`pytest.mark.skipif`), а не падает: у разработчика без Node `make check` не должен ложно краснеть. Настоящая проверка идёт в CI, где Node есть всегда.
 
 **Node ставится только в CI и только для шага тестов** — шагом `actions/setup-node` в `.github/workflows/backend.yml` перед `uv run pytest`. В прод-образ и рантайм бэкенда Node не попадает: единственный его потребитель — этот тест.
@@ -1193,6 +1193,170 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 **Что не входит в этот фикс.** На документе максимального покрытия (не на шаблонах) `tsc --noEmit` даёт две ошибки `TS2769` — узел `Text` со стилем `animation: 'rise'` не проходит типы `TextStyle`, потому что `animation` в принципе не входит в тип стиля RN. Это не связано с недостающими зависимостями: код, дословно выписывающий все ключи `AppNodeStyle` в сырой RN-стиль (`_style_to_rn`), не трогался с самого первого коммита кодогена, задолго до Paper и до этой задачи, — и `animation` там и тогда был документирован как «инертно» (раздел 10.2, «Что уже сломано сегодня, до Paper»), но не как «ломает компиляцию». Затрагивает только узлы `Text`/`View`/… с непустым `style.animation` вне Paper-компонентов (`Button`/`TextInput` фильтруют `PAPER_PASSTHROUGH_KEYS`, у обычных узлов фильтра нет) — ни один из пяти шаблонов такого стиля не генерирует, только синтетическая фикстура. Отдельная задача, не эта.
 
 ---
+
+### 10.4 Иконки Lucide: узел `Icon` (BIL-87)
+
+**Что это.** Девятый тип узла `Icon` — отдельный, самостоятельный узел наравне с `Text`/`Spacer`, а не проп у существующих типов: его можно положить куда угодно, в том числе рядом с `Text` внутри одного `View` (паттерн «иконка + подпись»). Задача разделена на две половины: бэкенд (схема, Python-кодоген, промпт) — BIL-87, фронт (`model.ts`, `component-registry.ts`, TS-кодоген, превью) — BIL-92. Решения ниже — общий контракт обеих половин, а не локальный выбор бэкенда.
+
+| Что | Решение |
+|---|---|
+| Имя иконки | `props.icon`, тип `AppIconName` — `Literal` из 100 курируемых имён (см. таблицу ниже), по тому же образцу, что `AppNodeAnimation`. Отсутствие — `null`/ключа нет |
+| Размер | `min(layout.width, layout.height)`; без `layout` — 24 |
+| Цвет | `style.color`, без него — `theme.colorText` (так же, как у `Text`) |
+| Новые поля стиля | нет, `AppNodeStyle` не менялся |
+
+**Почему 100 имён, а не весь каталог Lucide.** В `lucide-react-native@1.48.0` 1854 иконки. Enum на весь каталог лёг бы в JSON Schema, которая целиком уходит в системный промпт генерации и чата. BIL-72 и BIL-86 показали, что длинный промпт измеримо портит структурную корректность у модели по умолчанию (`deepseek-v4-flash`). Курируемые 100 имён добавили к промпту генерации с брифом 1222 символа (13256 → 14478), а с правилами про `Icon` в `RULES` — 2091 (→ 15347, +16%). Замеров качества генерации после этого изменения не проводилось.
+
+**Список сверен с установленным пакетом, а не написан по памяти.** Источник канонических имён — файлы `dist/esm/icons/<kebab>.mjs` в `lucide-react-native@1.48.0` (по файлу на иконку, без алиасов), проверено, что для **всех 1854** файлов `PascalCase(kebab)` — объявленный экспорт в `dist/types/lucide-react-native.d.ts`, и для каждого из 100 курируемых имён есть экспорт-алиас `<Pascal>Icon`. Осторожно со старыми именами из документации и памяти: в 1.x алиасы удалены, поэтому `home`, `edit`, `filter`, `alert-circle`, `check-circle`, `trash-2`, `unlock`, `help-circle` **не существуют** — канонические имена `house`, `pencil`, `funnel`, `circle-alert`, `circle-check`, `trash`, `lock-open`, `circle-question-mark`. Обновляете Lucide — перепроверьте список тем же способом: у пакета частые минорные релизы, и переименования иконок в них бывают.
+
+**Маппинг имени в компонент** (`_icon_component` в `src/codegen/service.py`): разбить kebab-имя по `-`, у каждой части заглавная первая буква, склеить и **добавить суффикс `Icon`**: `arrow-left` → `ArrowLeftIcon`, `share-2` → `Share2Icon`, `circle-question-mark` → `CircleQuestionMarkIcon`. Суффикс обязателен, это не косметика: без него `image` дал бы `Image` и столкнулся бы с `Image` из `react-native`, который импортируется в тот же файл экрана (так же `Text`/`View`, если их когда-нибудь добавят в список). Lucide экспортирует `<Pascal>Icon` для каждой иконки официально, переименовывать при импорте не нужно.
+
+**Что генерирует экспорт.** Позиционированный контейнер — тот же путь `_position_entries`/`_passthrough_entries`, что у `Button`/`TextInput` — с центрированием, внутри компонент иконки:
+
+```tsx
+<View style={{
+  position: 'absolute',
+  left: 16,
+  top: 24,
+  width: 40,
+  height: 28,
+  alignItems: 'center',
+  justifyContent: 'center'
+}}>
+  <ArrowLeftIcon
+    size={28}
+    color={'#FF0000'}
+  />
+</View>
+```
+
+- Из `style` в контейнер проходит только `opacity` (и `width`/`height` для узла без `layout`, как у всех). Фон, рамка, радиус, отступы, `flex*`, шрифтовые поля, `shadow`, `backgroundGradient`, `animation` отбрасываются: у квадратной иконки размером в меньшую сторону `layout` отступы и рамка выталкивали бы её за край, а `animation` не входит в типы стилей RN и ломает `tsc` (см. § 10.3). Иконка в цветном кружке — это `Icon` внутри `View` с фоном. `onPress` на `Icon` не работает — он декоративный, как `Text`. Всё это записано в `EXPORT_RULES` промпта.
+- `Icon` без `props.icon` — пустой контейнер без импорта, скрытый (`hidden`) — `{null}`, как у остальных узлов.
+- Импорт — **одной строкой из корня пакета**, только использованные на экране компоненты, по алфавиту, сразу после импорта `react-native-paper`: `import { HouseIcon, Share2Icon } from 'lucide-react-native';`.
+
+**Зависимости — только когда иконки есть.** В `package.json` добавляются `"lucide-react-native": "~1.48.0"` и `"react-native-svg": "15.8.0"`, **только если** в документе есть хотя бы один `Icon` с непустым `props.icon` (включая скрытые — их импорт тоже собирается), и **последними** в `dependencies`, в этом порядке. Условно, а не всегда, по двум причинам: не тянуть нативный `react-native-svg` в приложения без иконок и не ломать тест на равенство генераторов (§ 10.1) на документах без иконок, пока TS-половина (BIL-92) не сделана. BIL-92 обязан повторить то же условие и тот же порядок ключей — `package.json` сравнивается тестом целиком.
+
+| Пакет | Версия | Источник |
+|---|---|---|
+| `react-native-svg` | `15.8.0` | `bundledNativeModules.json` SDK 52 (`https://raw.githubusercontent.com/expo/expo/sdk-52/packages/expo/bundledNativeModules.json`) — тем же способом, что `expo-asset`/`react-native-web` в § 10.3; `npx expo install --check` на собранном проекте отвечает «Dependencies are up to date» |
+| `lucide-react-native` | `~1.48.0` | в `bundledNativeModules.json` его нет — это чистый JS, не нативный модуль. Совместимость с SDK 52 — по его `peerDependencies`: `react ^16.5.1 \|\| … \|\| ^19`, `react-native *`, `react-native-svg ^12 \|\| … \|\| ^15` — все три закрываются версиями проекта (`react 18.3.1`, `react-native 0.76.9`, `react-native-svg 15.8.0`). 1.48.0 — `latest` на 2026-09-28. Тильда, а не каретка: список имён завязан на экспорты конкретной версии, а переименования случаются в минорных релизах |
+
+**Проверка — реальная сборка.** Документ ручной сборки на два экрана (`tabs`) с 12 разными иконками: в шапке (`menu`, `search` с цветом, `bell` с `opacity`), пара «иконка + подпись» (`map-pin` + `Text` внутри `View`), `image` рядом с узлом `Image` (проверка коллизии имён), скрытая иконка (`trash`), `Icon` без имени, крупная иконка 80×80 (`shopping-cart`), составные имена (`circle-question-mark`, `layout-grid`, `share-2`, `arrow-left`, `circle-check`). Сквозь `generate_files` → `npm install` (без ручных правок, exit 0) → `npx tsc --noEmit` (exit 0, без ошибок) → `npx expo export --platform android|ios|web` (все три exit 0). Иконки в бандле есть: в web-бандле `(0,h.jsx)(l.ShoppingCartIcon,{size:80,color:'#16A34A'})`.
+
+Осторожно при повторении: сгенерированный `tsconfig.json` включает `allowJs` без `include`, а наследуемый из `expo/tsconfig.base` `exclude` не исключает папки сборки (в том числе `dist/` по умолчанию у `expo export`). Если прогнать `tsc` после `expo export` внутри папки проекта, он начнёт проверять собранные бандлы и упадёт с `RangeError: Maximum call stack size exceeded` — это артефакт проверки, а не кода экрана.
+
+**Открыто: размер бандла.** Metro в SDK 52 не делает tree-shaking, поэтому импорт из корня `lucide-react-native` тянет в бандл **весь** каталог (в собранном web-бандле есть и неиспользованные `AArrowDown`, `Wallet`), хотя импортируются только нужные имена. Замер на том же приложении, где узлы `Icon` заменены пустыми `View`: web 1.71 МБ → 3.68 МБ, Android (Hermes) 3.28 МБ → 5.69 МБ — около +2 МБ на приложение с иконками. Поимённый импорт `lucide-react-native/icons/<kebab>` (так пакет отдаёт каждую иконку через `exports`) проверен и **не работает** в SDK 52: Metro не резолвит путь (по всей видимости, потому что разрешение по `exports` в Metro SDK 52 по умолчанию выключено — причина не проверялась отдельно), а `tsc` с `moduleResolution: "node"` из `expo/tsconfig.base` не видит `exports` вовсе. Чинить — отдельной задачей и в обоих генераторах сразу: включить `resolver.unstable_enablePackageExports` в сгенерированном `metro.config.js` и перейти на `moduleResolution: "bundler"` в `tsconfig.json`, либо Babel-плагин переписывания импортов.
+
+**Порядок мержа.** Код и схема этой задачи корректны и проверены независимо, но как только правка промпта попадёт в `main`, генерация начнёт выдавать узлы `Icon`, а панель кода и превью в редакторе строятся TS-кодогеном и схемой `model.ts`, которые узнают про `Icon` только в BIL-92. До его мержа такие документы на фронте, скорее всего, не пройдут zod-валидацию или отрисуются неверно. Разумный порядок — BIL-87 не раньше BIL-92 или одновременно с ним; решение за владельцем бэкенда.
+
+`tests/codegen/max_coverage_document.py` (общая фикстура теста на равенство) `Icon` пока **не содержит** — там стоит TODO на BIL-92: TS-генератор его ещё не рендерит, и тест покраснел бы из-за очерёдности задач, а не из-за бага. Ветку рендера покрывает отдельный бэкенд-тест `tests/codegen/test_icon_codegen.py`.
+
+#### Курируемый список `AppIconName` (100 имён)
+
+Порядок — как в `Literal` в `src/apps/schemas.py`; он же порядок `enum` в JSON Schema. `appIconNameSchema` в BIL-92 обязан содержать ровно эти значения.
+
+| `props.icon` | Компонент |
+|---|---|
+| `house` | `HouseIcon` |
+| `search` | `SearchIcon` |
+| `settings` | `SettingsIcon` |
+| `menu` | `MenuIcon` |
+| `arrow-left` | `ArrowLeftIcon` |
+| `arrow-right` | `ArrowRightIcon` |
+| `arrow-up` | `ArrowUpIcon` |
+| `arrow-down` | `ArrowDownIcon` |
+| `chevron-left` | `ChevronLeftIcon` |
+| `chevron-right` | `ChevronRightIcon` |
+| `chevron-up` | `ChevronUpIcon` |
+| `chevron-down` | `ChevronDownIcon` |
+| `x` | `XIcon` |
+| `plus` | `PlusIcon` |
+| `minus` | `MinusIcon` |
+| `check` | `CheckIcon` |
+| `ellipsis` | `EllipsisIcon` |
+| `ellipsis-vertical` | `EllipsisVerticalIcon` |
+| `external-link` | `ExternalLinkIcon` |
+| `log-out` | `LogOutIcon` |
+| `pencil` | `PencilIcon` |
+| `trash` | `TrashIcon` |
+| `share-2` | `Share2Icon` |
+| `download` | `DownloadIcon` |
+| `upload` | `UploadIcon` |
+| `copy` | `CopyIcon` |
+| `heart` | `HeartIcon` |
+| `star` | `StarIcon` |
+| `bookmark` | `BookmarkIcon` |
+| `funnel` | `FunnelIcon` |
+| `refresh-cw` | `RefreshCwIcon` |
+| `send` | `SendIcon` |
+| `link` | `LinkIcon` |
+| `flag` | `FlagIcon` |
+| `thumbs-up` | `ThumbsUpIcon` |
+| `bell` | `BellIcon` |
+| `mail` | `MailIcon` |
+| `lock` | `LockIcon` |
+| `lock-open` | `LockOpenIcon` |
+| `eye` | `EyeIcon` |
+| `eye-off` | `EyeOffIcon` |
+| `circle-alert` | `CircleAlertIcon` |
+| `triangle-alert` | `TriangleAlertIcon` |
+| `info` | `InfoIcon` |
+| `circle-check` | `CircleCheckIcon` |
+| `circle-x` | `CircleXIcon` |
+| `circle-question-mark` | `CircleQuestionMarkIcon` |
+| `user` | `UserIcon` |
+| `users` | `UsersIcon` |
+| `calendar` | `CalendarIcon` |
+| `clock` | `ClockIcon` |
+| `map-pin` | `MapPinIcon` |
+| `map` | `MapIcon` |
+| `navigation` | `NavigationIcon` |
+| `globe` | `GlobeIcon` |
+| `camera` | `CameraIcon` |
+| `image` | `ImageIcon` |
+| `video` | `VideoIcon` |
+| `mic` | `MicIcon` |
+| `music` | `MusicIcon` |
+| `play` | `PlayIcon` |
+| `pause` | `PauseIcon` |
+| `file` | `FileIcon` |
+| `file-text` | `FileTextIcon` |
+| `folder` | `FolderIcon` |
+| `book-open` | `BookOpenIcon` |
+| `shopping-cart` | `ShoppingCartIcon` |
+| `shopping-bag` | `ShoppingBagIcon` |
+| `credit-card` | `CreditCardIcon` |
+| `wallet` | `WalletIcon` |
+| `tag` | `TagIcon` |
+| `gift` | `GiftIcon` |
+| `dollar-sign` | `DollarSignIcon` |
+| `store` | `StoreIcon` |
+| `package` | `PackageIcon` |
+| `truck` | `TruckIcon` |
+| `trending-up` | `TrendingUpIcon` |
+| `chart-bar` | `ChartBarIcon` |
+| `chart-pie` | `ChartPieIcon` |
+| `activity` | `ActivityIcon` |
+| `target` | `TargetIcon` |
+| `award` | `AwardIcon` |
+| `trophy` | `TrophyIcon` |
+| `phone` | `PhoneIcon` |
+| `message-circle` | `MessageCircleIcon` |
+| `message-square` | `MessageSquareIcon` |
+| `list` | `ListIcon` |
+| `layout-grid` | `LayoutGridIcon` |
+| `sun` | `SunIcon` |
+| `moon` | `MoonIcon` |
+| `cloud` | `CloudIcon` |
+| `flame` | `FlameIcon` |
+| `zap` | `ZapIcon` |
+| `dumbbell` | `DumbbellIcon` |
+| `utensils` | `UtensilsIcon` |
+| `coffee` | `CoffeeIcon` |
+| `car` | `CarIcon` |
+| `plane` | `PlaneIcon` |
+| `graduation-cap` | `GraduationCapIcon` |
+| `briefcase` | `BriefcaseIcon` |
 
 ## 11. Миграции
 
