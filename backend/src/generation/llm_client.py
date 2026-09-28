@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import Sequence
 from typing import Any, Literal, Protocol, TypedDict
@@ -25,6 +26,11 @@ ResponseFormatMode = Literal["json_schema", "text"]
 MAX_OUTPUT_TOKENS = 64000
 
 UNCONSTRAINED_MODEL_PREFIXES = ("anthropic/",)
+
+REQUEST_TIMEOUT_SECONDS = 750.0
+IDLE_TIMEOUT_SECONDS = 60.0
+
+SCHEMA_REJECTION_MARKERS = ("schema", "grammar")
 
 
 class ChatMessage(TypedDict):
@@ -54,9 +60,18 @@ class LlmClient(Protocol):
 
 
 class RouterAiLlmClient:
-    def __init__(self, api_key: str | None, base_url: str) -> None:
+    def __init__(
+        self,
+        api_key: str | None,
+        base_url: str,
+        *,
+        request_timeout_seconds: float = REQUEST_TIMEOUT_SECONDS,
+        idle_timeout_seconds: float = IDLE_TIMEOUT_SECONDS,
+    ) -> None:
         self._api_key = api_key
         self._base_url = base_url
+        self._request_timeout_seconds = request_timeout_seconds
+        self._idle_timeout_seconds = idle_timeout_seconds
         self._client: AsyncOpenAI | None = None
 
     async def complete(
@@ -95,13 +110,21 @@ class RouterAiLlmClient:
         max_tokens: int,
     ) -> str:
         client = self._ensure_client()
+        deadline = asyncio.timeout(self._request_timeout_seconds)
         try:
-            completion = await client.chat.completions.create(
-                model=model,
-                messages=[_to_message_param(message) for message in messages],
-                response_format=response_format,
-                max_tokens=max_tokens,
-            )
+            async with deadline:
+                completion = await client.chat.completions.create(
+                    model=model,
+                    messages=[_to_message_param(message) for message in messages],
+                    response_format=response_format,
+                    max_tokens=max_tokens,
+                )
+        except TimeoutError as error:
+            if not deadline.expired():
+                raise
+            raise GenerationError(
+                f"RouterAI не ответил на запрос генерации за {self._request_timeout_seconds:g} секунд"
+            ) from error
         except (BadRequestError, UnprocessableEntityError) as error:
             raise _rejection(model, mode, str(error)) from error
         except APIError as error:
@@ -122,7 +145,11 @@ class RouterAiLlmClient:
         if self._api_key is None:
             raise GenerationNotConfiguredError
         if self._client is None:
-            self._client = AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+            self._client = AsyncOpenAI(
+                api_key=self._api_key,
+                base_url=self._base_url,
+                timeout=self._idle_timeout_seconds,
+            )
             logger.info("RouterAI client ready: base_url=%s", self._base_url)
         return self._client
 
@@ -134,10 +161,15 @@ def _response_format_mode(model: str) -> ResponseFormatMode:
 
 
 def _rejection(model: str, mode: ResponseFormatMode, detail: str) -> GenerationError:
-    if mode == "json_schema":
+    if mode == "json_schema" and _is_schema_rejection(detail):
         logger.error("RouterAI rejected strict response_format=json_schema for model %s: %s", model, detail)
         return StrictSchemaUnsupportedError(model, detail)
     return GenerationError(f"RouterAI отклонил запрос генерации: {detail}")
+
+
+def _is_schema_rejection(detail: str) -> bool:
+    lowered = detail.lower()
+    return any(marker in lowered for marker in SCHEMA_REJECTION_MARKERS)
 
 
 def _response_format(mode: ResponseFormatMode, schema_name: str, schema: JsonSchema) -> ResponseFormat | Omit:
