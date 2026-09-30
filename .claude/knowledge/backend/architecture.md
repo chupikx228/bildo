@@ -1307,7 +1307,7 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 
 **Список сверен с установленным пакетом, а не написан по памяти.** Источник канонических имён — файлы `dist/esm/icons/<kebab>.mjs` в `lucide-react-native@1.48.0` (по файлу на иконку, без алиасов), проверено, что для **всех 1854** файлов `PascalCase(kebab)` — объявленный экспорт в `dist/types/lucide-react-native.d.ts`, и для каждого из 100 курируемых имён есть экспорт-алиас `<Pascal>Icon`. Осторожно со старыми именами из документации и памяти: в 1.x алиасы удалены, поэтому `home`, `edit`, `filter`, `alert-circle`, `check-circle`, `trash-2`, `unlock`, `help-circle` **не существуют** — канонические имена `house`, `pencil`, `funnel`, `circle-alert`, `circle-check`, `trash`, `lock-open`, `circle-question-mark`. Обновляете Lucide — перепроверьте список тем же способом: у пакета частые минорные релизы, и переименования иконок в них бывают.
 
-**Маппинг имени в компонент** (`_icon_component` в `src/codegen/service.py`): разбить kebab-имя по `-`, у каждой части заглавная первая буква, склеить и **добавить суффикс `Icon`**: `arrow-left` → `ArrowLeftIcon`, `share-2` → `Share2Icon`, `circle-question-mark` → `CircleQuestionMarkIcon`. Суффикс обязателен, это не косметика: без него `image` дал бы `Image` и столкнулся бы с `Image` из `react-native`, который импортируется в тот же файл экрана (так же `Text`/`View`, если их когда-нибудь добавят в список). Lucide экспортирует `<Pascal>Icon` для каждой иконки официально, переименовывать при импорте не нужно.
+**Маппинг имени в компонент** (`_icon_component` в `src/codegen/service.py`): разбить kebab-имя по `-`, у каждой части заглавная первая буква, склеить и **добавить суффикс `Icon`**: `arrow-left` → `ArrowLeftIcon`, `share-2` → `Share2Icon`, `circle-question-mark` → `CircleQuestionMarkIcon`. Суффикс обязателен, это не косметика: без него `image` дал бы `Image` и столкнулся бы с `Image` из `react-native`, который импортируется в тот же файл экрана (так же `Text`/`View`, если их когда-нибудь добавят в список). С BIL-93 иконка импортируется по умолчанию из своего файла (см. «Импорт по иконке» ниже), так что `<Pascal>Icon` — локальное имя, которое выбирает генератор. Оно совпадает с экспортом-алиасом корня пакета, поэтому код экрана читается так же, как до BIL-93.
 
 **Что генерирует экспорт.** Позиционированный контейнер — тот же путь `_position_entries`/`_passthrough_entries`, что у `Button`/`TextInput` — с центрированием, внутри компонент иконки:
 
@@ -1330,20 +1330,85 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 
 - Из `style` в контейнер проходит только `opacity` (и `width`/`height` для узла без `layout`, как у всех). Фон, рамка, радиус, отступы, `flex*`, шрифтовые поля, `shadow`, `backgroundGradient`, `animation` отбрасываются: у квадратной иконки размером в меньшую сторону `layout` отступы и рамка выталкивали бы её за край, а `animation` не входит в типы стилей RN и ломает `tsc` (см. § 10.3). Иконка в цветном кружке — это `Icon` внутри `View` с фоном. `onPress` на `Icon` не работает — он декоративный, как `Text`. Всё это записано в `EXPORT_RULES` промпта.
 - `Icon` без `props.icon` — пустой контейнер без импорта, скрытый (`hidden`) — `{null}`, как у остальных узлов.
-- Импорт — **одной строкой из корня пакета**, только использованные на экране компоненты, по алфавиту, сразу после импорта `react-native-paper`: `import { HouseIcon, Share2Icon } from 'lucide-react-native';`.
+- Импорт — **по строке на иконку, из подпути `lucide-react-native/icons/<kebab>`, никогда из корня пакета** (BIL-93). Импортируются только иконки, использованные на экране, по алфавиту kebab-имени, сразу после импорта `react-native-paper`:
+
+  ```tsx
+  import HouseIcon from 'lucide-react-native/icons/house';
+  import Share2Icon from 'lucide-react-native/icons/share-2';
+  ```
 
 **Зависимости — только когда иконки есть.** В `package.json` добавляются `"lucide-react-native": "~1.48.0"` и `"react-native-svg": "15.8.0"`, **только если** в документе есть хотя бы один `Icon` с непустым `props.icon` (включая скрытые — их импорт тоже собирается), и **последними** в `dependencies`, в этом порядке. Условно, а не всегда, по двум причинам: не тянуть нативный `react-native-svg` в приложения без иконок и не ломать тест на равенство генераторов (§ 10.1) на документах без иконок, пока TS-половина (BIL-92) не сделана. BIL-92 обязан повторить то же условие и тот же порядок ключей — `package.json` сравнивается тестом целиком.
+
+С BIL-93 при том же условии меняются ещё два файла проекта: появляется `metro.config.js`, а в `compilerOptions` у `tsconfig.json` добавляется `"moduleResolution": "bundler"`. Зачем они нужны, описано в «Импорт по иконке» ниже. Без иконок оба файла такие же, как до BIL-93: `metro.config.js` нет, `tsconfig.json` — `{"extends": "expo/tsconfig.base", "compilerOptions": {"strict": true}}`. Причина та же, что у зависимостей: тест на равенство (§ 10.1) сравнивает набор файлов целиком, а TS-генератор ни того, ни другого пока не выпускает.
 
 | Пакет | Версия | Источник |
 |---|---|---|
 | `react-native-svg` | `15.8.0` | `bundledNativeModules.json` SDK 52 (`https://raw.githubusercontent.com/expo/expo/sdk-52/packages/expo/bundledNativeModules.json`) — тем же способом, что `expo-asset`/`react-native-web` в § 10.3; `npx expo install --check` на собранном проекте отвечает «Dependencies are up to date» |
 | `lucide-react-native` | `~1.48.0` | в `bundledNativeModules.json` его нет — это чистый JS, не нативный модуль. Совместимость с SDK 52 — по его `peerDependencies`: `react ^16.5.1 \|\| … \|\| ^19`, `react-native *`, `react-native-svg ^12 \|\| … \|\| ^15` — все три закрываются версиями проекта (`react 18.3.1`, `react-native 0.76.9`, `react-native-svg 15.8.0`). 1.48.0 — `latest` на 2026-09-28. Тильда, а не каретка: список имён завязан на экспорты конкретной версии, а переименования случаются в минорных релизах |
 
-**Проверка — реальная сборка.** Документ ручной сборки на два экрана (`tabs`) с 12 разными иконками: в шапке (`menu`, `search` с цветом, `bell` с `opacity`), пара «иконка + подпись» (`map-pin` + `Text` внутри `View`), `image` рядом с узлом `Image` (проверка коллизии имён), скрытая иконка (`trash`), `Icon` без имени, крупная иконка 80×80 (`shopping-cart`), составные имена (`circle-question-mark`, `layout-grid`, `share-2`, `arrow-left`, `circle-check`). Сквозь `generate_files` → `npm install` (без ручных правок, exit 0) → `npx tsc --noEmit` (exit 0, без ошибок) → `npx expo export --platform android|ios|web` (все три exit 0). Иконки в бандле есть: в web-бандле `(0,h.jsx)(l.ShoppingCartIcon,{size:80,color:'#16A34A'})`.
+**Проверка — реальная сборка.** Документ ручной сборки на два экрана (`tabs`) с 12 разными иконками: в шапке (`menu`, `search` с цветом, `bell` с `opacity`), пара «иконка + подпись» (`map-pin` + `Text` внутри `View`), `image` рядом с узлом `Image` (проверка коллизии имён), скрытая иконка (`trash`), `Icon` без имени, крупная иконка 80×80 (`shopping-cart`), составные имена (`circle-question-mark`, `layout-grid`, `share-2`, `arrow-left`, `circle-check`). Сквозь `generate_files` → `npm install` (без ручных правок, exit 0) → `npx tsc --noEmit` (exit 0, без ошибок) → `npx expo export --platform android|ios|web` (все три exit 0). Иконки в бандле есть: в web-бандле `(0,h.jsx)(l.ShoppingCartIcon,{size:80,color:'#16A34A'})`. Это состояние BIL-87, с импортом из корня пакета; проверка после перехода на подпути — в «Импорт по иконке» ниже.
 
 Осторожно при повторении: сгенерированный `tsconfig.json` включает `allowJs` без `include`, а наследуемый из `expo/tsconfig.base` `exclude` не исключает папки сборки (в том числе `dist/` по умолчанию у `expo export`). Если прогнать `tsc` после `expo export` внутри папки проекта, он начнёт проверять собранные бандлы и упадёт с `RangeError: Maximum call stack size exceeded` — это артефакт проверки, а не кода экрана.
 
-**Открыто: размер бандла.** Metro в SDK 52 не делает tree-shaking, поэтому импорт из корня `lucide-react-native` тянет в бандл **весь** каталог (в собранном web-бандле есть и неиспользованные `AArrowDown`, `Wallet`), хотя импортируются только нужные имена. Замер на том же приложении, где узлы `Icon` заменены пустыми `View`: web 1.71 МБ → 3.68 МБ, Android (Hermes) 3.28 МБ → 5.69 МБ — около +2 МБ на приложение с иконками. Поимённый импорт `lucide-react-native/icons/<kebab>` (так пакет отдаёт каждую иконку через `exports`) проверен и **не работает** в SDK 52: Metro не резолвит путь (по всей видимости, потому что разрешение по `exports` в Metro SDK 52 по умолчанию выключено — причина не проверялась отдельно), а `tsc` с `moduleResolution: "node"` из `expo/tsconfig.base` не видит `exports` вовсе. Чинить — отдельной задачей и в обоих генераторах сразу: включить `resolver.unstable_enablePackageExports` в сгенерированном `metro.config.js` и перейти на `moduleResolution: "bundler"` в `tsconfig.json`, либо Babel-плагин переписывания импортов.
+#### Импорт по иконке, а не из корня пакета (BIL-93)
+
+**Что было.** Metro в SDK 52 не делает tree-shaking, поэтому импорт из корня `lucide-react-native` тянул в бандл **весь** каталог из 1854 иконок, хотя импортировались только нужные имена. Это фиксированный налог: он платился за первую же иконку и от их числа почти не зависел. Замер BIL-93 на приложении с одной иконкой против того же приложения, где вместо неё пустой `View`: web 1.71 МБ → 3.67 МБ, Android (Hermes) 3.28 МБ → 5.68 МБ. Это совпадает с замером BIL-87 на 12 иконках (3.68 и 5.69 МБ).
+
+**Почему подпуть не резолвился.** Пакет отдаёт каждую иконку через `exports` (`"./icons/*"` → `dist/esm/icons/*.mjs`, типы — `dist/types/icons/*.d.ts`). Файлов по этому пути на диске нет, путь существует только в `exports`. Проверено на версиях сгенерированного проекта (`expo` 52.0.49, `metro` 0.81.5, `typescript` 5.3.3):
+
+- Metro: `resolver.unstable_enablePackageExports` в SDK 52 по умолчанию выключен, без него `Unable to resolve module lucide-react-native/icons/arrow-left`;
+- `tsc`: `moduleResolution: "node"` из `expo/tsconfig.base` поле `exports` не читает, отсюда `TS2307`.
+
+**Фикс — три правки в сгенерированном проекте, все только при наличии иконок** (условие то же, что у зависимостей).
+
+1. Экран импортирует каждую иконку по умолчанию из её подпути: `import ArrowLeftIcon from 'lucide-react-native/icons/arrow-left';`. Kebab-имя генератор знает из `props.icon`, поэтому обратное преобразование `PascalCase` → kebab не нужно. Оно было бы неоднозначным на цифрах (`Share2`).
+2. `metro.config.js` включает разрешение по `exports` **только для запросов `lucide-react-native/…`**:
+
+   ```js
+   const { getDefaultConfig } = require('expo/metro-config');
+
+   const config = getDefaultConfig(__dirname);
+
+   config.resolver.resolveRequest = (context, moduleName, platform) =>
+     context.resolveRequest(
+       moduleName.startsWith('lucide-react-native/') ? { ...context, unstable_enablePackageExports: true } : context,
+       moduleName,
+       platform
+     );
+
+   module.exports = config;
+   ```
+
+3. `tsconfig.json` получает `"moduleResolution": "bundler"`, и `tsc` видит типы подпути через `exports`. `module` отдельно задавать не нужно: при `target: "ESNext"` из базового конфига он по умолчанию ES2015, а `bundler` это допускает. `"preserve"` в TS 5.3 ещё нет.
+
+**Почему не глобальный `unstable_enablePackageExports = true`.** Проверено: он тоже чинит иконки, но заодно меняет разрешение для других пакетов. В web-бандле приложения **без иконок** появляется второй экземпляр `use-latest-callback` (зависимость `@react-navigation`): к уже загруженному CJS-файлу добавляется `esm.mjs`, то есть одна и та же библиотека грузится дважды. Вариант с условием по имени модуля не меняет ничего, кроме запросов к Lucide: web-бандл приложения без иконок с таким `metro.config.js` побайтно совпадает с бандлом без него (тот же хэш содержимого). Файлы внутри Lucide (`../createLucideIcon.mjs` и т. п.) резолвятся обычным путём, потому что это относительные запросы, а не `lucide-react-native/…`.
+
+**Что отброшено.**
+
+- **Обновить SDK.** В более новых SDK Expo разрешение по `exports`, насколько известно, включено по умолчанию (в этой задаче не проверялось), но это переезд всего сгенерированного проекта (React, RN, Paper, expo-router), несоразмерный задаче. Когда проект переедет, `metro.config.js` из п. 2 станет лишним.
+- **Импорт по пути файла** (`lucide-react-native/dist/esm/icons/arrow-left.mjs`). Metro его резолвит и без настроек, но это непубличная раскладка `dist`, а `tsc` не находит к файлу типов (`.d.mts` рядом нет) и при `strict` падает. Пришлось бы генерировать свой `.d.ts`.
+- **Алиас через `paths` в `tsconfig.json`.** Expo CLI применяет `paths` и к резолву Metro, так что импорт указал бы бандлеру на `.d.ts`.
+- **Babel-плагин переписывания импортов.** Нужна лишняя dev-зависимость, а PascalCase → kebab неоднозначен (см. п. 1). Генератор и так знает kebab-имя.
+
+**Замер после фикса** — те же документы, `generate_files` → `npm install` → `npx expo export`, размер JS-бандла (web) и Hermes-байткода (Android, iOS):
+
+| Документ | web | Android | iOS |
+|---|---|---|---|
+| без иконок | 1.71 МБ (1 706 987 Б) | 3.28 МБ (3 283 771 Б) | 3.28 МБ (3 282 172 Б) |
+| 1 иконка, до BIL-93 (импорт из корня) | 3.67 МБ (3 674 337 Б) | 5.68 МБ (5 684 778 Б) | — |
+| **1 иконка, после BIL-93** | **1.79 МБ (1 786 722 Б)** | **3.52 МБ (3 523 558 Б)** | **3.52 МБ (3 521 755 Б)** |
+| 12 иконок, после BIL-93 | 1.80 МБ (1 795 843 Б) | 3.53 МБ (3 533 297 Б) | 3.53 МБ (3 531 433 Б) |
+
+Налог за первую иконку упал с +1.97 МБ до +80 КБ на web и с +2.40 МБ до +240 КБ на Android. Остаток — это `react-native-svg` и рантайм Lucide: `createLucideIcon`, `Icon`, `context` и около десятка утилит. Из самих иконок в бандл попадают только использованные: по source map web-бандла из `lucide-react-native` в него входят `icons/arrow-left.mjs` и эти 14 модулей рантайма. Каждая следующая иконка стоит меньше килобайта (12 иконок против одной: +9 КБ web, +10 КБ Android).
+
+**Проверка.**
+
+- `npx tsc --noEmit` проходит, и типы подпути настоящие, а не `any`: лишний проп на иконке даёт `TS2322 … not assignable to type 'IntrinsicAttributes & LucideProps'`.
+- `npx expo export --platform web|android|ios` проходит на всех трёх платформах. Кроме документов из таблицы, так проверен документ максимального покрытия (все типы узлов) плюс иконки (пара «иконка + подпись», `image` рядом с `Image`, скрытая иконка), шрифты `PT Serif`/`Unbounded` и навигация `tabs`. `tsc` на нём даёт ровно те же две ошибки `TS2769` про `animation`, что и без иконок (см. § 10.3), новых нет.
+- Web-экспорт открыт в Chrome: `outerHTML` отрисованного `<svg>` иконки до и после BIL-93 совпадает побайтно.
+- `tests/codegen/test_icon_codegen.py`: правила рендера и условие добавления зависимостей не менялись. Изменились только ожидаемые строки импорта, и добавлены тесты на подпуть и на условные `metro.config.js`/`tsconfig.json`.
+
+**BIL-92 обязан повторить то же самое в TS-генераторе**, когда добавит `Icon`: импорт по умолчанию из `lucide-react-native/icons/<kebab>`, по строке на иконку и по алфавиту kebab-имени, `metro.config.js` дословно как в п. 2 и `"moduleResolution": "bundler"` в `tsconfig.json`, всё при том же условии, что и зависимости. Тест на равенство (§ 10.1) сравнивает все три файла целиком, так что расхождение он поймает, как только иконка появится в `max_coverage_document.py`.
 
 **Порядок мержа.** Код и схема этой задачи корректны и проверены независимо, но как только правка промпта попадёт в `main`, генерация начнёт выдавать узлы `Icon`, а панель кода и превью в редакторе строятся TS-кодогеном и схемой `model.ts`, которые узнают про `Icon` только в BIL-92. До его мержа такие документы на фронте, скорее всего, не пройдут zod-валидацию или отрисуются неверно. Разумный порядок — BIL-87 не раньше BIL-92 или одновременно с ним; решение за владельцем бэкенда.
 
@@ -1499,7 +1564,7 @@ subprocess.run([node, <repo>/frontend/apps/web/scripts/codegen-cli.ts], input=<j
 
 #### Импорт по начертанию, а не из корня пакета
 
-Корневой `index.js` пакета делает `require` **всех** начертаний (у Inter — 18 TTF, включая курсивы), а Metro в SDK 52 не делает tree-shaking: импорт `Inter_400Regular` из `@expo-google-fonts/inter` утянул бы в бандл все 18 файлов (это та же проблема, что с иконками в § 10.4). Поэтому импорт идёт из подпапки начертания — `@expo-google-fonts/inter/400Regular`. Это обычная папка с `index.js` и `index.d.ts`, поля `exports` в `package.json` пакета нет, так что её резолвят и Metro, и `tsc` с `moduleResolution: "node"` — в отличие от подпутей Lucide. Проверено сборкой: в `expo export` на всех трёх платформах попадают ровно 4 TTF (2 семейства × 2 начертания) плюс шрифт иконок Paper.
+Корневой `index.js` пакета делает `require` **всех** начертаний (у Inter — 18 TTF, включая курсивы), а Metro в SDK 52 не делает tree-shaking: импорт `Inter_400Regular` из `@expo-google-fonts/inter` утянул бы в бандл все 18 файлов (это та же проблема, что с иконками в § 10.4). Поэтому импорт идёт из подпапки начертания — `@expo-google-fonts/inter/400Regular`. Это обычная папка с `index.js` и `index.d.ts`, поля `exports` в `package.json` пакета нет, так что её резолвят и Metro, и `tsc` с `moduleResolution: "node"` — в отличие от подпутей Lucide, которым для этого нужны `metro.config.js` и `moduleResolution: "bundler"` (§ 10.4, BIL-93). Проверено сборкой: в `expo export` на всех трёх платформах попадают ровно 4 TTF (2 семейства × 2 начертания) плюс шрифт иконок Paper.
 
 #### Начертания: только 400 и 700
 

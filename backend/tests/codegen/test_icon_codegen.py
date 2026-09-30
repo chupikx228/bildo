@@ -112,8 +112,19 @@ def test_icon_imports_only_used_components_sorted() -> None:
     )
     screen = generate_files(document)["app/index.tsx"]
 
-    assert "import { HouseIcon, Share2Icon, ShoppingCartIcon } from 'lucide-react-native';\n" in screen
-    assert screen.count("lucide-react-native") == 1
+    assert (
+        "import HouseIcon from 'lucide-react-native/icons/house';\n"
+        "import Share2Icon from 'lucide-react-native/icons/share-2';\n"
+        "import ShoppingCartIcon from 'lucide-react-native/icons/shopping-cart';\n"
+    ) in screen
+    assert screen.count("lucide-react-native") == 3
+
+
+def test_icons_are_never_imported_from_the_package_root() -> None:
+    screen = generate_files(_document(_icon("circle-question-mark")))["app/index.tsx"]
+
+    assert "import CircleQuestionMarkIcon from 'lucide-react-native/icons/circle-question-mark';\n" in screen
+    assert "from 'lucide-react-native';" not in screen
 
 
 def test_image_icon_does_not_clash_with_react_native_image() -> None:
@@ -121,7 +132,7 @@ def test_image_icon_does_not_clash_with_react_native_image() -> None:
     screen = generate_files(_document(image, _icon("image")))["app/index.tsx"]
 
     assert "import { Image, Text, View } from 'react-native';" in screen
-    assert "import { ImageIcon } from 'lucide-react-native';" in screen
+    assert "import ImageIcon from 'lucide-react-native/icons/image';" in screen
 
 
 def test_icon_without_name_renders_empty_container_and_no_import() -> None:
@@ -143,6 +154,20 @@ def test_package_json_adds_lucide_and_svg_only_when_icons_are_used() -> None:
     assert list(with_icons)[-2:] == ["lucide-react-native", "react-native-svg"]
 
 
+def test_icon_resolution_config_is_added_only_when_icons_are_used() -> None:
+    without = generate_files(_document(_icon(None)))
+    with_icons = generate_files(_document(_icon("bell")))
+
+    assert "metro.config.js" not in without
+    assert json.loads(without["tsconfig.json"]) == {
+        "extends": "expo/tsconfig.base",
+        "compilerOptions": {"strict": True},
+    }
+    assert "unstable_enablePackageExports: true" in with_icons["metro.config.js"]
+    assert "moduleName.startsWith('lucide-react-native/')" in with_icons["metro.config.js"]
+    assert json.loads(with_icons["tsconfig.json"])["compilerOptions"] == {"strict": True, "moduleResolution": "bundler"}
+
+
 def test_hidden_icon_renders_null_but_keeps_dependency() -> None:
     node = _icon("bell")
     node.hidden = True
@@ -151,6 +176,7 @@ def test_hidden_icon_renders_null_but_keeps_dependency() -> None:
     assert "{null}" in files["app/index.tsx"]
     assert "BellIcon" not in files["app/index.tsx"].split("export default")[1]
     assert "lucide-react-native" in json.loads(files["package.json"])["dependencies"]
+    assert "metro.config.js" in files
 
 
 def test_unknown_icon_name_is_rejected() -> None:
