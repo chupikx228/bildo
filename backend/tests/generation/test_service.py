@@ -3,11 +3,11 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from src.apps.schemas import AppDocument
+from src.apps.schemas import AppDocument, AppNodeLayout
 from src.generation.exceptions import GenerationError
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.prompt import build_system_prompt
-from src.generation.service import check_navigation, generate_document
+from src.generation.service import check_document, generate_document
 from tests.generation.fake_llm_client import FakeLlmClient
 from tests.generation.template_fixtures import build_template_document
 
@@ -221,29 +221,160 @@ async def test_generate_document_fails_when_the_start_screen_never_becomes_index
     assert "`index`" in error.value.message
 
 
-def test_check_navigation_accepts_a_document_with_an_index_route() -> None:
-    check_navigation(build_template_document(PROMPT, None))
+@pytest.mark.parametrize("template_prompt", ["habits", "social", "shop", "forms"])
+def test_check_document_accepts_the_template_documents(template_prompt: str) -> None:
+    check_document(build_template_document(template_prompt, None))
 
 
-def test_check_navigation_rejects_empty_roots() -> None:
+def test_check_document_rejects_empty_roots() -> None:
     document = build_template_document(PROMPT, None)
     document = document.model_copy(update={"navigation": document.navigation.model_copy(update={"roots": []})})
 
     with pytest.raises(ValueError) as error:
-        check_navigation(document)
+        check_document(document)
 
     assert "`navigation.roots` пуст" in str(error.value)
 
 
-def test_check_navigation_rejects_roots_pointing_at_missing_routes() -> None:
+def test_check_document_rejects_roots_pointing_at_missing_routes() -> None:
     document = build_template_document(PROMPT, None)
     roots = [*document.navigation.roots, "settings"]
     document = document.model_copy(update={"navigation": document.navigation.model_copy(update={"roots": roots})})
 
     with pytest.raises(ValueError) as error:
-        check_navigation(document)
+        check_document(document)
 
     assert "несуществующие `route`: settings" in str(error.value)
+
+
+def with_index_root_layout(document: AppDocument, layout: AppNodeLayout | None) -> AppDocument:
+    screens = [
+        screen.model_copy(update={"root": screen.root.model_copy(update={"layout": layout})})
+        if screen.route == "index"
+        else screen
+        for screen in document.screens
+    ]
+    return document.model_copy(update={"screens": screens})
+
+
+def dump(document: AppDocument) -> str:
+    return json.dumps(document.model_dump(mode="json", by_alias=True), ensure_ascii=False)
+
+
+def test_check_document_rejects_a_document_without_screens() -> None:
+    document = build_template_document(PROMPT, None).model_copy(update={"screens": []})
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    assert "экранов в документе 0, нужно от 2 до 5" in str(error.value)
+    assert "нет ни одного экрана" in str(error.value)
+
+
+def test_check_document_rejects_a_single_screen_document() -> None:
+    document = build_template_document("blank", None)
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    assert "экранов в документе 1, нужно от 2 до 5" in str(error.value)
+
+
+def test_check_document_accepts_the_maximum_screen_count_boundary() -> None:
+    document = build_template_document(PROMPT, None)
+    extra = [
+        screen.model_copy(update={"id": f"extra-{index}", "route": f"extra-{index}"})
+        for index, screen in enumerate([document.screens[-1]] * 3)
+    ]
+
+    check_document(document.model_copy(update={"screens": [*document.screens, *extra]}))
+
+
+@pytest.mark.parametrize(
+    ("layout", "described"),
+    [
+        (AppNodeLayout(x=0, y=0, width=370, height=560), "0, 0, 370, 560"),
+        (AppNodeLayout(x=0, y=0, width=390, height=844), "0, 0, 390, 844"),
+        (AppNodeLayout(x=10, y=20, width=370, height=640), "10, 20, 370, 640"),
+        (AppNodeLayout(x=0, y=0.5, width=370, height=640), "0, 0.5, 370, 640"),
+    ],
+)
+def test_check_document_rejects_a_root_that_does_not_fill_the_scene(layout: AppNodeLayout, described: str) -> None:
+    document = with_index_root_layout(build_template_document(PROMPT, None), layout)
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    message = str(error.value)
+    assert f"`layout` корня экрана `index` — {described}" in message
+    assert "ровно 0, 0, 370, 640" in message
+
+
+def test_check_document_rejects_a_root_without_layout() -> None:
+    document = with_index_root_layout(build_template_document(PROMPT, None), None)
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    assert "корень экрана `index` без `layout`" in str(error.value)
+
+
+def test_check_document_reports_every_problem_in_one_error() -> None:
+    document = with_index_root_layout(
+        build_template_document(PROMPT, None), AppNodeLayout(x=0, y=0, width=370, height=560)
+    )
+    document = document.model_copy(update={"navigation": document.navigation.model_copy(update={"roots": []})})
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    message = str(error.value)
+    assert "`navigation.roots` пуст" in message
+    assert "`layout` корня экрана `index` — 0, 0, 370, 560" in message
+
+
+async def test_generate_document_retries_a_root_that_does_not_fill_the_scene() -> None:
+    short_root = dump(
+        with_index_root_layout(build_template_document(PROMPT, None), AppNodeLayout(x=0, y=0, width=370, height=560))
+    )
+    client = FakeLlmClient([short_root, valid_answer()])
+
+    document = await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=2)
+
+    root = next(screen.root for screen in document.screens if screen.route == "index")
+    assert root.layout == AppNodeLayout(x=0, y=0, width=370, height=640)
+    assert len(client.calls) == 2
+    assert client.calls[1][-2] == {"role": "assistant", "content": short_root}
+    assert "`layout` корня экрана `index` — 0, 0, 370, 560" in client.calls[1][-1]["content"]
+
+
+async def test_generate_document_retries_a_document_without_screens() -> None:
+    no_screens = dump(build_template_document(PROMPT, None).model_copy(update={"screens": []}))
+    client = FakeLlmClient([no_screens, valid_answer()])
+
+    document = await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=2)
+
+    assert len(document.screens) == 2
+    assert len(client.calls) == 2
+    assert "экранов в документе 0" in client.calls[1][-1]["content"]
+
+
+async def test_generate_document_fails_when_the_root_never_fills_the_scene() -> None:
+    answers: list[str | Exception] = [
+        dump(
+            with_index_root_layout(
+                build_template_document(PROMPT, None), AppNodeLayout(x=0, y=0, width=370, height=height)
+            )
+        )
+        for height in (560, 600)
+    ]
+    client = FakeLlmClient(answers)
+
+    with pytest.raises(GenerationError) as error:
+        await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=2)
+
+    assert len(client.calls) == 2
+    assert "0, 0, 370, 600" in error.value.message
 
 
 async def test_generate_document_with_a_brief_sends_the_rules_only_prompt() -> None:
