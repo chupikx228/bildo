@@ -112,6 +112,30 @@ def adopt_bil95_state_layout(js_files: ExpoFileMap) -> ExpoFileMap:
     return adopted
 
 
+LEGACY_TS_FLATLIST_ROW_REWRITES = (
+    ("backgroundColor: '#18181B', borderRadius: 10", "backgroundColor: theme.colorSurface, borderRadius: 10"),
+    (
+        "<Text style={{ color: '#FAFAFA' }}>{String(item)}</Text>",
+        "<Text style={{ color: theme.colorText }}>{String(item)}</Text>",
+    ),
+)
+
+
+def adopt_bil96_flatlist_rows(js_files: ExpoFileMap) -> ExpoFileMap:
+    adopted = dict(js_files)
+    for path, content in js_files.items():
+        rows = content.count("renderItem={({ item }) => (")
+        if not path.startswith("app/") or rows == 0:
+            continue
+        for legacy, current in LEGACY_TS_FLATLIST_ROW_REWRITES:
+            if content.count(current) == rows:
+                continue
+            assert content.count(legacy) == rows, f"TypeScript FlatList row in {path} no longer contains {legacy!r}"
+            content = content.replace(legacy, current)
+        adopted[path] = content
+    return adopted
+
+
 PAPER_AFFECTED_STATIC_FILES = frozenset({"package.json", "theme.ts", "app/_layout.tsx"})
 PAPER_NODE_TYPES = frozenset({"Button", "TextInput"})
 
@@ -150,7 +174,7 @@ def paper_affected_outputs(request: pytest.FixtureRequest) -> tuple[str, ExpoFil
     label, build_document = PARITY_DOCUMENTS[request.param]
     document = build_document()
     python_files = generate_files(document)
-    js_files = adopt_bil95_state_layout(run_ts_codegen(document))
+    js_files = adopt_bil96_flatlist_rows(adopt_bil95_state_layout(run_ts_codegen(document)))
     assert set(python_files) == set(js_files), describe_difference(label, python_files, js_files)
 
     affected = paper_affected_files(document)
