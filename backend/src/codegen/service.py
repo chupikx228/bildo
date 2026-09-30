@@ -61,6 +61,10 @@ def _object_literal(entries: list[tuple[str, str]]) -> str:
     return "{\n" + ",\n".join(f"  {key}: {value}" for key, value in entries) + "\n}"
 
 
+def _inline_object_literal(entries: list[tuple[str, str]]) -> str:
+    return "{ " + ", ".join(f"{key}: {value}" for key, value in entries) + " }"
+
+
 def _position_entries(node: AppNode, is_root: bool) -> list[tuple[str, str]]:
     if is_root:
         return [("flex", "1")]
@@ -126,6 +130,12 @@ FONT_WEIGHT_FILES = ("400Regular", "700Bold")
 BOLD_FONT_WEIGHTS = frozenset({"600", "700"})
 HEADING_MIN_FONT_SIZE = 20
 BUTTON_DEFAULT_FONT_WEIGHT = "600"
+FLATLIST_ROW_FONT_SIZE = 14
+FLATLIST_ROW_FONT_WEIGHT = None
+HEADER_TITLE_FONT_SIZE = 20
+HEADER_TITLE_FONT_WEIGHT = "600"
+TAB_LABEL_FONT_SIZE = 10
+TAB_LABEL_FONT_WEIGHT = "500"
 
 
 def _font_family(family: str, font_weight: str | None) -> str | None:
@@ -135,10 +145,14 @@ def _font_family(family: str, font_weight: str | None) -> str | None:
     return f"{GOOGLE_FONTS[family].export_prefix}_{weight_file}"
 
 
+def _theme_font_family(theme: AppThemeTokens, font_size: float | None, font_weight: str | None) -> str | None:
+    is_heading = font_size is not None and font_size >= HEADING_MIN_FONT_SIZE
+    return _font_family(theme.font_heading if is_heading else theme.font_body, font_weight)
+
+
 def _text_font_family(node: AppNode, theme: AppThemeTokens) -> str | None:
     style = node.style if node.style is not None else AppNodeStyle()
-    is_heading = style.font_size is not None and style.font_size >= HEADING_MIN_FONT_SIZE
-    return _font_family(theme.font_heading if is_heading else theme.font_body, style.font_weight)
+    return _theme_font_family(theme, style.font_size, style.font_weight)
 
 
 def _font_entries(font_family: str) -> list[tuple[str, str]]:
@@ -446,6 +460,11 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool, theme: AppThemeT
 
     if node.type == "FlatList":
         data = _json_compact(props.data if props and props.data is not None else ["Item"])
+        row_text_entries = [("color", "theme.colorText")]
+        row_font = _theme_font_family(theme, FLATLIST_ROW_FONT_SIZE, FLATLIST_ROW_FONT_WEIGHT)
+        if row_font is not None:
+            row_text_entries.extend(_font_entries(row_font))
+        row_text_style = _inline_object_literal(row_text_entries)
         return (
             pad
             + "<FlatList\n"
@@ -462,9 +481,11 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool, theme: AppThemeT
             + pad
             + "  renderItem={({ item }) => (\n"
             + pad
-            + "    <View style={{ padding: 12, backgroundColor: '#18181B', borderRadius: 10, marginBottom: 8 }}>\n"
+            + "    <View style={{ padding: 12, backgroundColor: theme.colorSurface, borderRadius: 10, marginBottom: 8 }}>\n"
             + pad
-            + "      <Text style={{ color: '#FAFAFA' }}>{String(item)}</Text>\n"
+            + "      <Text style={"
+            + row_text_style
+            + "}>{String(item)}</Text>\n"
             + pad
             + "    </View>\n"
             + pad
@@ -692,7 +713,20 @@ def _font_gate(families: list[str]) -> str:
     )
 
 
-def _tabs_layout(roots: list[AppScreen], families: list[str]) -> str:
+def _navigator_font_option(name: str, font_family: str | None) -> str:
+    if font_family is None:
+        return ""
+    return f"                {name}: {_inline_object_literal(_font_entries(font_family))},\n"
+
+
+def _header_title_option(theme: AppThemeTokens) -> str:
+    font_family = _theme_font_family(theme, HEADER_TITLE_FONT_SIZE, HEADER_TITLE_FONT_WEIGHT)
+    return _navigator_font_option("headerTitleStyle", font_family)
+
+
+def _tabs_layout(roots: list[AppScreen], theme: AppThemeTokens) -> str:
+    families = _theme_font_families(theme)
+    tab_label_font = _theme_font_family(theme, TAB_LABEL_FONT_SIZE, TAB_LABEL_FONT_WEIGHT)
     screens = "\n".join(
         '              <Tabs.Screen name="'
         + ("index" if screen.route == "index" else screen.route)
@@ -719,10 +753,12 @@ def _tabs_layout(roots: list[AppScreen], families: list[str]) -> str:
         "              screenOptions={{\n"
         "                headerStyle: { backgroundColor: theme.colorSurface },\n"
         "                headerTintColor: theme.colorText,\n"
+        f"{_header_title_option(theme)}"
         "                tabBarStyle: { backgroundColor: theme.colorSurface,"
         " borderTopColor: theme.colorBorder },\n"
         "                tabBarActiveTintColor: theme.colorPrimary,\n"
         "                tabBarInactiveTintColor: theme.colorTextMuted,\n"
+        f"{_navigator_font_option('tabBarLabelStyle', tab_label_font)}"
         "                sceneStyle: { backgroundColor: theme.colorBg },\n"
         "              }}\n"
         "            >\n" + screens + "\n"
@@ -736,7 +772,8 @@ def _tabs_layout(roots: list[AppScreen], families: list[str]) -> str:
     )
 
 
-def _stack_layout(screens_list: list[AppScreen], families: list[str]) -> str:
+def _stack_layout(screens_list: list[AppScreen], theme: AppThemeTokens) -> str:
+    families = _theme_font_families(theme)
     screens = "\n".join(
         '              <Stack.Screen name="'
         + ("index" if screen.route == "index" else screen.route)
@@ -763,6 +800,7 @@ def _stack_layout(screens_list: list[AppScreen], families: list[str]) -> str:
         "              screenOptions={{\n"
         "                headerStyle: { backgroundColor: theme.colorSurface },\n"
         "                headerTintColor: theme.colorText,\n"
+        f"{_header_title_option(theme)}"
         "                contentStyle: { backgroundColor: theme.colorBg },\n"
         "              }}\n"
         "            >\n" + screens + "\n"
@@ -942,14 +980,13 @@ def generate_files(document: AppDocument) -> ExpoFileMap:
     files["theme.ts"] = _theme_file(document)
     files["lib/state.ts"] = _state_file(document)
 
-    families = _theme_font_families(document.theme)
     screens_by_id = {screen.id: screen for screen in document.screens}
     roots = [screens_by_id[root_id] for root_id in document.navigation.roots if root_id in screens_by_id]
 
     if document.navigation.type == "tabs":
-        files["app/_layout.tsx"] = _tabs_layout(roots, families)
+        files["app/_layout.tsx"] = _tabs_layout(roots, document.theme)
     else:
-        files["app/_layout.tsx"] = _stack_layout(document.screens, families)
+        files["app/_layout.tsx"] = _stack_layout(document.screens, document.theme)
 
     for screen in document.screens:
         file_name = "app/index.tsx" if screen.route == "index" else f"app/{screen.route}.tsx"
