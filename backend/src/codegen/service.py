@@ -515,7 +515,7 @@ def _screen_file(screen: AppScreen, theme: AppThemeTokens) -> str:
         f"import {_icon_component(icon)} from 'lucide-react-native/icons/{icon}';\n" for icon in sorted(icon_imports)
     )
     router_import = "import { useRouter } from 'expo-router';\n" if needs.router else ""
-    state_import = "import { useAppState } from './state';\n" if needs.state else ""
+    state_import = "import { useAppState } from '../lib/state';\n" if needs.state else ""
     hooks_block = "\n".join(hooks) + "\n" if hooks else ""
     theme_names = "paperTheme, theme" if paper_imports else "theme"
     theme_import = "import { " + theme_names + " } from '../theme';\n"
@@ -628,7 +628,7 @@ def _app_json(document: AppDocument) -> str:
 def _state_file(document: AppDocument) -> str:
     initial = _json_pretty(document.state if document.state is not None else {})
     return (
-        "import React, { createContext, useCallback, useContext, useMemo, useState,"
+        "import { createContext, createElement, useCallback, useContext, useMemo, useState,"
         " type ReactNode } from 'react';\n"
         "\n"
         "type Vars = Record<string, string | number | boolean>;\n"
@@ -648,7 +648,7 @@ def _state_file(document: AppDocument) -> str:
         "    setState(s => ({ ...s, [k]: v }));\n"
         "  }, []);\n"
         "  const value = useMemo(() => ({ state, setVar }), [state, setVar]);\n"
-        "  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;\n"
+        "  return createElement(Ctx.Provider, { value }, children);\n"
         "}\n"
         "\n"
         "export function useAppState(): CtxValue {\n"
@@ -706,7 +706,7 @@ def _tabs_layout(roots: list[AppScreen], families: list[str]) -> str:
         "import { GestureHandlerRootView } from 'react-native-gesture-handler';\n"
         "import { PaperProvider } from 'react-native-paper';\n"
         "import { SafeAreaProvider } from 'react-native-safe-area-context';\n"
-        "import { AppStateProvider } from './state';\n"
+        "import { AppStateProvider } from '../lib/state';\n"
         "import { paperTheme, theme } from '../theme';\n"
         f"{_font_imports(families)}\n"
         "export default function Layout() {\n"
@@ -750,7 +750,7 @@ def _stack_layout(screens_list: list[AppScreen], families: list[str]) -> str:
         "import { GestureHandlerRootView } from 'react-native-gesture-handler';\n"
         "import { PaperProvider } from 'react-native-paper';\n"
         "import { SafeAreaProvider } from 'react-native-safe-area-context';\n"
-        "import { AppStateProvider } from './state';\n"
+        "import { AppStateProvider } from '../lib/state';\n"
         "import { paperTheme, theme } from '../theme';\n"
         f"{_font_imports(families)}\n"
         "export default function Layout() {\n"
@@ -940,7 +940,7 @@ def generate_files(document: AppDocument) -> ExpoFileMap:
         files["metro.config.js"] = METRO_CONFIG
     files[".gitignore"] = GITIGNORE
     files["theme.ts"] = _theme_file(document)
-    files["app/state.tsx"] = _state_file(document)
+    files["lib/state.ts"] = _state_file(document)
 
     families = _theme_font_families(document.theme)
     screens_by_id = {screen.id: screen for screen in document.screens}

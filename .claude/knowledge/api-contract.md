@@ -186,7 +186,7 @@ Arq сохраняет в результате упавшей джобы **са�
 
 Асинхронность спрятана внутри: обработчик ставит задачу сборки в очередь Arq и ждёт её результат, а не собирает zip сам — CPU-работа идёт в процессе воркера и не занимает event loop API. Идентификатор задачи здесь — свежий `uuid4()` (у одного приложения может быть много независимых экспортов), поэтому опрашивать его через `/api/tasks/{id}` бессмысленно, клиент его и не видит.
 
-Содержимое архива строит **порт TS-генератора на Python** (`backend/src/codegen/service.py` ← `frontend/apps/web/src/entities/app-document/lib/codegen.ts`): те же файлы, те же пути, то же содержимое — `package.json`, `app.json`, `tsconfig.json`, `babel.config.js`, `.gitignore`, `theme.ts`, `app/state.tsx`, `app/_layout.tsx`, `app/<route>.tsx` на каждый экран (`index` → `app/index.tsx`), `README.md`. Совпадение с панелью кода в редакторе держится тестом на равенство вывода обоих генераторов (Node нужен только этому тесту в CI, в прод-рантайм бэкенда он не попадает). **Меняешь один генератор — меняй второй в том же PR.**
+Содержимое архива строит **порт TS-генератора на Python** (`backend/src/codegen/service.py` ← `frontend/apps/web/src/entities/app-document/lib/codegen.ts`): те же файлы, те же пути, то же содержимое — `package.json`, `app.json`, `tsconfig.json`, `babel.config.js`, `.gitignore`, `theme.ts`, `lib/state.ts`, `app/_layout.tsx`, `app/<route>.tsx` на каждый экран (`index` → `app/index.tsx`), `README.md`. Совпадение с панелью кода в редакторе держится тестом на равенство вывода обоих генераторов (Node нужен только этому тесту в CI, в прод-рантайм бэкенда он не попадает). **Меняешь один генератор — меняй второй в том же PR.**
 
 ## Чат ассистента (BIL-36, BIL-37)
 
