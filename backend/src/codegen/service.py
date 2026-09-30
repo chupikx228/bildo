@@ -237,7 +237,7 @@ def _collect_imports(node: AppNode, names: set[str], paper_names: set[str], icon
     elif node.type == "Icon":
         names.add("View")
         if node.props is not None and node.props.icon is not None:
-            icon_names.add(_icon_component(node.props.icon))
+            icon_names.add(node.props.icon)
     elif node.type == "Spacer":
         names.add("View")
     elif node.type == "Image":
@@ -511,8 +511,8 @@ def _screen_file(screen: AppScreen, theme: AppThemeTokens) -> str:
     paper_import = (
         "import { " + ", ".join(sorted(paper_imports)) + " } from 'react-native-paper';\n" if paper_imports else ""
     )
-    icon_import = (
-        "import { " + ", ".join(sorted(icon_imports)) + " } from 'lucide-react-native';\n" if icon_imports else ""
+    icon_import = "".join(
+        f"import {_icon_component(icon)} from 'lucide-react-native/icons/{icon}';\n" for icon in sorted(icon_imports)
     )
     router_import = "import { useRouter } from 'expo-router';\n" if needs.router else ""
     state_import = "import { useAppState } from './state';\n" if needs.state else ""
@@ -553,6 +553,10 @@ def _uses_icons(node: AppNode) -> bool:
     return any(_uses_icons(child) for child in node.children)
 
 
+def _document_uses_icons(document: AppDocument) -> bool:
+    return any(_uses_icons(screen.root) for screen in document.screens)
+
+
 def _package_json(document: AppDocument) -> str:
     dependencies = {
         "expo": "~52.0.46",
@@ -572,7 +576,7 @@ def _package_json(document: AppDocument) -> str:
         "expo-font": "~13.0.4",
         "query-string": "^7.1.3",
     }
-    if any(_uses_icons(screen.root) for screen in document.screens):
+    if _document_uses_icons(document):
         dependencies["lucide-react-native"] = "~1.48.0"
         dependencies["react-native-svg"] = "15.8.0"
     for family in _theme_font_families(document.theme):
@@ -804,6 +808,20 @@ npm-debug.*
 web-build/
 """
 
+METRO_CONFIG = """const { getDefaultConfig } = require('expo/metro-config');
+
+const config = getDefaultConfig(__dirname);
+
+config.resolver.resolveRequest = (context, moduleName, platform) =>
+  context.resolveRequest(
+    moduleName.startsWith('lucide-react-native/') ? { ...context, unstable_enablePackageExports: true } : context,
+    moduleName,
+    platform
+  );
+
+module.exports = config;
+"""
+
 BABEL_CONFIG = """module.exports = function (api) {
   api.cache(true);
   return { presets: ['babel-preset-expo'] };
@@ -912,8 +930,14 @@ def generate_files(document: AppDocument) -> ExpoFileMap:
 
     files["package.json"] = _package_json(document)
     files["app.json"] = _app_json(document)
-    files["tsconfig.json"] = _json_pretty({"extends": "expo/tsconfig.base", "compilerOptions": {"strict": True}})
+    uses_icons = _document_uses_icons(document)
+    compiler_options: dict[str, object] = {"strict": True}
+    if uses_icons:
+        compiler_options["moduleResolution"] = "bundler"
+    files["tsconfig.json"] = _json_pretty({"extends": "expo/tsconfig.base", "compilerOptions": compiler_options})
     files["babel.config.js"] = BABEL_CONFIG
+    if uses_icons:
+        files["metro.config.js"] = METRO_CONFIG
     files[".gitignore"] = GITIGNORE
     files["theme.ts"] = _theme_file(document)
     files["app/state.tsx"] = _state_file(document)
