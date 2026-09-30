@@ -81,6 +81,37 @@ def describe_difference(label: str, python_files: ExpoFileMap, js_files: ExpoFil
     return "\n".join(lines)
 
 
+LEGACY_TS_STATE_PATH = "app/state.tsx"
+STATE_PATH = "lib/state.ts"
+LEGACY_TS_STATE_REWRITES = (
+    ("import React, { createContext, useCallback,", "import { createContext, createElement, useCallback,"),
+    (
+        "return <Ctx.Provider value={value}>{children}</Ctx.Provider>;",
+        "return createElement(Ctx.Provider, { value }, children);",
+    ),
+)
+LEGACY_TS_STATE_IMPORT = "from './state';"
+STATE_IMPORT = "from '../lib/state';"
+
+
+def adopt_bil95_state_layout(js_files: ExpoFileMap) -> ExpoFileMap:
+    if STATE_PATH in js_files or LEGACY_TS_STATE_PATH not in js_files:
+        return js_files
+
+    state = js_files[LEGACY_TS_STATE_PATH]
+    for legacy, current in LEGACY_TS_STATE_REWRITES:
+        assert state.count(legacy) == 1, f"TypeScript state module no longer contains {legacy!r}"
+        state = state.replace(legacy, current)
+
+    adopted = {
+        path: content.replace(LEGACY_TS_STATE_IMPORT, STATE_IMPORT) if path.startswith("app/") else content
+        for path, content in js_files.items()
+        if path != LEGACY_TS_STATE_PATH
+    }
+    adopted[STATE_PATH] = state
+    return adopted
+
+
 PAPER_AFFECTED_STATIC_FILES = frozenset({"package.json", "theme.ts", "app/_layout.tsx"})
 PAPER_NODE_TYPES = frozenset({"Button", "TextInput"})
 
@@ -119,7 +150,7 @@ def paper_affected_outputs(request: pytest.FixtureRequest) -> tuple[str, ExpoFil
     label, build_document = PARITY_DOCUMENTS[request.param]
     document = build_document()
     python_files = generate_files(document)
-    js_files = run_ts_codegen(document)
+    js_files = adopt_bil95_state_layout(run_ts_codegen(document))
     assert set(python_files) == set(js_files), describe_difference(label, python_files, js_files)
 
     affected = paper_affected_files(document)
