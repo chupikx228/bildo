@@ -9,7 +9,8 @@ from src.apps.schemas import AppDocument
 from src.chat.prompt import RESPONSE_SCHEMA as CHAT_RESPONSE_SCHEMA
 from src.chat.prompt import SCHEMA_NAME as CHAT_SCHEMA_NAME
 from src.chat.schemas import ChatTurnResponse
-from src.generation.exceptions import GenerationError
+from src.generation import structured_output as structured_output_module
+from src.generation.exceptions import GenerationError, StrictSchemaUnsupportedError, TransientProviderError
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
 from src.generation.prompt import SCHEMA_NAME as DOCUMENT_SCHEMA_NAME
@@ -320,3 +321,90 @@ async def test_a_check_that_never_passes_exhausts_the_attempts() -> None:
 
     assert len(client.calls) == 3
     assert "нет экрана `index`" in error.value.message
+
+
+TRANSIENT = "RouterAI временно не смог выполнить запрос генерации: Provider connection error, please retry"
+
+
+@pytest.fixture
+def no_transient_delay(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(structured_output_module, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+async def test_transient_error_is_retried_with_the_same_dialog(case: Case) -> None:
+    client = FakeLlmClient([TransientProviderError(TRANSIENT), case.valid_answer])
+
+    result = await run(case, client)
+
+    assert result == case.target_model.model_validate(json.loads(case.valid_answer))
+    assert client.calls == [MESSAGES, MESSAGES]
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+async def test_transient_error_exhausting_the_attempts_surfaces_the_provider_error(case: Case) -> None:
+    client = FakeLlmClient([TransientProviderError(TRANSIENT) for _ in range(3)])
+
+    with pytest.raises(TransientProviderError) as error:
+        await run(case, client)
+
+    assert len(client.calls) == 3
+    assert error.value.message == TRANSIENT
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+async def test_transient_and_invalid_answers_share_one_attempt_budget(case: Case) -> None:
+    answers: list[str | Exception] = [
+        case.invalid_answer,
+        TransientProviderError(TRANSIENT),
+        TransientProviderError(TRANSIENT),
+        case.valid_answer,
+    ]
+    client = FakeLlmClient(answers)
+
+    with pytest.raises(TransientProviderError):
+        await run(case, client)
+
+    assert len(client.calls) == 3
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+async def test_feedback_from_an_invalid_answer_survives_a_transient_retry(case: Case) -> None:
+    answers: list[str | Exception] = [case.invalid_answer, TransientProviderError(TRANSIENT), case.valid_answer]
+    client = FakeLlmClient(answers)
+
+    await run(case, client)
+
+    assert len(client.calls) == 3
+    assert client.calls[2] == client.calls[1]
+    assert client.calls[1][len(MESSAGES)] == {"role": "assistant", "content": case.invalid_answer}
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+async def test_invalid_answer_on_the_last_attempt_after_a_transient_error_reports_the_validation_error(
+    case: Case,
+) -> None:
+    client = FakeLlmClient([TransientProviderError(TRANSIENT), case.invalid_answer])
+
+    with pytest.raises(GenerationError) as error:
+        await run(case, client, max_attempts=2)
+
+    assert not isinstance(error.value, TransientProviderError)
+    assert "2 попыток" in error.value.message
+    assert validation_error_of(case, case.invalid_answer) in error.value.message
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
+async def test_strict_schema_rejection_is_not_retried(case: Case) -> None:
+    client = FakeLlmClient([StrictSchemaUnsupportedError(MODEL, "oneOf is not permitted"), case.valid_answer])
+
+    with pytest.raises(StrictSchemaUnsupportedError):
+        await run(case, client)
+
+    assert len(client.calls) == 1

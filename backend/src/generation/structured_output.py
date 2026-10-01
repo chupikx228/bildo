@@ -1,10 +1,11 @@
+import asyncio
 import json
 import logging
 from collections.abc import Callable, Sequence
 
 from pydantic import BaseModel, ValidationError
 
-from src.generation.exceptions import GenerationError
+from src.generation.exceptions import GenerationError, TransientProviderError
 from src.generation.llm_client import ChatMessage, JsonSchema, LlmClient
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,8 @@ logger = logging.getLogger(__name__)
 MAX_ERROR_CHARS = 2000
 
 JSON_FENCE = "```"
+
+TRANSIENT_RETRY_DELAY_SECONDS = 2.0
 
 
 async def generate_structured[ModelT: BaseModel](
@@ -31,7 +34,20 @@ async def generate_structured[ModelT: BaseModel](
     previous_raw: str | None = None
 
     for attempt in range(1, max_attempts + 1):
-        raw = await client.complete(history, schema_name, schema, model=model)
+        try:
+            raw = await client.complete(history, schema_name, schema, model=model)
+        except TransientProviderError as error:
+            logger.warning(
+                "RouterAI failed transiently on attempt %s/%s for %s: %s",
+                attempt,
+                max_attempts,
+                schema_name,
+                error.message,
+            )
+            if attempt == max_attempts:
+                raise
+            await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
+            continue
         if raw == previous_raw:
             raise GenerationError(
                 f"Модель RouterAI повторила тот же некорректный {subject} после исправления: {last_error}"

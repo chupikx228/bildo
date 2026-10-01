@@ -1,9 +1,19 @@
 import asyncio
+import json
 import logging
 from collections.abc import Sequence
 from typing import Any, Literal, Protocol, TypedDict
 
-from openai import APIError, AsyncOpenAI, BadRequestError, Omit, UnprocessableEntityError, omit
+from openai import (
+    APIConnectionError,
+    APIError,
+    APIStatusError,
+    AsyncOpenAI,
+    BadRequestError,
+    Omit,
+    UnprocessableEntityError,
+    omit,
+)
 from openai.types.chat import (
     ChatCompletion,
     ChatCompletionAssistantMessageParam,
@@ -13,7 +23,12 @@ from openai.types.chat import (
 )
 from openai.types.chat.completion_create_params import ResponseFormat
 
-from src.generation.exceptions import GenerationError, GenerationNotConfiguredError, StrictSchemaUnsupportedError
+from src.generation.exceptions import (
+    GenerationError,
+    GenerationNotConfiguredError,
+    StrictSchemaUnsupportedError,
+    TransientProviderError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +45,11 @@ UNCONSTRAINED_MODEL_PREFIXES = ("anthropic/",)
 REQUEST_TIMEOUT_SECONDS = 750.0
 IDLE_TIMEOUT_SECONDS = 60.0
 
+SDK_MAX_RETRIES = 0
+
 SCHEMA_REJECTION_MARKERS = ("schema", "grammar")
+TRANSIENT_ERROR_MARKERS = ("connection error", "please retry")
+TRANSIENT_STATUS_CODES = frozenset({408, 429})
 
 
 class ChatMessage(TypedDict):
@@ -127,12 +146,18 @@ class RouterAiLlmClient:
             ) from error
         except (BadRequestError, UnprocessableEntityError) as error:
             raise _rejection(model, mode, str(error)) from error
+        except APIConnectionError as error:
+            raise TransientProviderError(f"RouterAI не ответил на запрос генерации: {error}") from error
+        except APIStatusError as error:
+            if _is_transient_status(error.status_code):
+                raise TransientProviderError(f"RouterAI не ответил на запрос генерации: {error}") from error
+            raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
         except APIError as error:
             raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
 
         provider_error = _extract_provider_error(completion)
         if provider_error is not None:
-            raise _rejection(model, mode, provider_error)
+            raise _provider_failure(model, mode, provider_error)
 
         return _extract_content(completion, max_tokens)
 
@@ -149,6 +174,7 @@ class RouterAiLlmClient:
                 api_key=self._api_key,
                 base_url=self._base_url,
                 timeout=self._idle_timeout_seconds,
+                max_retries=SDK_MAX_RETRIES,
             )
             logger.info("RouterAI client ready: base_url=%s", self._base_url)
         return self._client
@@ -165,6 +191,39 @@ def _rejection(model: str, mode: ResponseFormatMode, detail: str) -> GenerationE
         logger.error("RouterAI rejected strict response_format=json_schema for model %s: %s", model, detail)
         return StrictSchemaUnsupportedError(model, detail)
     return GenerationError(f"RouterAI отклонил запрос генерации: {detail}")
+
+
+def _provider_failure(model: str, mode: ResponseFormatMode, error: object) -> GenerationError:
+    detail = str(error)
+    schema_rejection = mode == "json_schema" and _is_schema_rejection(detail)
+    if not schema_rejection and _is_transient_provider_error(error, detail):
+        return TransientProviderError(f"RouterAI временно не смог выполнить запрос генерации: {detail}")
+    return _rejection(model, mode, detail)
+
+
+def _is_transient_provider_error(error: object, detail: str) -> bool:
+    code = _provider_error_code(error)
+    if code is not None and _is_transient_status(code):
+        return True
+    lowered = detail.lower()
+    return any(marker in lowered for marker in TRANSIENT_ERROR_MARKERS)
+
+
+def _provider_error_code(error: object) -> int | None:
+    payload = error
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            return None
+    if isinstance(payload, dict) and isinstance(payload.get("error"), dict):
+        payload = payload["error"]
+    code = payload.get("code") if isinstance(payload, dict) else None
+    return code if isinstance(code, int) else None
+
+
+def _is_transient_status(status_code: int) -> bool:
+    return status_code in TRANSIENT_STATUS_CODES or status_code >= 500
 
 
 def _is_schema_rejection(detail: str) -> bool:
@@ -189,13 +248,10 @@ def _to_message_param(message: ChatMessage) -> ChatCompletionMessageParam:
     return ChatCompletionUserMessageParam(role="user", content=message["content"])
 
 
-def _extract_provider_error(completion: ChatCompletion) -> str | None:
+def _extract_provider_error(completion: ChatCompletion) -> object | None:
     if completion.choices:
         return None
-    error = getattr(completion, "error", None)
-    if error is None:
-        return None
-    return str(error)
+    return getattr(completion, "error", None)
 
 
 def _extract_content(completion: ChatCompletion, max_tokens: int) -> str:

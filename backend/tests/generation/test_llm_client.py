@@ -9,9 +9,16 @@ from typing import Any
 import httpx
 import pytest
 from openai import AsyncOpenAI
+from pydantic import BaseModel
 
 from src.generation import llm_client as llm_client_module
-from src.generation.exceptions import GenerationError, GenerationNotConfiguredError, StrictSchemaUnsupportedError
+from src.generation import structured_output as structured_output_module
+from src.generation.exceptions import (
+    GenerationError,
+    GenerationNotConfiguredError,
+    StrictSchemaUnsupportedError,
+    TransientProviderError,
+)
 from src.generation.llm_client import (
     IDLE_TIMEOUT_SECONDS,
     MAX_OUTPUT_TOKENS,
@@ -20,6 +27,7 @@ from src.generation.llm_client import (
     JsonSchema,
     RouterAiLlmClient,
 )
+from src.generation.structured_output import generate_structured
 from src.worker.tasks import GENERATION_TIMEOUT_SECONDS
 
 BASE_URL = "https://routerai.test/api/v1"
@@ -79,12 +87,12 @@ class StubGateway:
 @pytest.fixture
 def build_client(monkeypatch: pytest.MonkeyPatch) -> BuildClient:
     def build(handler: Handler) -> RouterAiLlmClient:
-        def make_openai(*, api_key: str, base_url: str, timeout: float) -> AsyncOpenAI:
+        def make_openai(*, api_key: str, base_url: str, timeout: float, max_retries: int) -> AsyncOpenAI:
             return AsyncOpenAI(
                 api_key=api_key,
                 base_url=base_url,
                 timeout=timeout,
-                max_retries=0,
+                max_retries=max_retries,
                 http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
             )
 
@@ -252,7 +260,7 @@ async def test_transient_provider_error_embedded_in_a_200_response_is_not_a_sche
         await complete(client)
     await client.aclose()
 
-    assert not isinstance(error.value, StrictSchemaUnsupportedError)
+    assert isinstance(error.value, TransientProviderError)
     assert TRANSIENT_PROVIDER_ERROR in error.value.message
 
 
@@ -270,7 +278,194 @@ async def test_transient_provider_error_with_a_client_error_status_is_not_a_sche
     await client.aclose()
 
     assert not isinstance(error.value, StrictSchemaUnsupportedError)
+    assert not isinstance(error.value, TransientProviderError)
     assert TRANSIENT_PROVIDER_ERROR in error.value.message
+
+
+@pytest.mark.parametrize("code", [408, 429, 500, 502, 503, 504])
+async def test_provider_error_with_a_transient_code_embedded_in_a_200_response_is_transient(
+    build_client: BuildClient, code: int
+) -> None:
+    body = gateway_error_body(code, json.dumps({"error": {"message": "upstream failed"}}))
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    with pytest.raises(TransientProviderError) as error:
+        await complete(client)
+    await client.aclose()
+
+    assert "upstream failed" in error.value.message
+
+
+async def test_provider_error_with_a_client_error_code_embedded_in_a_200_response_is_not_transient(
+    build_client: BuildClient,
+) -> None:
+    body = gateway_error_body(400, json.dumps({"error": {"message": "max_tokens is too large"}}))
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    with pytest.raises(GenerationError) as error:
+        await complete(client)
+    await client.aclose()
+
+    assert not isinstance(error.value, TransientProviderError)
+    assert not isinstance(error.value, StrictSchemaUnsupportedError)
+    assert "max_tokens is too large" in error.value.message
+
+
+async def test_schema_rejection_wins_over_a_transient_error_in_the_same_response(build_client: BuildClient) -> None:
+    body = gateway_error_body(502, OPENAI_SCHEMA_REJECTION + " " + TRANSIENT_PROVIDER_ERROR)
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    with pytest.raises(StrictSchemaUnsupportedError):
+        await complete(client)
+    await client.aclose()
+
+
+async def test_transient_text_without_a_response_format_is_still_transient(build_client: BuildClient) -> None:
+    body = gateway_error_body(400, json.dumps({"error": {"message": f"schema cache: {TRANSIENT_PROVIDER_ERROR}"}}))
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    with pytest.raises(TransientProviderError):
+        await complete(client, model=ANTHROPIC_MODEL)
+    await client.aclose()
+
+
+@pytest.mark.parametrize("status", [408, 429, 500, 502, 503, 504])
+async def test_gateway_status_that_is_transient_becomes_a_transient_error(
+    build_client: BuildClient, status: int
+) -> None:
+    def failing(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json={"error": {"message": "gateway is busy"}})
+
+    client = build_client(failing)
+
+    with pytest.raises(TransientProviderError):
+        await complete(client)
+    await client.aclose()
+
+
+@pytest.mark.parametrize("status", [401, 402, 403, 404])
+async def test_gateway_status_that_is_not_transient_stays_a_plain_generation_error(
+    build_client: BuildClient, status: int
+) -> None:
+    def failing(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json={"error": {"message": "nope"}})
+
+    client = build_client(failing)
+
+    with pytest.raises(GenerationError) as error:
+        await complete(client)
+    await client.aclose()
+
+    assert not isinstance(error.value, TransientProviderError)
+
+
+class Named(BaseModel):
+    name: str
+
+
+@pytest.fixture
+def no_transient_delay(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(structured_output_module, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+
+
+class FlakyGateway:
+    def __init__(self, failures: list[dict[str, Any]]) -> None:
+        self._failures = failures
+        self.calls = 0
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.calls += 1
+        if self._failures:
+            return httpx.Response(200, json=self._failures.pop(0))
+        return httpx.Response(200, json=completion_body(ANSWER))
+
+
+async def generate_named(client: RouterAiLlmClient, max_attempts: int = 3) -> Named:
+    return await generate_structured(
+        MESSAGES,
+        client=client,
+        model=MODEL,
+        schema_name=SCHEMA_NAME,
+        schema=SCHEMA,
+        target_model=Named,
+        max_attempts=max_attempts,
+    )
+
+
+def transient_body() -> dict[str, Any]:
+    return gateway_error_body(502, json.dumps({"error": {"message": TRANSIENT_PROVIDER_ERROR}}))
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_transient_gateway_error_is_retried_until_the_model_answers(build_client: BuildClient) -> None:
+    gateway = FlakyGateway([transient_body(), transient_body()])
+    client = build_client(gateway)
+
+    assert await generate_named(client) == Named(name="Трекер привычек")
+    await client.aclose()
+
+    assert gateway.calls == 3
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_transient_gateway_errors_exhaust_the_attempts(build_client: BuildClient) -> None:
+    gateway = FlakyGateway([transient_body() for _ in range(3)])
+    client = build_client(gateway)
+
+    with pytest.raises(TransientProviderError) as error:
+        await generate_named(client)
+    await client.aclose()
+
+    assert gateway.calls == 3
+    assert TRANSIENT_PROVIDER_ERROR in error.value.message
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_strict_schema_rejection_is_not_retried(build_client: BuildClient) -> None:
+    gateway = FlakyGateway([gateway_error_body(400, OPENAI_SCHEMA_REJECTION)])
+    client = build_client(gateway)
+
+    with pytest.raises(StrictSchemaUnsupportedError):
+        await generate_named(client)
+    await client.aclose()
+
+    assert gateway.calls == 1
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_network_failure_is_retried_by_us_not_by_the_sdk(build_client: BuildClient) -> None:
+    calls = 0
+
+    def unreachable_once(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise httpx.ConnectError("шлюз недоступен", request=request)
+        return httpx.Response(200, json=completion_body(ANSWER))
+
+    client = build_client(unreachable_once)
+
+    assert await generate_named(client) == Named(name="Трекер привычек")
+    await client.aclose()
+
+    assert calls == 2
+
+
+async def test_sdk_retries_are_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+    gateway = StubGateway(rejected=set())
+
+    def make_openai(**kwargs: Any) -> AsyncOpenAI:
+        seen.update(kwargs)
+        return AsyncOpenAI(**kwargs, http_client=httpx.AsyncClient(transport=httpx.MockTransport(gateway)))
+
+    monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
+    client = RouterAiLlmClient("test-key", BASE_URL)
+
+    await complete(client)
+    await client.aclose()
+
+    assert seen["max_retries"] == 0
 
 
 LOCAL_GATEWAY_LIFETIME_SECONDS = 5.0
@@ -279,8 +474,10 @@ Respond = Callable[[asyncio.StreamReader, asyncio.StreamWriter], Awaitable[None]
 
 
 @asynccontextmanager
-async def local_gateway(respond: Respond) -> AsyncIterator[str]:
+async def local_gateway(respond: Respond, connections: list[int] | None = None) -> AsyncIterator[str]:
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        if connections is not None:
+            connections.append(1)
         await reader.readuntil(b"\r\n\r\n")
         with contextlib.suppress(ConnectionError, TimeoutError):
             async with asyncio.timeout(LOCAL_GATEWAY_LIFETIME_SECONDS):
@@ -305,16 +502,18 @@ async def keep_alive_with_whitespace(reader: asyncio.StreamReader, writer: async
         await asyncio.sleep(0.05)
 
 
-async def test_silent_connection_fails_on_the_idle_timeout() -> None:
-    async with local_gateway(stay_silent) as base_url:
+async def test_silent_connection_fails_on_the_idle_timeout_without_sdk_retries() -> None:
+    connections: list[int] = []
+    async with local_gateway(stay_silent, connections) as base_url:
         client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=30, idle_timeout_seconds=0.2)
         started = time.monotonic()
 
-        with pytest.raises(GenerationError) as error:
+        with pytest.raises(TransientProviderError) as error:
             await complete(client)
         await client.aclose()
 
     assert "Request timed out" in error.value.message
+    assert len(connections) == 1
     assert time.monotonic() - started < LOCAL_GATEWAY_LIFETIME_SECONDS
 
 
@@ -327,6 +526,7 @@ async def test_request_kept_alive_with_whitespace_fails_on_the_request_timeout()
             await complete(client)
         await client.aclose()
 
+    assert not isinstance(error.value, TransientProviderError)
     assert "за 0.5 секунд" in error.value.message
     assert time.monotonic() - started < LOCAL_GATEWAY_LIFETIME_SECONDS
 
@@ -365,7 +565,7 @@ async def test_network_failure_becomes_a_generation_error(build_client: BuildCli
 
     client = build_client(unreachable)
 
-    with pytest.raises(GenerationError):
+    with pytest.raises(TransientProviderError):
         await complete(client)
     await client.aclose()
 
