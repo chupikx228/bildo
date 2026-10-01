@@ -39,9 +39,32 @@ async def generate_document(
 
 
 def check_document(document: AppDocument) -> None:
-    routes = [screen.route for screen in document.screens]
-    problems = [*_screen_count_problems(document), *_navigation_problems(document), *_root_layout_problems(document)]
+    _raise_on_problems(
+        document,
+        [
+            *_screen_count_problems(document),
+            *_start_route_problems(document, "`id` и `route`"),
+            *_empty_roots_problems(document),
+            *_missing_roots_problems(document),
+            *_root_layout_problems(document),
+        ],
+    )
+
+
+def check_edited_document(document: AppDocument) -> None:
+    _raise_on_problems(
+        document,
+        [
+            *_start_route_problems(document, "`route`"),
+            *_empty_roots_problems(document),
+            *_root_layout_problems(document),
+        ],
+    )
+
+
+def _raise_on_problems(document: AppDocument, problems: list[str]) -> None:
     if problems:
+        routes = [screen.route for screen in document.screens]
         raise ValueError(
             f"Документ нарушает правила модели документа: {'; '.join(problems)}. "
             f"Маршруты экранов в документе: {', '.join(routes) or 'нет ни одного экрана'}"
@@ -58,21 +81,27 @@ def _screen_count_problems(document: AppDocument) -> list[str]:
     ]
 
 
-def _navigation_problems(document: AppDocument) -> list[str]:
+def _start_route_problems(document: AppDocument, start_screen_fields: str) -> list[str]:
+    if START_ROUTE in [screen.route for screen in document.screens]:
+        return []
+    return [
+        f"нет экрана, чей `route` равен `{START_ROUTE}`: {start_screen_fields} стартового экрана — буквально строка "
+        f"`{START_ROUTE}`, смысловое название экрана пиши в `name`"
+    ]
+
+
+def _empty_roots_problems(document: AppDocument) -> list[str]:
+    if document.navigation.roots:
+        return []
+    return ["`navigation.roots` пуст: перечисли в нём `route` корневых экранов"]
+
+
+def _missing_roots_problems(document: AppDocument) -> list[str]:
     routes = [screen.route for screen in document.screens]
-    problems: list[str] = []
-    if START_ROUTE not in routes:
-        problems.append(
-            f"нет экрана, чей `route` равен `{START_ROUTE}`: `id` и `route` стартового экрана — буквально строка "
-            f"`{START_ROUTE}`, смысловое название экрана пиши в `name`"
-        )
-    roots = document.navigation.roots
-    if not roots:
-        problems.append("`navigation.roots` пуст: перечисли в нём `route` корневых экранов")
-    missing = [root for root in roots if root not in routes]
-    if missing:
-        problems.append(f"`navigation.roots` ссылается на несуществующие `route`: {', '.join(missing)}")
-    return problems
+    missing = [root for root in document.navigation.roots if root not in routes]
+    if not missing:
+        return []
+    return [f"`navigation.roots` ссылается на несуществующие `route`: {', '.join(missing)}"]
 
 
 def _root_layout_problems(document: AppDocument) -> list[str]:

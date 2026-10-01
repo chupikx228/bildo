@@ -15,7 +15,7 @@ from src.chat.prompt import SCHEMA_NAME as CHAT_SCHEMA_NAME
 from src.chat.prompt import build_messages as build_chat_messages
 from src.chat.repository import SqlAlchemyChatRepository, is_duplicate_reply_violation
 from src.chat.schemas import ChatTurnResponse
-from src.chat.service import ChatService
+from src.chat.service import ChatService, check_chat_turn
 from src.codegen.service import build_zip, generate_files
 from src.config import settings
 from src.database import async_session_factory
@@ -111,6 +111,7 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
                     target_model=ChatTurnResponse,
                     max_attempts=settings.routerai_max_retries,
                     subject=CHAT_TURN_TIMEOUT_SUBJECT,
+                    check=check_chat_turn,
                 )
         except TimeoutError as error:
             if not deadline.expired():
