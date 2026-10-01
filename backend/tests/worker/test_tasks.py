@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import json
 import logging
+from collections.abc import Callable
 from types import TracebackType
 from typing import Any, Self
 from uuid import UUID
@@ -9,7 +10,7 @@ from uuid import UUID
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from src.apps.schemas import AppDocument
+from src.apps.schemas import AppDocument, AppNodeLayout
 from src.apps.service import AppService
 from src.chat.models import REPLY_FOREIGN_KEY_CONSTRAINT, REPLY_UNIQUE_CONSTRAINT
 from src.chat.schemas import ChatTurnResponse
@@ -50,6 +51,32 @@ def chat_answer(reply: str, *, with_document: bool, document_revision: int = 1) 
         document = build_template_document(PROMPT, None).model_copy(update={"revision": document_revision})
         payload["document"] = document.model_dump(mode="json", by_alias=True)
     return json.dumps(payload, ensure_ascii=False)
+
+
+def chat_answer_with(reply: str, document: AppDocument) -> str:
+    payload = {"reply": reply, "document": document.model_dump(mode="json", by_alias=True)}
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def without_index_route(document: AppDocument) -> AppDocument:
+    screens = [
+        screen.model_copy(update={"route": "today"}) if screen.route == "index" else screen
+        for screen in document.screens
+    ]
+    return document.model_copy(update={"screens": screens})
+
+
+def with_empty_roots(document: AppDocument) -> AppDocument:
+    return document.model_copy(update={"navigation": document.navigation.model_copy(update={"roots": []})})
+
+
+def with_iphone_sized_roots(document: AppDocument) -> AppDocument:
+    layout = AppNodeLayout(x=0, y=0, width=390, height=844)
+    screens = [
+        screen.model_copy(update={"root": screen.root.model_copy(update={"layout": layout})})
+        for screen in document.screens
+    ]
+    return document.model_copy(update={"screens": screens})
 
 
 def context(
@@ -667,6 +694,75 @@ async def test_chat_turn_retries_when_the_model_returns_a_blank_reply(
     assert len(llm_client.calls) == 2
     messages = await chat_repository.list_messages(app_id)
     assert [message.content for message in messages] == ["сколько тут экранов?", "пока ни одного"]
+
+
+@pytest.mark.parametrize(
+    ("break_document", "expected_problem"),
+    [
+        (without_index_route, "нет экрана, чей `route` равен `index`"),
+        (with_empty_roots, "`navigation.roots` пуст"),
+        (with_iphone_sized_roots, "`layout` корня экрана `index` — 0, 0, 390, 844"),
+    ],
+)
+async def test_chat_turn_retries_a_proposed_document_that_breaks_the_document_rules(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+    break_document: Callable[[AppDocument], AppDocument],
+    expected_problem: str,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "переделай главный экран")
+    broken = break_document(build_template_document(PROMPT, None))
+    ctx = context([chat_answer_with("готово", broken), chat_answer("готово, исправил", with_document=True)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 2
+    assert expected_problem in llm_client.calls[1][-1]["content"]
+    messages = await chat_repository.list_messages(app_id)
+    assert [message.content for message in messages] == ["переделай главный экран", "готово, исправил"]
+    assert messages[1].proposed_document is not None
+    proposed = AppDocument.model_validate(messages[1].proposed_document)
+    assert "index" in [screen.route for screen in proposed.screens]
+
+
+async def test_chat_turn_fails_when_the_proposed_document_never_follows_the_document_rules(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+    sessions: list[FakeSession],
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "переделай главный экран")
+    broken = without_index_route(build_template_document(PROMPT, None))
+    answers: list[str | Exception] = [
+        chat_answer_with(f"готово {attempt}", broken) for attempt in range(settings.routerai_max_retries)
+    ]
+
+    with pytest.raises(GenerationError) as error:
+        await worker_tasks.chat_turn(context(answers), str(app_id), str(user_message.id))
+
+    assert "`index`" in error.value.message
+    messages = await chat_repository.list_messages(app_id)
+    assert [message.role for message in messages] == ["user"]
+    assert sessions[0].commits == 0
+
+
+async def test_chat_turn_accepts_a_proposed_document_with_a_single_screen(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "оставь только главный экран")
+    ctx = context([chat_answer_with("оставил один экран", build_template_document("blank", None))])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 1
+    messages = await chat_repository.list_messages(app_id)
+    assert messages[1].proposed_document is not None
+    assert len(AppDocument.model_validate(messages[1].proposed_document).screens) == 1
 
 
 async def test_chat_turn_does_not_create_an_assistant_message_when_generation_fails(

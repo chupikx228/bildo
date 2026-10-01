@@ -6,7 +6,14 @@ from src.chat.models import ChatMessage as ChatMessageRecord
 from src.chat.schemas import ChatTurnResponse
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import ChatMessage, JsonSchema
-from src.generation.prompt import DESIGN_RULES, EXPORT_RULES, NODE_TYPE_RULES, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.generation.prompt import (
+    DESIGN_RULES,
+    EXPORT_RULES,
+    NODE_TYPE_RULES,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    START_ROUTE,
+)
 
 SCHEMA_NAME = "chat_turn_response"
 
@@ -27,8 +34,14 @@ RULES = f"""Ты ассистент редактора мобильных при
   что просит пользователь, сохранив всё остальное как было.
 - Не меняй `id`, `createdAt` документа и не трогай `revision` — сервер их всё равно перезапишет.
 - Сцена экрана — {SCREEN_WIDTH} x {SCREEN_HEIGHT} точек, позиционирование абсолютное (`layout.x/y/width/height`).
+- Корневой узел каждого экрана — `View` с `layout` ровно 0, 0, {SCREEN_WIDTH}, {SCREEN_HEIGHT}: он занимает всю сцену,
+  вложенные узлы располагай внутри него. Добавляя новый экран, давай его корню ровно такой `layout`.
 {NODE_TYPE_RULES}
-- `navigation.roots` и действия `navigate` ссылаются только на существующие `route` экранов.
+- В документе всегда есть стартовый экран — тот, чей `route` буквально `{START_ROUTE}`. Не переименовывай и не переводи
+  этот `route`, даже когда пользователь просит назвать стартовый экран иначе, — новое название пиши в `name` экрана.
+  Если пользователь просит убрать стартовый экран, `route` `{START_ROUTE}` получает экран, который становится стартовым.
+- `navigation.roots` не бывает пустым; `navigation.roots` и действия `navigate` ссылаются только на существующие
+  `route` экранов.
 - `textBind`, `valueBind` и действие `setVar` ссылаются только на переменные, объявленные в `state`.
 - Сохраняй дизайн-направление, которое уже сложилось в документе: палитру темы, layout-архетип экранов и их плотность.
   Меняй визуальный стиль только когда пользователь прямо просит об этом; правка контента, текстов или логики —

@@ -6,12 +6,18 @@ from src.apps.service import AppService
 from src.chat.exceptions import ChatMessageNotFound, ChatQueueNotConfiguredError, MessageNotDecidable
 from src.chat.models import ChatMessage
 from src.chat.repository import ChatRepository
-from src.chat.schemas import ChatMessageRole
+from src.chat.schemas import ChatMessageRole, ChatTurnResponse
+from src.generation.service import check_edited_document
 from src.queue.base import TaskQueue
 from src.queue.jobs import CHAT_TURN_JOB
 from src.transaction.base import Transaction
 
 CONTEXT_HISTORY_LIMIT = 20
+
+
+def check_chat_turn(response: ChatTurnResponse) -> None:
+    if response.document is not None:
+        check_edited_document(response.document)
 
 
 class ChatService:
