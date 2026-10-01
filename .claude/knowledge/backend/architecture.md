@@ -1797,7 +1797,7 @@ screenOptions={{
 
 `tabBarLabelStyle` есть только в варианте `tabs`. Если нужный токен — `System`, соответствующей строки нет вовсе, а при `System` в обоих токенах `_layout.tsx` совпадает с выводом до BIL-96 байт в байт. Отдельной загрузки шрифтов не нужно: гейт `useFonts` из § 10.5 уже грузит оба начертания обоих семейств темы.
 
-**Цвета строки `FlatList`** — по ролям токенов из `EXPORT_RULES` (§ 9.1, BIL-86): фон строки — это карточка, то есть `colorSurface`, текст — основной, то есть `colorText`. В коде это ссылки `theme.colorSurface` / `theme.colorText`, а не подставленные HEX, как и у остальных цветов из темы в экспорте. Отступ, радиус 10 и зазор между строками не менялись. Поля `style` самого узла `FlatList` (`color`, `fontSize` и т. п.) на строки по-прежнему не влияют: они уходят в стиль контейнера списка, как и до этой задачи. Старые зашитые цвета совпадали с тёмной темой по умолчанию (`#18181B` — это `colorSurface`, `#FAFAFA` — `colorText` фикстуры `max_coverage_document`), так что на тёмной теме вид строк не изменился.
+**Цвета строки `FlatList`** — по ролям токенов из `EXPORT_RULES` (§ 9.1, BIL-86): фон строки — это карточка, то есть `colorSurface`, текст — основной, то есть `colorText`. В коде это ссылки `theme.colorSurface` / `theme.colorText`, а не подставленные HEX, как и у остальных цветов из темы в экспорте. Отступ и зазор между строками не менялись. Радиус строки и поля `color`/`fontSize`/`fontWeight` самого узла `FlatList` на момент BIL-96 оставались как были (зашитый радиус 10, стиль узла уходил в контейнер списка); с BIL-105 радиус берётся из `radiusBase`, а эти три поля применяются к строкам, см. § 10.9. Старые зашитые цвета совпадали с тёмной темой по умолчанию (`#18181B` — это `colorSurface`, `#FAFAFA` — `colorText` фикстуры `max_coverage_document`), так что на тёмной теме вид строк не изменился.
 
 **Тест на равенство и TS-генератор.** TS-генератор (`codegen.ts`) переезжает отдельной задачей, заблокированной этой. Шрифтов в фикстурах теста на равенство (§ 10.1) нет, там `System`, так что `_layout.tsx` не расходится. Расходятся только цвета строк `FlatList`, и тест приводит к ним вывод TS функцией `adopt_bil96_flatlist_rows`, тем же приёмом, что `adopt_bil95_state_layout` (§ 10.6): в каждом экране она заменяет две зашитые строки на ссылки на тему и проверяет, что каждая встречается ровно по разу на каждый `FlatList`. Если TS-вывод уже ссылается на тему, функция ничего не делает. После мержа фронтовой задачи её нужно удалить. Фронтовая задача обязана выпустить ровно то, что выпускает Python: строки `FlatList` с `theme.colorSurface`/`theme.colorText` и шрифтом `fontBody`, `headerTitleStyle` с `fontHeading`/`700Bold` и `tabBarLabelStyle` с `fontBody`/`400Regular`, в тех же местах `screenOptions`.
 
@@ -1822,6 +1822,94 @@ screenOptions={{
 Что не закрыто: имя, слаг которого совпадает с зарезервированным словом Java (`class`, `new`, `for`…), даёт пакет `com.bildo.class`, и `expo prebuild` его отклоняет по той же проверке.
 
 **Тест на равенство и TS-генератор.** `slugify` в `codegen.ts` ещё старый. Тест на равенство (§ 10.1) приводит его вывод функцией `adopt_bil102_slug` (тем же приёмом, что § 10.6 и § 10.7): переписывает `name` в `package.json` и `slug`, `scheme`, оба идентификатора пакета в `app.json`, проверяя число вхождений каждого. Из фикстур её затрагивает только документ максимального покрытия, у шаблонов кириллические имена без цифр и слаг `app`. Когда TS-генератор начнёт ставить тот же префикс `app-`, функцию нужно удалить.
+
+### 10.9 Тема на заглушке `Image`, подписи «Назад» и строках `FlatList` (BIL-103, BIL-104, BIL-105)
+
+Три независимые правки в `src/codegen/service.py`, продолжение § 10.7: ещё три видимые поверхности экспорта, которые игнорировали тему.
+
+#### Заглушка `Image` без источника (BIL-103)
+
+`Image` без `props.source` рисовался заглушкой с зашитыми `#27272A` (фон) и `#71717A` (подпись «Image»), то есть тёмной палитрой при любой теме. Теперь цвета берутся по ролям токенов из `EXPORT_RULES` (§ 9.1, BIL-86): заглушка — это карточка, фон `theme.colorSurface`; подпись — вторичный текст, `theme.colorTextMuted` (та же роль, что у плейсхолдера `TextInput` в § 10.2).
+
+```tsx
+<View style={[{…стиль узла…}, { backgroundColor: theme.colorSurface, alignItems: 'center', justifyContent: 'center' }]}>
+  <Text style={{ color: theme.colorTextMuted }}>Image</Text>
+</View>
+```
+
+Порядок в массиве стилей не менялся: фон из темы по-прежнему перекрывает `backgroundColor`, заданный на самом узле. Перевернуть порядок, чтобы стиль узла побеждал, — отдельное решение, в BIL-103 не входит. Шрифт подписи «Image» тоже не трогали: она остаётся на системном шрифте.
+
+#### Подпись кнопки «Назад» на iOS (BIL-104)
+
+§ 10.7 применил тему к заголовку навигатора, но не к подписи кнопки «Назад» нативного стека — на iOS она оставалась системным шрифтом. Теперь вариант `stack` (через него же идёт `drawer`) получает в `screenOptions`, сразу после `headerTitleStyle`:
+
+```tsx
+headerBackTitleStyle: { fontFamily: 'PTSerif_400Regular' },
+```
+
+Правило выбора токена то же, что в § 10.5 и § 10.7, размер и вес по умолчанию сверены по исходникам установленных пакетов, как в § 10.7:
+
+| Что | Значение | Откуда |
+|---|---|---|
+| вес по умолчанию | `400` | `@react-navigation/native-stack@7.20.0`, `views/useHeaderConfigProps.tsx`: `StyleSheet.flatten([fonts.regular, headerBackTitleStyle])` |
+| размер по умолчанию | 17 | `react-native-screens@4.4.0`, `ios/RNSScreenStackHeaderConfig.mm`: `config.backTitleFontSize ?: @17`, шрифт собирается `RCTFont` из `backTitleFontFamily` с `weight:nil` |
+| итог | `fontBody`, `400Regular` | 17 < 20 → `fontBody`; 400 → `400Regular` |
+
+Константы — `HEADER_BACK_TITLE_FONT_SIZE` = 17, `HEADER_BACK_TITLE_FONT_WEIGHT` = `"400"`.
+
+Решения и следствия:
+
+- **`fontWeight: 'normal'` здесь не пишется**, в отличие от остальных поверхностей § 10.5/§ 10.7. Тип `headerBackTitleStyle` в native-stack — `StyleProp<{ fontFamily?: string; fontSize?: number }>`, и `tsc` отклоняет `fontWeight` (проверено: `TS2353 … 'fontWeight' does not exist in type …`). Вес нативной стороне и не передаётся (`weight:nil`), так что синтетического полужирного не бывает.
+- **Только `stack`/`drawer`.** В варианте `tabs` кнопки «Назад» нет, строки нет. При `fontBody: "System"` строки тоже нет.
+- **Только iOS.** На Android у нативного стека подписи «Назад» нет, а на web native-stack передаёт кнопке только текст (`headerBackTitle`), `headerBackTitleStyle` до неё не доходит.
+- **Цена: на iOS 14+ отключается адаптивный режим кнопки «Назад».** native-stack включает `headerBackButtonDisplayMode` (заголовок предыдущего экрана → «Назад» → только иконка по мере нехватки места), только если шрифт подписи системный и размер не задан (`isBackButtonDisplayModeAvailable`). С нашим шрифтом всегда показываются иконка и заголовок предыдущего экрана. Это принято сознательно: иначе подпись «Назад» — единственная видимая надпись экспорта, выпадающая из темы.
+
+#### Строки `FlatList`: радиус и стиль узла (BIL-105)
+
+**Радиус.** Строка больше не зашита на `borderRadius: 10`, а берёт `paperTheme.roundness`, то есть `radiusBase` темы, уже разобранный `parseFloat` с фоллбэком 12 (§ 10.2). `theme.radiusBase` напрямую не подходит: это строка, и бывает `"12px"`. Экран с `FlatList` теперь импортирует `paperTheme` из `../theme`, даже если на нём нет узлов Paper.
+
+**Стиль узла применяется к строкам.** До BIL-105 `color`, `fontSize`, `fontWeight`, заданные на самом узле `FlatList`, уходили в стиль контейнера списка (`ViewStyle`) и ни на что не влияли — давняя проблема, а не регрессия. Теперь эти три поля (`FLATLIST_ROW_TEXT_KEYS`) **переносятся** в текст строки и из стиля контейнера убираются; остальные поля (`backgroundColor`, `gap`, …) остаются на контейнере, как раньше. Приоритет — тот же, что у `Text` (§ 10.5): значение узла не перекрывается темой, а участвует в выборе шрифта темы.
+
+| Поле узла | Что попадает в текст строки |
+|---|---|
+| `color` | `color` узла; без него — `theme.colorText` (§ 10.7) |
+| `fontSize` | `fontSize` узла; он же выбирает токен: `>= 20` — `fontHeading`, иначе `fontBody`. Без него — размер по умолчанию 14 (`FLATLIST_ROW_FONT_SIZE`), `fontBody` |
+| `fontWeight` | при шрифте Google — выбирает начертание (`600`/`700` → `700Bold`), пишется пара `fontFamily` + `fontWeight: 'normal'`; при `System` — `fontWeight` узла как есть |
+
+Например, узел с `color: "#1D4ED8"`, `fontSize: 22`, `fontWeight: "700"` при `fontHeading: "Unbounded"` даёт:
+
+```tsx
+<View style={{ padding: 12, backgroundColor: theme.colorSurface, borderRadius: paperTheme.roundness, marginBottom: 8 }}>
+  <Text style={{ color: '#1D4ED8', fontSize: 22, fontFamily: 'Unbounded_700Bold', fontWeight: 'normal' }}>{String(item)}</Text>
+</View>
+```
+
+Узел только с `fontWeight: "600"` остаётся на `fontBody`, но в начертании `700Bold`. Остальные текстовые поля узла (`letterSpacing`, `lineHeight`, `textAlign`) по-прежнему уходят в контейнер и на строки не влияют — в BIL-105 они не входили.
+
+#### Тест на равенство и TS-генератор
+
+TS-генератор (`codegen.ts`) по всем трём пунктам ещё старый. Тест на равенство (§ 10.1) приводит его вывод тем же приёмом, что § 10.6–10.8:
+
+- `adopt_bil96_flatlist_rows` теперь переписывает зашитый фон строки сразу в `backgroundColor: theme.colorSurface, borderRadius: paperTheme.roundness` и, если на экране нет `import { paperTheme, theme } from '../theme';`, заменяет `import { theme } …` на него (проверяя ровно одно вхождение);
+- новая `adopt_bil103_image_placeholder` заменяет `#27272A`/`#71717A` заглушки на `theme.colorSurface`/`theme.colorTextMuted`, проверяя, что каждая строка встречается ровно по разу на каждую заглушку.
+
+Из фикстур их затрагивает только документ максимального покрытия (у шаблонов нет ни `FlatList`, ни `Image`). Фикстура не задаёт `color`/`fontSize`/`fontWeight` на `FlatList` и не использует стек с шрифтом Google, поэтому перенос стиля узла и `headerBackTitleStyle` тест на равенство не задевают. Фронтовая задача обязана выпустить ровно то, что выпускает Python: заглушку на `colorSurface`/`colorTextMuted`, строки `FlatList` с `paperTheme.roundness`, импортом `paperTheme` и стилем узла по таблице выше, `headerBackTitleStyle` только с `fontFamily`. После этого обе функции нужно удалить.
+
+#### Проверка — реальная сборка
+
+Один документ: `stack`, светлая тема (`colorSurface` `#F3E6D8`, `colorTextMuted` `#7A6552`, `colorText` `#2B1D12`), `radiusBase: "20"`, `fontBody: "PT Serif"`, `fontHeading: "Unbounded"`. На первом экране — `Image` без источника, `FlatList` со стилем узла (`color: "#1D4ED8"`, `fontSize: 22`, `fontWeight: "700"`, `backgroundColor: "#FFFFFF"`, строки с `№` и `₽`), `FlatList` без стиля и кнопка перехода; на втором экране — `FlatList` без узлов Paper (проверка импорта `paperTheme` под `tsc`). `generate_files` → `npm install` → `npx tsc --noEmit` → `npx expo export --platform web|ios|android`, все шаги с exit 0.
+
+Web-экспорт открыт в Chrome, вычисленные стили:
+
+| Узел | Цвет | Шрифт | Радиус строки |
+|---|---|---|---|
+| заглушка `Image` | фон `#F3E6D8` = `colorSurface`, подпись `#7A6552` = `colorTextMuted` | — | — |
+| строки `FlatList` со стилем узла | `#1D4ED8` | `Unbounded_700Bold`, 22px | 20px |
+| строки `FlatList` без стиля | `#2B1D12` = `colorText` | `PTSerif_400Regular`, 14px | 20px |
+
+Фон строк — `colorSurface`, белый `backgroundColor` узла остался на контейнере списка. Вычисленный `font-weight` везде 400.
+
+Подпись «Назад» на web не проверить (см. выше), а симуляторов iOS на машине проверки нет — Xcode установлен, рантаймов симулятора нет. Проверено то, что можно без устройства: `headerBackTitleStyle` и `PTSerif_400Regular` есть в Hermes-бандле iOS, а по исходникам `react-native-screens@4.4.0` `backTitleFontFamily` доходит до нативного `UIFont` подписи. Нативный рендер подписи на устройстве или симуляторе не проверялся. Юнит-тесты — `tests/codegen/test_theme_surfaces_codegen.py`.
 
 ## 11. Миграции
 

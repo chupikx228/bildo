@@ -136,8 +136,11 @@ FLATLIST_ROW_FONT_SIZE = 14
 FLATLIST_ROW_FONT_WEIGHT = None
 HEADER_TITLE_FONT_SIZE = 20
 HEADER_TITLE_FONT_WEIGHT = "600"
+HEADER_BACK_TITLE_FONT_SIZE = 17
+HEADER_BACK_TITLE_FONT_WEIGHT = "400"
 TAB_LABEL_FONT_SIZE = 10
 TAB_LABEL_FONT_WEIGHT = "500"
+FLATLIST_ROW_TEXT_KEYS = frozenset({"color", "fontSize", "fontWeight"})
 
 
 def _font_family(family: str, font_weight: str | None) -> str | None:
@@ -169,7 +172,9 @@ def _theme_font_families(theme: AppThemeTokens) -> list[str]:
     return families
 
 
-def _style_to_rn(node: AppNode, is_root: bool, font_family: str | None = None) -> str:
+def _style_to_rn(
+    node: AppNode, is_root: bool, font_family: str | None = None, skip_keys: frozenset[str] = frozenset()
+) -> str:
     parts: list[str] = []
     if is_root:
         parts.append("  flex: 1")
@@ -186,6 +191,8 @@ def _style_to_rn(node: AppNode, is_root: bool, font_family: str | None = None) -
             if not is_root and node.layout is not None and key in {"width", "height"}:
                 continue
             if font_family is not None and key == "fontWeight":
+                continue
+            if key in skip_keys:
                 continue
             if isinstance(value, str):
                 parts.append(f"  {key}: '{_esc(value)}'")
@@ -426,7 +433,12 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool, theme: AppThemeT
     pad = " " * indent
     if node.hidden:
         return f"{pad}{{null}}"
-    style = _style_to_rn(node, is_root, _text_font_family(node, theme) if node.type == "Text" else None)
+    style = _style_to_rn(
+        node,
+        is_root,
+        _text_font_family(node, theme) if node.type == "Text" else None,
+        FLATLIST_ROW_TEXT_KEYS if node.type == "FlatList" else frozenset(),
+    )
     props = node.props
 
     if node.type == "Text":
@@ -446,8 +458,8 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool, theme: AppThemeT
                 pad
                 + "<View style={["
                 + style
-                + ", { backgroundColor: '#27272A', alignItems: 'center', justifyContent: 'center' }]}>"
-                + "<Text style={{ color: '#71717A' }}>Image</Text></View>"
+                + ", { backgroundColor: theme.colorSurface, alignItems: 'center', justifyContent: 'center' }]}>"
+                + "<Text style={{ color: theme.colorTextMuted }}>Image</Text></View>"
             )
         return pad + "<Image source={{ uri: '" + _esc(source) + "' }} style={" + style + "} />"
 
@@ -462,10 +474,21 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool, theme: AppThemeT
 
     if node.type == "FlatList":
         data = _json_compact(props.data if props and props.data is not None else ["Item"])
-        row_text_entries = [("color", "theme.colorText")]
-        row_font = _theme_font_family(theme, FLATLIST_ROW_FONT_SIZE, FLATLIST_ROW_FONT_WEIGHT)
+        list_style = node.style if node.style is not None else AppNodeStyle()
+        row_text_entries = [
+            ("color", _literal(list_style.color) if list_style.color is not None else "theme.colorText")
+        ]
+        if list_style.font_size is not None:
+            row_text_entries.append(("fontSize", _number(list_style.font_size)))
+        row_font = _theme_font_family(
+            theme,
+            list_style.font_size if list_style.font_size is not None else FLATLIST_ROW_FONT_SIZE,
+            list_style.font_weight if list_style.font_weight is not None else FLATLIST_ROW_FONT_WEIGHT,
+        )
         if row_font is not None:
             row_text_entries.extend(_font_entries(row_font))
+        elif list_style.font_weight is not None:
+            row_text_entries.append(("fontWeight", _literal(list_style.font_weight)))
         row_text_style = _inline_object_literal(row_text_entries)
         return (
             pad
@@ -483,7 +506,8 @@ def _render_node_tsx(node: AppNode, indent: int, is_root: bool, theme: AppThemeT
             + pad
             + "  renderItem={({ item }) => (\n"
             + pad
-            + "    <View style={{ padding: 12, backgroundColor: theme.colorSurface, borderRadius: 10, marginBottom: 8 }}>\n"
+            + "    <View style={{ padding: 12, backgroundColor: theme.colorSurface,"
+            + " borderRadius: paperTheme.roundness, marginBottom: 8 }}>\n"
             + pad
             + "      <Text style={"
             + row_text_style
@@ -540,7 +564,7 @@ def _screen_file(screen: AppScreen, theme: AppThemeTokens) -> str:
     router_import = "import { useRouter } from 'expo-router';\n" if needs.router else ""
     state_import = "import { useAppState } from '../lib/state';\n" if needs.state else ""
     hooks_block = "\n".join(hooks) + "\n" if hooks else ""
-    theme_names = "paperTheme, theme" if paper_imports else "theme"
+    theme_names = "paperTheme, theme" if paper_imports or "FlatList" in imports else "theme"
     theme_import = "import { " + theme_names + " } from '../theme';\n"
 
     return (
@@ -726,6 +750,13 @@ def _header_title_option(theme: AppThemeTokens) -> str:
     return _navigator_font_option("headerTitleStyle", font_family)
 
 
+def _header_back_title_option(theme: AppThemeTokens) -> str:
+    font_family = _theme_font_family(theme, HEADER_BACK_TITLE_FONT_SIZE, HEADER_BACK_TITLE_FONT_WEIGHT)
+    if font_family is None:
+        return ""
+    return f"                headerBackTitleStyle: {_inline_object_literal([('fontFamily', _literal(font_family))])},\n"
+
+
 def _tabs_layout(roots: list[AppScreen], theme: AppThemeTokens) -> str:
     families = _theme_font_families(theme)
     tab_label_font = _theme_font_family(theme, TAB_LABEL_FONT_SIZE, TAB_LABEL_FONT_WEIGHT)
@@ -803,6 +834,7 @@ def _stack_layout(screens_list: list[AppScreen], theme: AppThemeTokens) -> str:
         "                headerStyle: { backgroundColor: theme.colorSurface },\n"
         "                headerTintColor: theme.colorText,\n"
         f"{_header_title_option(theme)}"
+        f"{_header_back_title_option(theme)}"
         "                contentStyle: { backgroundColor: theme.colorBg },\n"
         "              }}\n"
         "            >\n" + screens + "\n"
