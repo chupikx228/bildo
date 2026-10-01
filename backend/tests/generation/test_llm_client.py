@@ -4,6 +4,8 @@ import json
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from typing import Any
 
 import httpx
@@ -27,7 +29,11 @@ from src.generation.llm_client import (
     JsonSchema,
     RouterAiLlmClient,
 )
-from src.generation.structured_output import generate_structured
+from src.generation.structured_output import (
+    MAX_RETRY_AFTER_SECONDS,
+    TRANSIENT_RETRY_DELAY_SECONDS,
+    generate_structured,
+)
 from src.worker.tasks import GENERATION_TIMEOUT_SECONDS
 
 BASE_URL = "https://routerai.test/api/v1"
@@ -449,6 +455,76 @@ async def test_network_failure_is_retried_by_us_not_by_the_sdk(build_client: Bui
     await client.aclose()
 
     assert calls == 2
+
+
+@pytest.fixture
+def recorded_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    sleeps: list[float] = []
+
+    async def record(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", record)
+    return sleeps
+
+
+def rate_limited_once(headers: dict[str, str]) -> Handler:
+    calls = 0
+
+    def gateway(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(429, headers=headers, json={"error": {"message": "rate limit exceeded"}})
+        return httpx.Response(200, json=completion_body(ANSWER))
+
+    return gateway
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected_delay"),
+    [
+        ({"Retry-After": "7"}, 7.0),
+        ({"Retry-After": "0.5"}, 0.5),
+        ({"Retry-After": "0"}, 0.0),
+        ({}, TRANSIENT_RETRY_DELAY_SECONDS),
+        ({"Retry-After": "soon"}, TRANSIENT_RETRY_DELAY_SECONDS),
+        ({"Retry-After": "-5"}, TRANSIENT_RETRY_DELAY_SECONDS),
+        ({"Retry-After": "3600"}, MAX_RETRY_AFTER_SECONDS),
+    ],
+)
+async def test_rate_limit_retry_waits_as_long_as_retry_after_says(
+    build_client: BuildClient, recorded_sleeps: list[float], headers: dict[str, str], expected_delay: float
+) -> None:
+    client = build_client(rate_limited_once(headers))
+
+    assert await generate_named(client) == Named(name="Трекер привычек")
+    await client.aclose()
+
+    assert recorded_sleeps == [expected_delay]
+
+
+async def test_rate_limit_retry_after_as_an_http_date(build_client: BuildClient, recorded_sleeps: list[float]) -> None:
+    retry_at = format_datetime(datetime.now(UTC) + timedelta(seconds=30), usegmt=True)
+    client = build_client(rate_limited_once({"Retry-After": retry_at}))
+
+    assert await generate_named(client) == Named(name="Трекер привычек")
+    await client.aclose()
+
+    assert len(recorded_sleeps) == 1
+    assert 25 < recorded_sleeps[0] <= 30
+
+
+async def test_rate_limit_retry_after_date_in_the_past_retries_immediately(
+    build_client: BuildClient, recorded_sleeps: list[float]
+) -> None:
+    retry_at = format_datetime(datetime.now(UTC) - timedelta(minutes=5), usegmt=True)
+    client = build_client(rate_limited_once({"Retry-After": retry_at}))
+
+    assert await generate_named(client) == Named(name="Трекер привычек")
+    await client.aclose()
+
+    assert recorded_sleeps == [0.0]
 
 
 async def test_sdk_retries_are_disabled(monkeypatch: pytest.MonkeyPatch) -> None:

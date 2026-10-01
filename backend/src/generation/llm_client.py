@@ -1,7 +1,10 @@
 import asyncio
 import json
 import logging
+import math
 from collections.abc import Sequence
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any, Literal, Protocol, TypedDict
 
 from openai import (
@@ -50,6 +53,7 @@ SDK_MAX_RETRIES = 0
 SCHEMA_REJECTION_MARKERS = ("schema", "grammar")
 TRANSIENT_ERROR_MARKERS = ("connection error", "please retry")
 TRANSIENT_STATUS_CODES = frozenset({408, 429})
+RATE_LIMIT_STATUS_CODE = 429
 
 
 class ChatMessage(TypedDict):
@@ -150,7 +154,10 @@ class RouterAiLlmClient:
             raise TransientProviderError(f"RouterAI не ответил на запрос генерации: {error}") from error
         except APIStatusError as error:
             if _is_transient_status(error.status_code):
-                raise TransientProviderError(f"RouterAI не ответил на запрос генерации: {error}") from error
+                raise TransientProviderError(
+                    f"RouterAI не ответил на запрос генерации: {error}",
+                    retry_after_seconds=_retry_after_seconds(error),
+                ) from error
             raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
         except APIError as error:
             raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
@@ -224,6 +231,31 @@ def _provider_error_code(error: object) -> int | None:
 
 def _is_transient_status(status_code: int) -> bool:
     return status_code in TRANSIENT_STATUS_CODES or status_code >= 500
+
+
+def _retry_after_seconds(error: APIStatusError) -> float | None:
+    if error.status_code != RATE_LIMIT_STATUS_CODE:
+        return None
+    value = error.response.headers.get("retry-after")
+    if value is None:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        return _seconds_until_http_date(value)
+    if not math.isfinite(seconds) or seconds < 0:
+        return None
+    return seconds
+
+
+def _seconds_until_http_date(value: str) -> float | None:
+    try:
+        moment = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return max(0.0, (moment - datetime.now(UTC)).total_seconds())
 
 
 def _is_schema_rejection(detail: str) -> bool:

@@ -3,7 +3,8 @@ from collections.abc import Sequence
 
 import pytest
 
-from src.generation.exceptions import GenerationError, GenerationNotConfiguredError
+from src.generation import structured_output as structured_output_module
+from src.generation.exceptions import GenerationError, GenerationNotConfiguredError, TransientProviderError
 from src.generation.llm_client import ChatMessage
 from src.generation.prompt_enricher import (
     ENRICHER_MAX_OUTPUT_TOKENS,
@@ -16,6 +17,7 @@ from tests.generation.fake_llm_client import FakeLlmClient
 MODEL = "test/enricher"
 PROMPT = "трекер привычек"
 BRIEF = "Трекер привычек для студентов в сессию: фон #F3F6F4, акцент #1D3B2F."
+TRANSIENT = "RouterAI временно не смог выполнить запрос генерации: Provider connection error, please retry"
 
 
 class HangingTextClient(FakeLlmClient):
@@ -78,3 +80,39 @@ async def test_failure_is_logged_as_a_fallback(caplog: pytest.LogCaptureFixture)
     await enrich_prompt(PROMPT, client=client, model=MODEL)
 
     assert "falling back to the raw prompt" in caplog.text
+
+
+@pytest.fixture
+def no_transient_delay(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(structured_output_module, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_first_transient_error_is_retried_with_the_same_request() -> None:
+    client = FakeLlmClient([], [TransientProviderError(TRANSIENT), BRIEF])
+
+    assert await enrich_prompt(PROMPT, client=client, model=MODEL) == BRIEF
+    assert client.text_calls == [build_enricher_messages(PROMPT), build_enricher_messages(PROMPT)]
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_second_transient_error_falls_back_without_a_third_request() -> None:
+    client = FakeLlmClient([], [TransientProviderError(TRANSIENT), TransientProviderError(TRANSIENT), BRIEF])
+
+    assert await enrich_prompt(PROMPT, client=client, model=MODEL) is None
+    assert len(client.text_calls) == 2
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_non_transient_failure_is_not_retried() -> None:
+    client = FakeLlmClient([], [GenerationError("RouterAI отклонил запрос генерации: 400"), BRIEF])
+
+    assert await enrich_prompt(PROMPT, client=client, model=MODEL) is None
+    assert len(client.text_calls) == 1
+
+
+async def test_retry_pause_counts_against_the_enricher_deadline() -> None:
+    client = FakeLlmClient([], [TransientProviderError(TRANSIENT, retry_after_seconds=30), BRIEF])
+
+    assert await enrich_prompt(PROMPT, client=client, model=MODEL, timeout_seconds=0.05) is None
+    assert len(client.text_calls) == 1
