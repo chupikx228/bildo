@@ -3,7 +3,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from src.apps.schemas import AppDocument, AppNodeLayout
+from src.apps.schemas import AppComponentType, AppDocument, AppNodeLayout
 from src.generation.exceptions import GenerationError
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.prompt import build_system_prompt
@@ -257,6 +257,16 @@ def with_index_root_layout(document: AppDocument, layout: AppNodeLayout | None) 
     return document.model_copy(update={"screens": screens})
 
 
+def with_index_root_type(document: AppDocument, node_type: AppComponentType) -> AppDocument:
+    screens = [
+        screen.model_copy(update={"root": screen.root.model_copy(update={"type": node_type})})
+        if screen.route == "index"
+        else screen
+        for screen in document.screens
+    ]
+    return document.model_copy(update={"screens": screens})
+
+
 def dump(document: AppDocument) -> str:
     return json.dumps(document.model_dump(mode="json", by_alias=True), ensure_ascii=False)
 
@@ -317,6 +327,16 @@ def test_check_document_rejects_a_root_without_layout() -> None:
         check_document(document)
 
     assert "корень экрана `index` без `layout`" in str(error.value)
+
+
+@pytest.mark.parametrize("node_type", ["ScrollView", "Text"])
+def test_check_document_rejects_a_root_that_is_not_a_view(node_type: AppComponentType) -> None:
+    document = with_index_root_type(build_template_document(PROMPT, None), node_type)
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    assert f"корень экрана `index` — `{node_type}`, нужен `View`" in str(error.value)
 
 
 def test_check_document_reports_every_problem_in_one_error() -> None:
@@ -426,6 +446,15 @@ def test_check_edited_document_rejects_a_root_without_layout() -> None:
         check_edited_document(document)
 
     assert "корень экрана `index` без `layout`" in str(error.value)
+
+
+def test_check_edited_document_rejects_a_root_that_is_not_a_view() -> None:
+    document = with_index_root_type(build_template_document(PROMPT, None), "ScrollView")
+
+    with pytest.raises(ValueError) as error:
+        check_edited_document(document)
+
+    assert "корень экрана `index` — `ScrollView`, нужен `View`" in str(error.value)
 
 
 async def test_generate_document_still_rejects_a_single_screen_document() -> None:

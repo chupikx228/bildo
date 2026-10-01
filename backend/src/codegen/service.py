@@ -26,6 +26,8 @@ def slugify(name: str) -> str:
     slug = name.lower()
     slug = re.sub(r"[^a-z0-9]+", "-", slug)
     slug = re.sub(r"^-|-$", "", slug)
+    if slug[:1].isdigit():
+        slug = f"app-{slug}"
     return slug[:32] or "app"
 
 

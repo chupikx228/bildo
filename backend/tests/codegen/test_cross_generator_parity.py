@@ -1,5 +1,6 @@
 import difflib
 import json
+import re
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -9,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from src.apps.schemas import AppDocument, AppNode
-from src.codegen.service import ExpoFileMap, generate_files
+from src.codegen.service import ExpoFileMap, generate_files, slugify
 from tests.codegen.max_coverage_document import build_max_coverage_document
 from tests.generation.template_fixtures import TemplateKey, build_template_document, select_template
 
@@ -136,6 +137,39 @@ def adopt_bil96_flatlist_rows(js_files: ExpoFileMap) -> ExpoFileMap:
     return adopted
 
 
+def legacy_ts_slugify(name: str) -> str:
+    slug = re.sub(r"^-|-$", "", re.sub(r"[^a-z0-9]+", "-", name.lower()))
+    return slug[:32] or "app"
+
+
+def adopt_bil102_slug(js_files: ExpoFileMap, document: AppDocument) -> ExpoFileMap:
+    legacy = legacy_ts_slugify(document.name)
+    current = slugify(document.name)
+    if legacy == current or f'"name": "{current}"' in js_files["package.json"]:
+        return js_files
+
+    rewrites = {
+        "package.json": ((f'"name": "{legacy}"', f'"name": "{current}"', 1),),
+        "app.json": (
+            (f'"slug": "{legacy}"', f'"slug": "{current}"', 1),
+            (f'"scheme": "{legacy}"', f'"scheme": "{current}"', 1),
+            (
+                f'"com.bildo.{legacy.replace("-", "")}"',
+                f'"com.bildo.{current.replace("-", "")}"',
+                2,
+            ),
+        ),
+    }
+    adopted = dict(js_files)
+    for path, replacements in rewrites.items():
+        content = adopted[path]
+        for old, new, count in replacements:
+            assert content.count(old) == count, f"TypeScript {path} no longer contains {old!r} {count} time(s)"
+            content = content.replace(old, new)
+        adopted[path] = content
+    return adopted
+
+
 PAPER_AFFECTED_STATIC_FILES = frozenset({"package.json", "theme.ts", "app/_layout.tsx"})
 PAPER_NODE_TYPES = frozenset({"Button", "TextInput"})
 
@@ -174,7 +208,9 @@ def paper_affected_outputs(request: pytest.FixtureRequest) -> tuple[str, ExpoFil
     label, build_document = PARITY_DOCUMENTS[request.param]
     document = build_document()
     python_files = generate_files(document)
-    js_files = adopt_bil96_flatlist_rows(adopt_bil95_state_layout(run_ts_codegen(document)))
+    js_files = adopt_bil102_slug(
+        adopt_bil96_flatlist_rows(adopt_bil95_state_layout(run_ts_codegen(document))), document
+    )
     assert set(python_files) == set(js_files), describe_difference(label, python_files, js_files)
 
     affected = paper_affected_files(document)
