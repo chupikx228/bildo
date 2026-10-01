@@ -15,6 +15,8 @@ from src.generation.prompt import (
 )
 from src.generation.structured_output import generate_structured
 
+ROOT_NODE_TYPE = "View"
+
 
 async def generate_document(
     prompt: str,
@@ -46,7 +48,7 @@ def check_document(document: AppDocument) -> None:
             *_start_route_problems(document, "`id` и `route`"),
             *_empty_roots_problems(document),
             *_missing_roots_problems(document),
-            *_root_layout_problems(document),
+            *_root_problems(document),
         ],
     )
 
@@ -57,7 +59,7 @@ def check_edited_document(document: AppDocument) -> None:
         [
             *_start_route_problems(document, "`route`"),
             *_empty_roots_problems(document),
-            *_root_layout_problems(document),
+            *_root_problems(document),
         ],
     )
 
@@ -104,10 +106,15 @@ def _missing_roots_problems(document: AppDocument) -> list[str]:
     return [f"`navigation.roots` ссылается на несуществующие `route`: {', '.join(missing)}"]
 
 
-def _root_layout_problems(document: AppDocument) -> list[str]:
+def _root_problems(document: AppDocument) -> list[str]:
     expected = f"ровно 0, 0, {SCREEN_WIDTH}, {SCREEN_HEIGHT}"
     problems: list[str] = []
     for screen in document.screens:
+        if screen.root.type != ROOT_NODE_TYPE:
+            problems.append(
+                f"корень экрана `{screen.route}` — `{screen.root.type}`, нужен `{ROOT_NODE_TYPE}`: корень каждого "
+                f"экрана — контейнер `{ROOT_NODE_TYPE}`, остальные узлы вкладывай в него"
+            )
         layout = screen.root.layout
         if layout is None:
             problems.append(f"корень экрана `{screen.route}` без `layout`, нужен `layout` {expected}")
