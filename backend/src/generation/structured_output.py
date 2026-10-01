@@ -15,6 +15,7 @@ MAX_ERROR_CHARS = 2000
 JSON_FENCE = "```"
 
 TRANSIENT_RETRY_DELAY_SECONDS = 2.0
+MAX_RETRY_AFTER_SECONDS = 60.0
 
 
 async def generate_structured[ModelT: BaseModel](
@@ -46,7 +47,7 @@ async def generate_structured[ModelT: BaseModel](
             )
             if attempt == max_attempts:
                 raise
-            await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
+            await asyncio.sleep(transient_retry_delay(error))
             continue
         if raw == previous_raw:
             raise GenerationError(
@@ -70,6 +71,12 @@ async def generate_structured[ModelT: BaseModel](
             history = [*history, *_build_retry_messages(raw, last_error)]
 
     raise GenerationError(f"Модель RouterAI не вернула корректный {subject} за {max_attempts} попыток: {last_error}")
+
+
+def transient_retry_delay(error: TransientProviderError) -> float:
+    if error.retry_after_seconds is None:
+        return TRANSIENT_RETRY_DELAY_SECONDS
+    return min(error.retry_after_seconds, MAX_RETRY_AFTER_SECONDS)
 
 
 def _parse[ModelT: BaseModel](raw: str, target_model: type[ModelT], subject: str) -> ModelT:

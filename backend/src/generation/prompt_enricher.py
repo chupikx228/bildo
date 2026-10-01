@@ -2,7 +2,9 @@ import asyncio
 import logging
 import time
 
+from src.generation.exceptions import TransientProviderError
 from src.generation.llm_client import ChatMessage, LlmClient
+from src.generation.structured_output import transient_retry_delay
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +55,7 @@ async def enrich_prompt(
     started = time.monotonic()
     try:
         async with asyncio.timeout(timeout_seconds):
-            answer = await client.complete_text(
-                build_enricher_messages(prompt),
-                model=model,
-                max_tokens=ENRICHER_MAX_OUTPUT_TOKENS,
-            )
+            answer = await _complete_with_one_retry(build_enricher_messages(prompt), client=client, model=model)
     except TimeoutError:
         logger.warning("Prompt enricher %s timed out after %gs, falling back to the raw prompt", model, timeout_seconds)
         return None
@@ -72,3 +70,12 @@ async def enrich_prompt(
         time.monotonic() - started,
     )
     return brief
+
+
+async def _complete_with_one_retry(messages: list[ChatMessage], *, client: LlmClient, model: str) -> str:
+    try:
+        return await client.complete_text(messages, model=model, max_tokens=ENRICHER_MAX_OUTPUT_TOKENS)
+    except TransientProviderError as error:
+        logger.warning("Prompt enricher %s failed transiently, retrying once: %s", model, error.message)
+        await asyncio.sleep(transient_retry_delay(error))
+    return await client.complete_text(messages, model=model, max_tokens=ENRICHER_MAX_OUTPUT_TOKENS)
