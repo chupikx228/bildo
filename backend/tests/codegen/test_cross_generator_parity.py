@@ -114,12 +114,17 @@ def adopt_bil95_state_layout(js_files: ExpoFileMap) -> ExpoFileMap:
 
 
 LEGACY_TS_FLATLIST_ROW_REWRITES = (
-    ("backgroundColor: '#18181B', borderRadius: 10", "backgroundColor: theme.colorSurface, borderRadius: 10"),
+    (
+        "backgroundColor: '#18181B', borderRadius: 10",
+        "backgroundColor: theme.colorSurface, borderRadius: paperTheme.roundness",
+    ),
     (
         "<Text style={{ color: '#FAFAFA' }}>{String(item)}</Text>",
         "<Text style={{ color: theme.colorText }}>{String(item)}</Text>",
     ),
 )
+LEGACY_TS_THEME_IMPORT = "import { theme } from '../theme';\n"
+PAPER_THEME_IMPORT = "import { paperTheme, theme } from '../theme';\n"
 
 
 def adopt_bil96_flatlist_rows(js_files: ExpoFileMap) -> ExpoFileMap:
@@ -132,6 +137,35 @@ def adopt_bil96_flatlist_rows(js_files: ExpoFileMap) -> ExpoFileMap:
             if content.count(current) == rows:
                 continue
             assert content.count(legacy) == rows, f"TypeScript FlatList row in {path} no longer contains {legacy!r}"
+            content = content.replace(legacy, current)
+        if PAPER_THEME_IMPORT not in content:
+            assert content.count(LEGACY_TS_THEME_IMPORT) == 1, f"TypeScript {path} no longer imports theme alone"
+            content = content.replace(LEGACY_TS_THEME_IMPORT, PAPER_THEME_IMPORT)
+        adopted[path] = content
+    return adopted
+
+
+LEGACY_TS_IMAGE_PLACEHOLDER_REWRITES = (
+    (
+        "{ backgroundColor: '#27272A', alignItems: 'center', justifyContent: 'center' }",
+        "{ backgroundColor: theme.colorSurface, alignItems: 'center', justifyContent: 'center' }",
+    ),
+    ("<Text style={{ color: '#71717A' }}>Image</Text>", "<Text style={{ color: theme.colorTextMuted }}>Image</Text>"),
+)
+
+
+def adopt_bil103_image_placeholder(js_files: ExpoFileMap) -> ExpoFileMap:
+    adopted = dict(js_files)
+    for path, content in js_files.items():
+        placeholders = content.count(">Image</Text></View>")
+        if not path.startswith("app/") or placeholders == 0:
+            continue
+        for legacy, current in LEGACY_TS_IMAGE_PLACEHOLDER_REWRITES:
+            if content.count(current) == placeholders:
+                continue
+            assert content.count(legacy) == placeholders, (
+                f"TypeScript Image placeholder in {path} no longer contains {legacy!r}"
+            )
             content = content.replace(legacy, current)
         adopted[path] = content
     return adopted
@@ -209,7 +243,8 @@ def paper_affected_outputs(request: pytest.FixtureRequest) -> tuple[str, ExpoFil
     document = build_document()
     python_files = generate_files(document)
     js_files = adopt_bil102_slug(
-        adopt_bil96_flatlist_rows(adopt_bil95_state_layout(run_ts_codegen(document))), document
+        adopt_bil103_image_placeholder(adopt_bil96_flatlist_rows(adopt_bil95_state_layout(run_ts_codegen(document)))),
+        document,
     )
     assert set(python_files) == set(js_files), describe_difference(label, python_files, js_files)
 

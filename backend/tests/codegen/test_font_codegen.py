@@ -193,7 +193,8 @@ def test_same_body_and_heading_font_is_added_once() -> None:
     dependencies = json.loads(files["package.json"])["dependencies"]
 
     assert [name for name in dependencies if name.startswith("@expo-google-fonts/")] == ["@expo-google-fonts/nunito"]
-    assert files["app/_layout.tsx"].count("Nunito_400Regular") == 2
+    assert files["app/_layout.tsx"].count("import { Nunito_400Regular }") == 1
+    assert files["app/_layout.tsx"].count("    Nunito_400Regular,\n") == 1
 
 
 def test_font_packages_come_after_icon_packages() -> None:
