@@ -5,7 +5,13 @@ from src.apps.schemas import AppDocument
 from src.apps.service import AppService
 from src.chat.exceptions import ChatMessageNotFound, ChatQueueNotConfiguredError, MessageNotDecidable
 from src.chat.models import ChatMessage
-from src.chat.prompt import DOCUMENT_REQUEST_PATTERNS, DOCUMENT_REQUEST_PROBLEM, QUOTED_TEXT
+from src.chat.prompt import (
+    DOCUMENT_REQUEST_PATTERNS,
+    DOCUMENT_REQUEST_PROBLEM,
+    EDIT_CLAIM_PATTERNS,
+    EDIT_CLAIM_PROBLEM,
+    QUOTED_TEXT,
+)
 from src.chat.repository import ChatRepository
 from src.chat.schemas import ChatMessageRole, ChatTurnResponse
 from src.generation.service import check_edited_document
@@ -21,11 +27,17 @@ def check_chat_turn(response: ChatTurnResponse) -> None:
         check_edited_document(response.document)
     elif asks_for_the_document(response.reply):
         raise ValueError(DOCUMENT_REQUEST_PROBLEM)
+    elif claims_an_edit(response.reply):
+        raise ValueError(EDIT_CLAIM_PROBLEM)
 
 
 def asks_for_the_document(reply: str) -> bool:
     unquoted = QUOTED_TEXT.sub("", reply)
     return any(pattern.search(unquoted) for pattern in DOCUMENT_REQUEST_PATTERNS)
+
+
+def claims_an_edit(reply: str) -> bool:
+    return any(pattern.search(reply) for pattern in EDIT_CLAIM_PATTERNS)
 
 
 class ChatService:
