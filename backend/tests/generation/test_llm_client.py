@@ -50,7 +50,7 @@ ANSWER = '{"name": "Трекер привычек"}'
 NO_FORMAT = "none"
 
 Handler = Callable[[httpx.Request], httpx.Response]
-BuildClient = Callable[[Handler], RouterAiLlmClient]
+BuildClient = Callable[..., RouterAiLlmClient]
 
 
 def completion_body(content: str | None) -> dict[str, Any]:
@@ -92,7 +92,7 @@ class StubGateway:
 
 @pytest.fixture
 def build_client(monkeypatch: pytest.MonkeyPatch) -> BuildClient:
-    def build(handler: Handler) -> RouterAiLlmClient:
+    def build(handler: Handler, **client_options: Any) -> RouterAiLlmClient:
         def make_openai(*, api_key: str, base_url: str, timeout: float, max_retries: int) -> AsyncOpenAI:
             return AsyncOpenAI(
                 api_key=api_key,
@@ -103,7 +103,7 @@ def build_client(monkeypatch: pytest.MonkeyPatch) -> BuildClient:
             )
 
         monkeypatch.setattr(llm_client_module, "AsyncOpenAI", make_openai)
-        return RouterAiLlmClient("test-key", BASE_URL)
+        return RouterAiLlmClient("test-key", BASE_URL, **client_options)
 
     return build
 
@@ -134,6 +134,37 @@ async def test_every_request_sets_the_output_token_limit(build_client: BuildClie
     await client.aclose()
 
     assert [payload["max_tokens"] for payload in gateway.payloads] == [MAX_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS]
+
+
+async def test_ignored_providers_are_sent_on_structured_requests(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, ignored_providers=["OpenInference", "Other"])
+
+    await complete(client)
+    await complete(client, model=ANTHROPIC_MODEL)
+    await client.aclose()
+
+    assert [payload["provider"] for payload in gateway.payloads] == [{"ignore": ["OpenInference", "Other"]}] * 2
+
+
+async def test_no_provider_preference_is_sent_by_default(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway)
+
+    await complete(client)
+    await client.aclose()
+
+    assert "provider" not in gateway.payloads[0]
+
+
+async def test_ignored_providers_are_not_sent_on_text_requests(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, ignored_providers=["OpenInference"])
+
+    await client.complete_text(MESSAGES, model=MODEL, max_tokens=100)
+    await client.aclose()
+
+    assert "provider" not in gateway.payloads[0]
 
 
 @pytest.mark.parametrize("model", ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5"])

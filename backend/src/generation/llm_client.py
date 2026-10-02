@@ -90,8 +90,10 @@ class RouterAiLlmClient:
         *,
         request_timeout_seconds: float = REQUEST_TIMEOUT_SECONDS,
         idle_timeout_seconds: float = IDLE_TIMEOUT_SECONDS,
+        ignored_providers: Sequence[str] = (),
     ) -> None:
         self._api_key = api_key
+        self._ignored_providers = tuple(ignored_providers)
         self._base_url = base_url
         self._request_timeout_seconds = request_timeout_seconds
         self._idle_timeout_seconds = idle_timeout_seconds
@@ -112,6 +114,7 @@ class RouterAiLlmClient:
             mode=mode,
             response_format=_response_format(mode, schema_name, schema),
             max_tokens=MAX_OUTPUT_TOKENS,
+            ignored_providers=self._ignored_providers,
         )
 
     async def complete_text(
@@ -131,8 +134,12 @@ class RouterAiLlmClient:
         mode: ResponseFormatMode,
         response_format: ResponseFormat | Omit,
         max_tokens: int,
+        ignored_providers: Sequence[str] = (),
     ) -> str:
         client = self._ensure_client()
+        extra_body: dict[str, Any] | None = (
+            {"provider": {"ignore": list(ignored_providers)}} if ignored_providers else None
+        )
         deadline = asyncio.timeout(self._request_timeout_seconds)
         try:
             async with deadline:
@@ -141,6 +148,7 @@ class RouterAiLlmClient:
                     messages=[_to_message_param(message) for message in messages],
                     response_format=response_format,
                     max_tokens=max_tokens,
+                    extra_body=extra_body,
                 )
         except TimeoutError as error:
             if not deadline.expired():

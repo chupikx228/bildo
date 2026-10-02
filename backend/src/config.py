@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     routerai_model: str = "deepseek/deepseek-v4-flash"
     routerai_enricher_model: str = "deepseek/deepseek-v4-flash"
     routerai_max_retries: int = 3
+    routerai_ignored_providers: list[str] = ["OpenInference"]
 
 
 settings = Settings()
