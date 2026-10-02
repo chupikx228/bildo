@@ -11,6 +11,7 @@ def build_llm_client() -> LlmClient:
     return RouterAiLlmClient(
         api_key=settings.routerai_api_key,
         base_url=settings.routerai_base_url,
+        ignored_providers=settings.routerai_ignored_providers,
     )
 
 
