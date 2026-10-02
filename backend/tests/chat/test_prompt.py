@@ -1,5 +1,6 @@
 from src.chat.prompt import build_system_prompt
 from src.generation.prompt import DESIGN_RULES, EXPORT_RULES
+from src.generation.structured_output import VALIDATION_FEEDBACK_HEADER
 from tests.generation.template_fixtures import build_template_document
 
 
@@ -28,3 +29,11 @@ def test_chat_prompt_does_not_impose_the_generation_screen_count() -> None:
     prompt = build_system_prompt(build_template_document("трекер привычек", None))
 
     assert "от 2 до 5 экранов" not in prompt
+
+
+def test_chat_prompt_keeps_validation_feedback_out_of_the_reply() -> None:
+    prompt = build_system_prompt(build_template_document("трекер привычек", None))
+
+    assert f"«{VALIDATION_FEEDBACK_HEADER} …»" in prompt
+    assert "пользователь её не видит" in prompt
+    assert "упоминай в `reply` проверку, валидацию, ошибки, исправления, повторные попытки" in prompt

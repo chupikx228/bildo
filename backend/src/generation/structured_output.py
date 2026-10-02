@@ -17,6 +17,8 @@ JSON_FENCE = "```"
 TRANSIENT_RETRY_DELAY_SECONDS = 2.0
 MAX_RETRY_AFTER_SECONDS = 60.0
 
+VALIDATION_FEEDBACK_HEADER = "Этот ответ не прошёл валидацию:"
+
 
 async def generate_structured[ModelT: BaseModel](
     messages: Sequence[ChatMessage],
@@ -107,7 +109,7 @@ def _build_retry_messages(raw_answer: str, error: str) -> list[ChatMessage]:
         ChatMessage(
             role="user",
             content=(
-                "Этот ответ не прошёл валидацию:\n"
+                f"{VALIDATION_FEEDBACK_HEADER}\n"
                 f"{error}\n\n"
                 "Исправь перечисленные ошибки и верни ответ снова целиком одним JSON-объектом, строго по схеме."
             ),
