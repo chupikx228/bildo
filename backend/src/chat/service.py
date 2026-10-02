@@ -10,6 +10,7 @@ from src.chat.prompt import (
     DOCUMENT_REQUEST_PROBLEM,
     EDIT_CLAIM_PATTERNS,
     EDIT_CLAIM_PROBLEM,
+    EDITED_WITHOUT_DOCUMENT_PROBLEM,
     QUOTED_TEXT,
 )
 from src.chat.repository import ChatRepository
@@ -25,6 +26,8 @@ CONTEXT_HISTORY_LIMIT = 20
 def check_chat_turn(response: ChatTurnResponse) -> None:
     if response.document is not None:
         check_edited_document(response.document)
+    elif response.edited:
+        raise ValueError(EDITED_WITHOUT_DOCUMENT_PROBLEM)
     elif asks_for_the_document(response.reply):
         raise ValueError(DOCUMENT_REQUEST_PROBLEM)
     elif claims_an_edit(response.reply):

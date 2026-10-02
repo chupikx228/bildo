@@ -6,7 +6,13 @@ from src.apps.exceptions import AppGenerationInProgress, AppNotFound
 from src.apps.schemas import AppDocument
 from src.apps.service import AppService
 from src.chat.exceptions import ChatMessageNotFound, ChatQueueNotConfiguredError, MessageNotDecidable
-from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM, EDIT_CLAIM_PROBLEM
+from src.chat.models import ChatMessage as ChatMessageRecord
+from src.chat.prompt import (
+    DOCUMENT_REQUEST_PROBLEM,
+    EDIT_CLAIM_PROBLEM,
+    EDITED_WITHOUT_DOCUMENT_PROBLEM,
+    build_messages,
+)
 from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService, check_chat_turn
 from src.generation.structured_output import generate_structured
@@ -439,3 +445,75 @@ async def test_chat_turn_retries_until_the_dangling_navigate_is_fixed() -> None:
     assert result == fixed
     assert len(client.calls) == 2
     assert "ведёт на `/`" in client.calls[1][-1]["content"]
+
+
+def test_check_chat_turn_rejects_edited_true_without_a_document() -> None:
+    with pytest.raises(ValueError) as error:
+        check_chat_turn(ChatTurnResponse(reply="Заменил подпись кнопки.", document=None, edited=True))
+
+    assert str(error.value) == EDITED_WITHOUT_DOCUMENT_PROBLEM
+
+
+def test_check_chat_turn_accepts_edited_false_without_a_document() -> None:
+    check_chat_turn(ChatTurnResponse(reply="Какую кнопку поменять?", document=None, edited=False))
+
+
+def test_check_chat_turn_accepts_edited_true_with_a_document() -> None:
+    document = build_template_document("форма заявки", None)
+
+    check_chat_turn(ChatTurnResponse(reply="Готово", document=document, edited=True))
+
+
+def test_check_chat_turn_keeps_the_text_heuristic_when_edited_is_false() -> None:
+    with pytest.raises(ValueError) as error:
+        check_chat_turn(ChatTurnResponse(reply="Готово, кнопка изменена.", document=None, edited=False))
+
+    assert str(error.value) == EDIT_CLAIM_PROBLEM
+
+
+def test_check_chat_turn_reports_only_the_structural_problem_when_both_signals_fire() -> None:
+    with pytest.raises(ValueError) as error:
+        check_chat_turn(ChatTurnResponse(reply="Готово, кнопка изменена.", document=None, edited=True))
+
+    assert str(error.value) == EDITED_WITHOUT_DOCUMENT_PROBLEM
+
+
+async def test_chat_turn_retries_edited_true_without_a_document_until_the_document_arrives() -> None:
+    document = build_template_document("форма заявки", None)
+    flagged = ChatTurnResponse(reply="Поправил кнопку.", document=None, edited=True)
+    fixed = ChatTurnResponse(reply="Поправил кнопку.", document=document, edited=True)
+    client = FakeLlmClient([flagged.model_dump_json(by_alias=True), fixed.model_dump_json(by_alias=True)])
+
+    result = await generate_structured(
+        [{"role": "user", "content": "поправь кнопку"}],
+        client=client,
+        model="m",
+        schema_name="ChatTurnResponse",
+        schema={},
+        target_model=ChatTurnResponse,
+        max_attempts=3,
+        check=check_chat_turn,
+    )
+
+    assert result == fixed
+    assert len(client.calls) == 2
+    assert EDITED_WITHOUT_DOCUMENT_PROBLEM in client.calls[1][-1]["content"]
+
+
+def test_a_stored_turn_without_the_edited_field_still_validates() -> None:
+    legacy = ChatTurnResponse.model_validate({"reply": "Ответ", "document": None})
+
+    assert legacy.edited is False
+
+
+def test_replayed_history_carries_only_role_and_content() -> None:
+    document = build_template_document("форма заявки", None)
+    history = [
+        ChatMessageRecord(app_id=uuid4(), role="user", content="привет"),
+        ChatMessageRecord(app_id=uuid4(), role="assistant", content="Здравствуйте"),
+    ]
+
+    messages = build_messages(document, history)
+
+    assert [(m["role"], m["content"]) for m in messages[1:]] == [("user", "привет"), ("assistant", "Здравствуйте")]
+    assert all(set(m) == {"role", "content"} for m in messages)
