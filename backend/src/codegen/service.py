@@ -757,7 +757,7 @@ def _header_back_title_option(theme: AppThemeTokens) -> str:
     return f"                headerBackTitleStyle: {_inline_object_literal([('fontFamily', _literal(font_family))])},\n"
 
 
-def _tabs_layout(roots: list[AppScreen], theme: AppThemeTokens) -> str:
+def _tabs_layout(roots: list[AppScreen], hidden: list[AppScreen], theme: AppThemeTokens) -> str:
     families = _theme_font_families(theme)
     tab_label_font = _theme_font_family(theme, TAB_LABEL_FONT_SIZE, TAB_LABEL_FONT_WEIGHT)
     screens = "\n".join(
@@ -767,6 +767,14 @@ def _tabs_layout(roots: list[AppScreen], theme: AppThemeTokens) -> str:
         + _esc(screen.name)
         + "' }} />"
         for screen in roots
+    )
+    screens += "".join(
+        '\n              <Tabs.Screen name="'
+        + screen.route
+        + "\" options={{ href: null, title: '"
+        + _esc(screen.name)
+        + "' }} />"
+        for screen in hidden
     )
     return (
         "import { Tabs } from 'expo-router';\n"
@@ -1018,7 +1026,9 @@ def generate_files(document: AppDocument) -> ExpoFileMap:
     roots = [screens_by_id[root_id] for root_id in document.navigation.roots if root_id in screens_by_id]
 
     if document.navigation.type == "tabs":
-        files["app/_layout.tsx"] = _tabs_layout(roots, document.theme)
+        root_ids = set(document.navigation.roots)
+        hidden = [screen for screen in document.screens if screen.id not in root_ids]
+        files["app/_layout.tsx"] = _tabs_layout(roots, hidden, document.theme)
     else:
         files["app/_layout.tsx"] = _stack_layout(document.screens, document.theme)
 
