@@ -3,14 +3,17 @@ from uuid import UUID, uuid4
 import pytest
 
 from src.apps.exceptions import AppGenerationInProgress, AppNotFound
+from src.apps.schemas import AppDocument
 from src.apps.service import AppService
 from src.chat.exceptions import ChatMessageNotFound, ChatQueueNotConfiguredError, MessageNotDecidable
 from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM
 from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService, check_chat_turn
+from src.generation.structured_output import generate_structured
 from src.queue.jobs import CHAT_TURN_JOB
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.chat.in_memory_repository import InMemoryChatRepository
+from tests.generation.fake_llm_client import FakeLlmClient
 from tests.generation.in_memory_model_catalog import InMemoryModelCatalog
 from tests.generation.template_fixtures import build_template_document
 from tests.in_memory_task_queue import InMemoryTaskQueue
@@ -357,3 +360,60 @@ def test_check_chat_turn_does_not_apply_the_document_request_rule_when_a_documen
     document = build_template_document("форма заявки", None)
 
     check_chat_turn(ChatTurnResponse(reply="Готово. Пришлите следующий документ, если нужно ещё.", document=document))
+
+
+def legacy_slash_start_document() -> AppDocument:
+    document = build_template_document("трекер привычек", None)
+    legacy = document.model_dump_json(by_alias=True, exclude_none=True).replace('"route":"index"', '"route":"/"')
+    return AppDocument.model_validate_json(legacy)
+
+
+def rename_start_screen_only(document: AppDocument) -> AppDocument:
+    screens = [
+        screen.model_copy(update={"route": "index"}) if screen.route == "/" else screen for screen in document.screens
+    ]
+    return document.model_copy(update={"screens": screens})
+
+
+def rename_start_route_everywhere(document: AppDocument) -> AppDocument:
+    dumped = document.model_dump_json(by_alias=True, exclude_none=True).replace('"route":"/"', '"route":"index"')
+    return AppDocument.model_validate_json(dumped)
+
+
+def test_check_chat_turn_rejects_a_navigate_left_pointing_at_the_renamed_start_route() -> None:
+    renamed = rename_start_screen_only(legacy_slash_start_document())
+
+    with pytest.raises(ValueError) as error:
+        check_chat_turn(ChatTurnResponse(reply="Готово", document=renamed))
+
+    message = str(error.value)
+    assert "ведёт на `/`, среди экранов такого `route` нет" in message
+    assert "на экране `progress`" in message
+
+
+def test_check_chat_turn_accepts_the_start_route_renamed_together_with_its_navigate_targets() -> None:
+    renamed = rename_start_route_everywhere(legacy_slash_start_document())
+
+    check_chat_turn(ChatTurnResponse(reply="Готово", document=renamed))
+
+
+async def test_chat_turn_retries_until_the_dangling_navigate_is_fixed() -> None:
+    legacy = legacy_slash_start_document()
+    dangling = ChatTurnResponse(reply="Готово", document=rename_start_screen_only(legacy))
+    fixed = ChatTurnResponse(reply="Готово", document=rename_start_route_everywhere(legacy))
+    client = FakeLlmClient([dangling.model_dump_json(by_alias=True), fixed.model_dump_json(by_alias=True)])
+
+    result = await generate_structured(
+        [{"role": "user", "content": "переименуй стартовый экран"}],
+        client=client,
+        model="m",
+        schema_name="ChatTurnResponse",
+        schema={},
+        target_model=ChatTurnResponse,
+        max_attempts=3,
+        check=check_chat_turn,
+    )
+
+    assert result == fixed
+    assert len(client.calls) == 2
+    assert "ведёт на `/`" in client.calls[1][-1]["content"]

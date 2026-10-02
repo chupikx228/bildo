@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from src.apps.schemas import AppDocument
+from src.apps.schemas import AppDocument, AppNode, NavigateAction
 from src.generation.llm_client import LlmClient
 from src.generation.prompt import (
     MAX_SCREENS,
@@ -57,6 +57,7 @@ def check_edited_document(document: AppDocument) -> None:
     _raise_on_problems(
         document,
         [
+            *_dangling_navigate_problems(document),
             *_start_route_problems(document),
             *_empty_roots_problems(document),
             *_missing_roots_problems(document),
@@ -108,6 +109,30 @@ def _missing_roots_problems(document: AppDocument) -> list[str]:
         f"`navigation.roots` ссылается на несуществующие `id` экранов: {', '.join(missing)}. "
         "`navigation.roots` перечисляет `id` экранов, их `route` туда не пишется"
     ]
+
+
+def _dangling_navigate_problems(document: AppDocument) -> list[str]:
+    routes = {screen.route for screen in document.screens}
+    problems: list[str] = []
+    for screen in document.screens:
+        for node in _walk(screen.root):
+            if node.props is None:
+                continue
+            for action in [*(node.props.on_press or []), *(node.props.on_change or [])]:
+                if isinstance(action, NavigateAction) and action.route not in routes:
+                    problems.append(
+                        f"действие `navigate` узла `{node.id}` на экране `{screen.route}` ведёт на `{action.route}`, "
+                        "среди экранов такого `route` нет: после переименования `route` экрана обнови все `navigate` "
+                        "на него"
+                    )
+    return problems
+
+
+def _walk(node: AppNode) -> list[AppNode]:
+    nodes = [node]
+    for child in node.children:
+        nodes.extend(_walk(child))
+    return nodes
 
 
 def _root_problems(document: AppDocument) -> list[str]:
