@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from src.apps.schemas import AppDocument, AppNodeLayout
 from src.apps.service import AppService
 from src.chat.models import REPLY_FOREIGN_KEY_CONSTRAINT, REPLY_UNIQUE_CONSTRAINT
+from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM
 from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService
 from src.config import settings
@@ -20,6 +21,7 @@ from src.generation.exceptions import GenerationError, GenerationNotConfiguredEr
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.prompt import build_system_prompt
 from src.generation.prompt_enricher import ENRICHER_TIMEOUT_SECONDS, enrich_prompt
+from src.generation.structured_output import VALIDATION_FEEDBACK_HEADER
 from src.queue.base import JobStatusInfo
 from src.queue.jobs import CHAT_TURN_JOB, GENERATE_APP_DOCUMENT_JOB
 from src.tasks.service import TASK_FAILURE_MESSAGE, TaskService
@@ -725,6 +727,62 @@ async def test_chat_turn_retries_a_proposed_document_that_breaks_the_document_ru
     assert messages[1].proposed_document is not None
     proposed = AppDocument.model_validate(messages[1].proposed_document)
     assert "index" in [screen.route for screen in proposed.screens]
+
+
+async def test_chat_turn_retries_a_reply_that_asks_the_user_for_the_document(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "поменяй текст кнопки на «Записаться»")
+    asks_for_document = chat_answer("Пришлите, пожалуйста, текущий документ приложения", with_document=False)
+    ctx = context([asks_for_document, chat_answer("Готово, кнопка теперь «Записаться»", with_document=True)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 2
+    assert DOCUMENT_REQUEST_PROBLEM in llm_client.calls[1][-1]["content"]
+    messages = await chat_repository.list_messages(app_id)
+    assert messages[1].content == "Готово, кнопка теперь «Записаться»"
+    assert messages[1].proposed_document is not None
+
+
+async def test_chat_turn_does_not_retry_a_clarifying_question_without_a_document(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "поменяй текст кнопки")
+    question = "Какую именно кнопку поменять и на какой текст?"
+    ctx = context([chat_answer(question, with_document=False)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 1
+    messages = await chat_repository.list_messages(app_id)
+    assert messages[1].content == question
+    assert messages[1].proposed_document is None
+
+
+async def test_chat_turn_retry_feedback_is_the_message_the_prompt_marks_as_hidden_from_the_user(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "переделай главный экран")
+    broken = without_index_route(build_template_document(PROMPT, None))
+    ctx = context([chat_answer_with("готово", broken), chat_answer("готово", with_document=True)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    retry = llm_client.calls[1]
+    feedback = retry[-1]["content"]
+    assert feedback.startswith(VALIDATION_FEEDBACK_HEADER)
+    assert f"«{VALIDATION_FEEDBACK_HEADER} …»" in retry[0]["content"]
+    assert "пользователь её не видит" in retry[0]["content"]
 
 
 async def test_chat_turn_fails_when_the_proposed_document_never_follows_the_document_rules(

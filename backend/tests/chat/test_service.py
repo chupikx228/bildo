@@ -5,7 +5,9 @@ import pytest
 from src.apps.exceptions import AppGenerationInProgress, AppNotFound
 from src.apps.service import AppService
 from src.chat.exceptions import ChatMessageNotFound, ChatQueueNotConfiguredError, MessageNotDecidable
-from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService
+from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM
+from src.chat.schemas import ChatTurnResponse
+from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService, check_chat_turn
 from src.queue.jobs import CHAT_TURN_JOB
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.chat.in_memory_repository import InMemoryChatRepository
@@ -311,3 +313,47 @@ async def test_send_message_without_a_task_queue_raises(
 
     assert await chat_repository.list_messages(app_id) == []
     assert transaction.commits == 0
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Пришлите, пожалуйста, текущий документ экрана — я заменю текст кнопки «Отправить» на «Записаться».",
+        "Пожалуйста, пришлите текущий JSON экрана, в котором нужно поменять текст кнопки «Отправить» на «Записаться».",
+        "Ошибка: не найден документ для изменения. Пожалуйста, предоставьте AppDocument.",
+        "Пожалуйста, предоставьте документ, в котором нужно заменить текст кнопки. Документа в текущем контексте нет.",
+        "Уточните, на каком экране заменить текст кнопки — в текущем диалоге пока нет ни одного сгенерированного макета.",
+        "Please send me the current app document so I can change the button text.",
+        "Пожалуйста, прикрепите текущий дизайн-документ (JSON), чтобы я нашёл кнопку «Отправить».",
+        "Нет доступа к текущему документу приложения в этом диалоге, в переписке документа не видно.",
+        "Чтобы изменить текст кнопки, мне нужен текущий документ приложения. Пожалуйста, отправьте.",
+    ],
+)
+def test_check_chat_turn_rejects_a_reply_that_asks_for_the_document(reply: str) -> None:
+    with pytest.raises(ValueError, match="уже передан тебе целиком") as error:
+        check_chat_turn(ChatTurnResponse(reply=reply, document=None))
+
+    assert str(error.value) == DOCUMENT_REQUEST_PROBLEM
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Какую именно кнопку поменять — «Отправить» на экране заявки или «Новая заявка» на экране готово?",
+        "Sure! Which button do you mean — “Отправить” on the form screen, or “Новая заявка” on the success screen?",
+        "Пожалуйста, уточните, на каком экране нужно изменить кнопку. Пришлите название экрана, и я обновлю документ.",
+        "Экранов в приложении два: «Заявка» и «Готово». Кнопка «Отправить» ведёт на экран «Готово».",
+        "Чтобы выложить приложение, нажмите «Экспорт» — скачается zip-архив Expo-проекта.",
+        "Сейчас в документе нет экрана настроек — добавить такой экран?",
+        "Я не вижу в документе экрана настроек — добавить экран настроек?",
+        "Добавить на экран входа кнопку «Отправьте код»?",
+    ],
+)
+def test_check_chat_turn_accepts_a_conversational_reply_without_a_document(reply: str) -> None:
+    check_chat_turn(ChatTurnResponse(reply=reply, document=None))
+
+
+def test_check_chat_turn_does_not_apply_the_document_request_rule_when_a_document_is_proposed() -> None:
+    document = build_template_document("форма заявки", None)
+
+    check_chat_turn(ChatTurnResponse(reply="Готово. Пришлите следующий документ, если нужно ещё.", document=document))
