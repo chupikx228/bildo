@@ -6,7 +6,7 @@ from src.apps.exceptions import AppGenerationInProgress, AppNotFound
 from src.apps.schemas import AppDocument
 from src.apps.service import AppService
 from src.chat.exceptions import ChatMessageNotFound, ChatQueueNotConfiguredError, MessageNotDecidable
-from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM
+from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM, EDIT_CLAIM_PROBLEM
 from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService, check_chat_turn
 from src.generation.structured_output import generate_structured
@@ -350,10 +350,32 @@ def test_check_chat_turn_rejects_a_reply_that_asks_for_the_document(reply: str) 
         "Сейчас в документе нет экрана настроек — добавить такой экран?",
         "Я не вижу в документе экрана настроек — добавить экран настроек?",
         "Добавить на экран входа кнопку «Отправьте код»?",
+        "Я добавил бы на экран вторую кнопку — сделать это?",
+        "Ранее я поменял цвет кнопки, сейчас она синяя.",
+        "Сделать кнопку крупнее?",
     ],
 )
 def test_check_chat_turn_accepts_a_conversational_reply_without_a_document(reply: str) -> None:
     check_chat_turn(ChatTurnResponse(reply=reply, document=None))
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Готово, текст кнопки изменён на «Записаться».",
+        "Готово!",
+        "Сделано: заголовок теперь «Запишитесь на консультацию».",
+        "Я поменял текст кнопки на «Записаться».",
+        "Поменяла цвет кнопки на синий.",
+        "Изменил заголовок экрана.",
+        "Уже заменил подпись кнопки.",
+    ],
+)
+def test_check_chat_turn_rejects_a_reply_that_claims_an_edit_without_a_document(reply: str) -> None:
+    with pytest.raises(ValueError) as error:
+        check_chat_turn(ChatTurnResponse(reply=reply, document=None))
+
+    assert str(error.value) == EDIT_CLAIM_PROBLEM
 
 
 def test_check_chat_turn_does_not_apply_the_document_request_rule_when_a_document_is_proposed() -> None:

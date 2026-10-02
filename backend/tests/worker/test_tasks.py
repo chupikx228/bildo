@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from src.apps.schemas import AppDocument, AppNodeLayout
 from src.apps.service import AppService
 from src.chat.models import REPLY_FOREIGN_KEY_CONSTRAINT, REPLY_UNIQUE_CONSTRAINT
-from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM
+from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM, EDIT_CLAIM_PROBLEM
 from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService
 from src.config import settings
@@ -656,7 +656,7 @@ async def test_chat_turn_asks_the_llm_for_the_default_model(
 ) -> None:
     app_id = await create_ready_app(repository)
     user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
-    ctx = context([chat_answer("готово", with_document=False)])
+    ctx = context([chat_answer("ок", with_document=False)])
 
     await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
 
@@ -752,6 +752,25 @@ async def test_chat_turn_retries_a_reply_that_asks_the_user_for_the_document(
     llm_client: FakeLlmClient = ctx["llm_client"]
     assert len(llm_client.calls) == 2
     assert DOCUMENT_REQUEST_PROBLEM in llm_client.calls[1][-1]["content"]
+    messages = await chat_repository.list_messages(app_id)
+    assert messages[1].content == "Готово, кнопка теперь «Записаться»"
+    assert messages[1].proposed_document is not None
+
+
+async def test_chat_turn_retries_a_reply_that_claims_an_edit_without_a_document(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "поменяй текст кнопки на «Записаться»")
+    claims_edit = chat_answer("Готово, текст кнопки изменён на «Записаться»", with_document=False)
+    ctx = context([claims_edit, chat_answer("Готово, кнопка теперь «Записаться»", with_document=True)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 2
+    assert EDIT_CLAIM_PROBLEM in llm_client.calls[1][-1]["content"]
     messages = await chat_repository.list_messages(app_id)
     assert messages[1].content == "Готово, кнопка теперь «Записаться»"
     assert messages[1].proposed_document is not None
@@ -977,7 +996,7 @@ async def test_chat_turn_links_the_assistant_reply_to_the_answered_message(
     user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
 
     await worker_tasks.chat_turn(
-        context([chat_answer("готово", with_document=False)]),
+        context([chat_answer("ок", with_document=False)]),
         str(app_id),
         str(user_message.id),
     )
@@ -994,14 +1013,14 @@ async def test_chat_turn_is_idempotent_when_arq_retries_the_same_message(
 ) -> None:
     app_id = await create_ready_app(repository)
     user_message = await chat_repository.create_message(app_id, "user", "добавь экран настроек")
-    ctx = context([chat_answer("готово", with_document=False), chat_answer("готово ещё раз", with_document=False)])
+    ctx = context([chat_answer("ок", with_document=False), chat_answer("ок ещё раз", with_document=False)])
 
     await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
     await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
 
     messages = await chat_repository.list_messages(app_id)
     assert [message.role for message in messages] == ["user", "assistant"]
-    assert messages[1].content == "готово"
+    assert messages[1].content == "ок"
     llm_client: FakeLlmClient = ctx["llm_client"]
     assert len(llm_client.calls) == 1
     assert len(sessions) == 2
@@ -1023,7 +1042,7 @@ async def test_chat_turn_treats_a_unique_constraint_violation_as_already_answere
     monkeypatch.setattr(chat_repository, "create_message", racing_create)
 
     await worker_tasks.chat_turn(
-        context([chat_answer("готово", with_document=False)]),
+        context([chat_answer("ок", with_document=False)]),
         str(app_id),
         str(user_message.id),
     )
@@ -1049,7 +1068,7 @@ async def test_chat_turn_reraises_an_integrity_error_from_another_constraint(
 
     with pytest.raises(IntegrityError) as raised:
         await worker_tasks.chat_turn(
-            context([chat_answer("готово", with_document=False)]),
+            context([chat_answer("ок", with_document=False)]),
             str(app_id),
             str(user_message.id),
         )
@@ -1074,7 +1093,7 @@ async def test_chat_turn_reraises_an_integrity_error_without_a_driver_cause(
 
     with pytest.raises(IntegrityError):
         await worker_tasks.chat_turn(
-            context([chat_answer("готово", with_document=False)]),
+            context([chat_answer("ок", with_document=False)]),
             str(app_id),
             str(user_message.id),
         )
