@@ -2122,6 +2122,24 @@ Web-экспорт открыт в Chrome, вычисленные стили:
 
 Подпись «Назад» на web не проверить (см. выше), а симуляторов iOS на машине проверки нет — Xcode установлен, рантаймов симулятора нет. Проверено то, что можно без устройства: `headerBackTitleStyle` и `PTSerif_400Regular` есть в Hermes-бандле iOS, а по исходникам `react-native-screens@4.4.0` `backTitleFontFamily` доходит до нативного `UIFont` подписи. Нативный рендер подписи на устройстве или симуляторе не проверялся. Юнит-тесты — `tests/codegen/test_theme_surfaces_codegen.py`.
 
+### 10.10 Частичные `navigation.roots`: экраны вне вкладок (BIL-115)
+
+**Решение.** Подмножество `roots` при `tabs` — настоящая возможность, а не ошибка документа: экран, которого нет в `roots`, остаётся маршрутом (на него можно перейти через `navigate`), но не показывается вкладкой. Раньше expo-router добавлял каждый файл из `app/` вкладкой с подписью-маршрутом (`settings`), даже если экрана не было в `roots` (см. «Что не закрыто» в BIL-108).
+
+**Что делает бэкенд.** `_tabs_layout` в `src/codegen/service.py` выпускает `Tabs.Screen` для всех экранов документа: сначала корневые в порядке `roots` (как раньше), затем остальные в порядке `screens` с `options={{ href: null, title: '…' }}`:
+
+```tsx
+<Tabs.Screen name="index" options={{ title: 'Сегодня' }} />
+<Tabs.Screen name="stats" options={{ title: 'Статистика' }} />
+<Tabs.Screen name="settings" options={{ href: null, title: 'Настройки' }} />
+```
+
+`stack`/`drawer` не затронуты (там `roots` не читается). Документ с полным `roots` даёт тот же вывод, что до BIL-115, поэтому тест на равенство генераторов (§ 10.1) на текущих фикстурах не меняется. Два теста BIL-108 (`test_navigation_roots_codegen.py`) обновлены: раньше они закрепляли, что экран вне `roots` не выпускается вовсе.
+
+**Проверка — реальная сборка.** Документ из трёх экранов (`index`, `stats`, `settings`), `roots` — первые два, на `index` кнопка с `navigate` на `settings`: `npm install` → `npx tsc --noEmit` → `npx expo export --platform web`, всё с exit 0. В Chrome таб-бар показывает две вкладки («Сегодня», «Статистика»), нажатие кнопки открывает `/settings`. Тесты — `tests/codegen/test_partial_roots_codegen.py`.
+
+**Фронтовая половина** — BIL-119 («feat: support partial navigation.roots in TS codegen and normalizeAppDocument (frontend half of BIL-115)»): TS-генератор (`codegen.ts`) должен выпускать то же самое, а `normalizeAppDocument` перестать дописывать в `roots` все экраны, иначе частичные `roots` не переживают загрузку в редакторе. До этого `PUT` с частичными `roots` бэкенд принимает и экспортирует верно, а превью и панель кода редактора расходятся с экспортом.
+
 ## 11. Миграции
 
 Каждое изменение `models.py` — новая ревизия Alembic. Автогенерация (`alembic revision --autogenerate`) как черновик: сгенерированный файл читается глазами до коммита, потому что Alembic не видит переименований и часто предлагает `drop + create` вместо `alter`.

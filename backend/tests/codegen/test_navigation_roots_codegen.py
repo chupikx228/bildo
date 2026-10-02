@@ -50,13 +50,18 @@ def test_tabs_follow_the_order_of_roots_not_of_screens() -> None:
     assert _navigator_screens(layout) == [
         "<Tabs.Screen name=\"settings\" options={{ title: 'Настройки' }} />",
         "<Tabs.Screen name=\"index\" options={{ title: 'Сегодня' }} />",
+        "<Tabs.Screen name=\"stats\" options={{ href: null, title: 'Статистика' }} />",
     ]
 
 
 def test_tabs_do_not_treat_a_route_in_roots_as_a_screen_reference() -> None:
     layout = generate_files(_document("tabs", ["index", "scr-stats", "settings"]))["app/_layout.tsx"]
 
-    assert _navigator_screens(layout) == ["<Tabs.Screen name=\"stats\" options={{ title: 'Статистика' }} />"]
+    assert _navigator_screens(layout) == [
+        "<Tabs.Screen name=\"stats\" options={{ title: 'Статистика' }} />",
+        "<Tabs.Screen name=\"index\" options={{ href: null, title: 'Сегодня' }} />",
+        "<Tabs.Screen name=\"settings\" options={{ href: null, title: 'Настройки' }} />",
+    ]
 
 
 def test_stack_lists_every_screen_whatever_roots_say() -> None:
