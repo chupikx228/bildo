@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from src.apps.schemas import AppDocument
+from src.apps.schemas import AppDocument, AppScreen
 from src.exceptions import ConflictError, DomainError, NotFoundError
 
 
@@ -42,3 +42,15 @@ class InvalidNavigationRootsError(DomainError):
             f"Экраны в документе: {screens or 'нет ни одного экрана'}"
         )
         super().__init__(", ".join(missing))
+
+
+class InvalidScreenRoutesError(DomainError):
+    status_code = 422
+
+    def __init__(self, offending: list[AppScreen]) -> None:
+        screens = ", ".join(f"«{screen.id}» (route «{screen.route}»)" for screen in offending)
+        self.message = (
+            f"route экрана не может иметь ведущий «/»: {screens}. "
+            "Стартовый экран — «index», остальные — без ведущего слэша, например «progress»"
+        )
+        super().__init__(", ".join(screen.id for screen in offending))

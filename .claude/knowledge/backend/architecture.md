@@ -969,7 +969,7 @@ Flash в курируемый список (§ 9.3) не входит, и это
 
 **Проверка сборкой.** Приложение `8c90a14f…` из brew (`tabs`, экраны `/` и `/progress`, кнопки перехода друг на друга) после миграции: `npm install` → `npx tsc --noEmit` → `npx expo export --platform web|android|ios`, всё с exit 0. В карте маршрутов web-бандла `index.tsx`, `progress.tsx`, `_layout.tsx`. Web-экспорт открыт в Chrome: кнопка «Прогресс» ведёт на `/progress`, кнопка «Привычки» — обратно на `/`, вкладки подписаны «Сегодня» и «Прогресс», ошибок в консоли нет. Тест — `tests/apps/test_leading_slash_routes_migration.py` (миграция на настоящем Postgres).
 
-**Что не закрыто: новые маршруты с ведущим `/` ничто не запрещает.** Схема (`route: str`), `PUT`, `check_document` и `check_edited_document` такой `route` пропускают, если в документе есть экран `index`, — тогда кодоген снова выпустит `app//progress.tsx`. Редактор таких маршрутов сам не создаёт, источник — ответ модели или `PUT`. Нужна отдельная задача: проверка формы `route` в обеих проверках документа и, вероятно, 422 на `PUT`.
+**Закрыто в BIL-118: новые маршруты с ведущим `/` отклоняются.** `leading_slash_routes` (`backend/src/apps/navigation.py`) находит экраны с `route`, начинающимся с `/`. Её используют `check_document` и `check_edited_document` (текст — подсказка для модели, обычный повтор `generate_structured`) и `AppService.save_document`: после проверок 409, 412 и `roots` он отвечает 422 (`InvalidScreenRoutesError`). Схема (`route: str`) по-прежнему пропускает любую строку. Контракт — в `api-contract.md`.
 
 #### Замеры (BIL-86, 2026-09-27)
 

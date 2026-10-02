@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from src.apps.navigation import missing_roots
+from src.apps.navigation import leading_slash_routes, missing_roots
 from src.apps.schemas import AppDocument, AppNode, NavigateAction
 from src.generation.llm_client import LlmClient
 from src.generation.prompt import (
@@ -49,6 +49,7 @@ def check_document(document: AppDocument) -> None:
             *_start_route_problems(document),
             *_empty_roots_problems(document),
             *_missing_roots_problems(document),
+            *_leading_slash_route_problems(document),
             *_root_problems(document),
         ],
     )
@@ -62,6 +63,7 @@ def check_edited_document(document: AppDocument) -> None:
             *_start_route_problems(document),
             *_empty_roots_problems(document),
             *_missing_roots_problems(document),
+            *_leading_slash_route_problems(document),
             *_root_problems(document),
         ],
     )
@@ -108,6 +110,18 @@ def _missing_roots_problems(document: AppDocument) -> list[str]:
     return [
         f"`navigation.roots` ссылается на несуществующие `id` экранов: {', '.join(missing)}. "
         "`navigation.roots` перечисляет `id` экранов, их `route` туда не пишется"
+    ]
+
+
+def _leading_slash_route_problems(document: AppDocument) -> list[str]:
+    slashed = leading_slash_routes(document)
+    if not slashed:
+        return []
+    described = ", ".join(f"`{screen.id}` (`route` `{screen.route}`)" for screen in slashed)
+    return [
+        f"`route` экрана не может иметь ведущий `/`: {described}. "
+        f"Стартовый экран — `{START_ROUTE}`, остальные пиши без ведущего слэша, например `progress`; "
+        "при переименовании обнови все `navigate` и `href` на этот экран, `id` экрана не меняй"
     ]
 
 

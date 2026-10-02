@@ -578,3 +578,36 @@ async def test_generate_document_without_a_brief_sends_the_full_design_prompt() 
     await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=1)
 
     assert client.calls[0][0]["content"] == build_system_prompt(has_brief=False)
+
+
+def with_added_screen_route(document: AppDocument, route: str) -> AppDocument:
+    extra = document.screens[-1].model_copy(update={"id": "screen-progress", "route": route})
+    return document.model_copy(update={"screens": [*document.screens, extra]})
+
+
+def test_check_document_rejects_a_route_with_a_leading_slash() -> None:
+    document = with_added_screen_route(build_template_document(PROMPT, None), "/progress")
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    message = str(error.value)
+    assert "не может иметь ведущий `/`" in message
+    assert "`screen-progress` (`route` `/progress`)" in message
+
+
+def test_check_document_accepts_index_and_slashless_routes() -> None:
+    check_document(with_added_screen_route(build_template_document(PROMPT, None), "progress"))
+
+
+def test_check_edited_document_rejects_a_route_with_a_leading_slash() -> None:
+    document = with_added_screen_route(build_template_document(PROMPT, None), "/progress")
+
+    with pytest.raises(ValueError) as error:
+        check_edited_document(document)
+
+    assert "`screen-progress` (`route` `/progress`)" in str(error.value)
+
+
+def test_check_edited_document_accepts_index_and_slashless_routes() -> None:
+    check_edited_document(with_added_screen_route(build_template_document(PROMPT, None), "progress"))
