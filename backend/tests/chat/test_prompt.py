@@ -22,7 +22,16 @@ def test_chat_prompt_states_the_start_route_rule() -> None:
     prompt = build_system_prompt(build_template_document("трекер привычек", None))
 
     assert "стартовый экран — тот, чей `route` буквально `index`" in prompt
-    assert "`navigation.roots` не бывает пустым" in prompt
+
+
+def test_chat_prompt_defines_roots_as_screen_ids() -> None:
+    prompt = build_system_prompt(build_template_document("трекер привычек", None))
+
+    assert "`navigation.roots` — список `id` корневых экранов" in prompt
+    assert "Он не бывает пустым и ссылается только на `id` существующих экранов" in prompt
+    assert "меняй `id`\n  существующих экранов: на них ссылается `navigation.roots`" in prompt
+    assert "`navigation.roots` и действия `navigate` ссылаются только на существующие" not in prompt
+    assert "Действия `navigate` ссылаются только на существующие `route` экранов" in prompt
 
 
 def test_chat_prompt_does_not_impose_the_generation_screen_count() -> None:

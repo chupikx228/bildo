@@ -49,3 +49,14 @@ def test_rules_say_the_start_route_is_literally_index_whatever_the_brief_calls_i
 def test_build_messages_passes_the_flag_through_to_the_system_prompt() -> None:
     assert build_messages("бриф", None, has_brief=True)[0]["content"] == build_system_prompt(has_brief=True)
     assert build_messages("идея", None, has_brief=False)[0]["content"] == build_system_prompt(has_brief=False)
+
+
+def test_rules_define_roots_as_screen_ids_not_routes() -> None:
+    assert "`navigation.roots` — список `id` корневых экранов" in RULES
+    assert "не их `route`: каждый элемент — `id` существующего экрана" in RULES
+    assert "`navigation.roots` содержит только существующие `route`" not in RULES
+
+
+def test_rules_no_longer_require_the_start_screen_id_to_be_index() -> None:
+    assert f"`route` стартового экрана всегда `{START_ROUTE}`" in RULES
+    assert "имеет `id` и `route`" not in RULES
