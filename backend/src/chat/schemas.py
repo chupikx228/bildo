@@ -30,6 +30,7 @@ class DecisionRequest(CamelModel):
 class ChatTurnResponse(CamelModel):
     reply: Annotated[str, Field(min_length=1)]
     document: AppDocument | None = None
+    edited: bool = False
 
     @field_validator("reply", mode="before")
     @classmethod
