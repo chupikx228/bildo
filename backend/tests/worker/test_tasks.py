@@ -72,6 +72,14 @@ def with_empty_roots(document: AppDocument) -> AppDocument:
     return document.model_copy(update={"navigation": document.navigation.model_copy(update={"roots": []})})
 
 
+def with_roots_naming_routes_of_renamed_screens(document: AppDocument) -> AppDocument:
+    screens = [screen.model_copy(update={"id": f"screen-{screen.route}"}) for screen in document.screens]
+    roots = [screen.route for screen in screens]
+    return document.model_copy(
+        update={"screens": screens, "navigation": document.navigation.model_copy(update={"roots": roots})}
+    )
+
+
 def with_iphone_sized_roots(document: AppDocument) -> AppDocument:
     layout = AppNodeLayout(x=0, y=0, width=390, height=844)
     screens = [
@@ -703,6 +711,7 @@ async def test_chat_turn_retries_when_the_model_returns_a_blank_reply(
     [
         (without_index_route, "нет экрана, чей `route` равен `index`"),
         (with_empty_roots, "`navigation.roots` пуст"),
+        (with_roots_naming_routes_of_renamed_screens, "`navigation.roots` ссылается на несуществующие `id` экранов"),
         (with_iphone_sized_roots, "`layout` корня экрана `index` — 0, 0, 390, 844"),
     ],
 )

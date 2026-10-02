@@ -236,7 +236,7 @@ def test_check_document_rejects_empty_roots() -> None:
     assert "`navigation.roots` пуст" in str(error.value)
 
 
-def test_check_document_rejects_roots_pointing_at_missing_routes() -> None:
+def test_check_document_rejects_roots_pointing_at_missing_screens() -> None:
     document = build_template_document(PROMPT, None)
     roots = [*document.navigation.roots, "settings"]
     document = document.model_copy(update={"navigation": document.navigation.model_copy(update={"roots": roots})})
@@ -244,7 +244,38 @@ def test_check_document_rejects_roots_pointing_at_missing_routes() -> None:
     with pytest.raises(ValueError) as error:
         check_document(document)
 
-    assert "несуществующие `route`: settings" in str(error.value)
+    assert "`navigation.roots` ссылается на несуществующие `id` экранов: settings" in str(error.value)
+
+
+def with_screen_ids_apart_from_routes(document: AppDocument, roots: str) -> AppDocument:
+    screens = [screen.model_copy(update={"id": f"scr-{screen.route}"}) for screen in document.screens]
+    root_values = [screen.id if roots == "ids" else screen.route for screen in screens]
+    return document.model_copy(
+        update={"screens": screens, "navigation": document.navigation.model_copy(update={"roots": root_values})}
+    )
+
+
+def test_check_document_accepts_roots_that_name_screen_ids_different_from_routes() -> None:
+    check_document(with_screen_ids_apart_from_routes(build_template_document(PROMPT, None), "ids"))
+
+
+def test_check_document_rejects_roots_that_name_routes_instead_of_screen_ids() -> None:
+    document = with_screen_ids_apart_from_routes(build_template_document(PROMPT, None), "routes")
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    message = str(error.value)
+    assert "`navigation.roots` ссылается на несуществующие `id` экранов: index, progress" in message
+    assert "перечисляет `id` экранов, их `route` туда не пишется" in message
+    assert "`scr-index` (`route` `index`), `scr-progress` (`route` `progress`)" in message
+
+
+def test_check_document_accepts_a_start_screen_whose_id_is_not_index() -> None:
+    document = with_screen_ids_apart_from_routes(build_template_document(PROMPT, None), "ids")
+
+    assert "index" not in [screen.id for screen in document.screens]
+    check_document(document)
 
 
 def with_index_root_layout(document: AppDocument, layout: AppNodeLayout | None) -> AppDocument:
@@ -360,13 +391,16 @@ def with_index_route(document: AppDocument, route: str) -> AppDocument:
     return document.model_copy(update={"screens": screens})
 
 
-def test_check_document_asks_for_both_id_and_route_of_the_start_screen() -> None:
+def test_check_document_asks_for_the_start_route_but_keeps_the_screen_id() -> None:
     document = with_index_route(build_template_document(PROMPT, None), "today")
 
     with pytest.raises(ValueError) as error:
         check_document(document)
 
-    assert "`id` и `route` стартового экрана — буквально строка `index`" in str(error.value)
+    message = str(error.value)
+    assert "`route` стартового экрана — буквально строка `index`" in message
+    assert "`id` экрана не меняй" in message
+    assert "`id` и `route` стартового экрана" not in message
 
 
 def test_check_edited_document_accepts_a_single_screen_document() -> None:
@@ -387,7 +421,7 @@ def test_check_edited_document_rejects_a_document_without_the_index_route() -> N
     message = str(error.value)
     assert "нет экрана, чей `route` равен `index`" in message
     assert "`route` стартового экрана — буквально строка `index`" in message
-    assert "`id` и `route`" not in message
+    assert "`id` и `route` стартового экрана" not in message
 
 
 def test_check_edited_document_rejects_a_document_without_screens() -> None:
@@ -410,6 +444,25 @@ def test_check_edited_document_rejects_empty_roots() -> None:
         check_edited_document(document)
 
     assert "`navigation.roots` пуст" in str(error.value)
+
+
+def test_check_edited_document_rejects_roots_that_name_routes_instead_of_screen_ids() -> None:
+    document = with_screen_ids_apart_from_routes(build_template_document(PROMPT, None), "routes")
+
+    with pytest.raises(ValueError) as error:
+        check_edited_document(document)
+
+    assert "`navigation.roots` ссылается на несуществующие `id` экранов: index, progress" in str(error.value)
+
+
+def test_check_edited_document_rejects_roots_pointing_at_a_removed_screen() -> None:
+    document = build_template_document(PROMPT, None)
+    document = document.model_copy(update={"screens": [s for s in document.screens if s.route == "index"]})
+
+    with pytest.raises(ValueError) as error:
+        check_edited_document(document)
+
+    assert "несуществующие `id` экранов: progress" in str(error.value)
 
 
 def test_check_edited_document_accepts_roots_that_name_screen_ids_instead_of_routes() -> None:

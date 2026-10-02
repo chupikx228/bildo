@@ -13,7 +13,7 @@
 Верхний уровень `AppDocument`:
 - `name`, `id`, `prompt`, `revision`, `createdAt`, `updatedAt`
 - `theme` — 10 токенов: фон, поверхность, граница, текст, приглушённый текст, акцент, текст на акценте, базовый радиус, шрифт текста, шрифт заголовков. Шрифты — `System` или одно из 10 курируемых семейств Google Fonts; экспорт загружает выбранные семейства и применяет шрифт заголовков к крупному тексту (BIL-88, см. [backend/architecture.md](backend/architecture.md#105-шрифты-google-fonts-fontbody--fontheading-bil-88))
-- `navigation` — тип (`tabs` / `stack` / `drawer`) и список корневых маршрутов
+- `navigation` — тип (`tabs` / `stack` / `drawer`) и `roots` — список `id` корневых экранов (при `tabs` — вкладки, в этом порядке). Именно `id` экранов, не их `route` (BIL-108)
 - `screens[]` — у каждого экрана `id`, `name`, `route`, `root` (корневой узел)
 - `state` — переменные приложения (строки, числа, булевы)
 
