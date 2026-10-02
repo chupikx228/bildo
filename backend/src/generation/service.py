@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from src.apps.navigation import missing_roots
 from src.apps.schemas import AppDocument, AppNode, NavigateAction
 from src.generation.llm_client import LlmClient
 from src.generation.prompt import (
@@ -101,8 +102,7 @@ def _empty_roots_problems(document: AppDocument) -> list[str]:
 
 
 def _missing_roots_problems(document: AppDocument) -> list[str]:
-    ids = {screen.id for screen in document.screens}
-    missing = [root for root in document.navigation.roots if root not in ids]
+    missing = missing_roots(document)
     if not missing:
         return []
     return [

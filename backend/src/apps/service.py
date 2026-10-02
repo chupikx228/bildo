@@ -1,8 +1,15 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from src.apps.exceptions import AppGenerationInProgress, AppNotFound, InvalidModel, StaleRevisionError
+from src.apps.exceptions import (
+    AppGenerationInProgress,
+    AppNotFound,
+    InvalidModel,
+    InvalidNavigationRootsError,
+    StaleRevisionError,
+)
 from src.apps.models import App
+from src.apps.navigation import missing_roots
 from src.apps.repository import AppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppSummary, AppThemeTokens
 from src.config import settings
@@ -133,6 +140,9 @@ class AppService:
             raise AppGenerationInProgress(app_id)
         if document.revision != current.revision:
             raise StaleRevisionError(app_id)
+        missing = missing_roots(document)
+        if missing:
+            raise InvalidNavigationRootsError(missing, document)
         saved = document.model_copy(update={"revision": current.revision + 1})
         app = await self._repository.update_document(current, saved)
         return AppDocument.model_validate(app.document)

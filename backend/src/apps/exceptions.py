@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from src.apps.schemas import AppDocument
 from src.exceptions import ConflictError, DomainError, NotFoundError
 
 
@@ -29,3 +30,15 @@ class InvalidModel(DomainError):  # noqa: N818
     def __init__(self, model: str) -> None:
         self.message = f"Модель «{model}» недоступна"
         super().__init__(model)
+
+
+class InvalidNavigationRootsError(DomainError):
+    status_code = 422
+
+    def __init__(self, missing: list[str], document: AppDocument) -> None:
+        screens = ", ".join(f"«{screen.id}» (route «{screen.route}»)" for screen in document.screens)
+        self.message = (
+            f"navigation.roots ссылается на несуществующие id экранов: {', '.join(f'«{m}»' for m in missing)}. "
+            f"Экраны в документе: {screens or 'нет ни одного экрана'}"
+        )
+        super().__init__(", ".join(missing))

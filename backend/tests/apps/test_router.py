@@ -281,6 +281,44 @@ async def test_save_app_while_pending_returns_409_for_a_stale_revision_too(
     assert get_response.json()["document"]["name"] == "New app"
 
 
+def with_screens(payload: dict[str, object], roots: list[str]) -> dict[str, object]:
+    root = {"id": "root", "type": "View", "layout": {"x": 0, "y": 0, "width": 370, "height": 640}, "children": []}
+    payload["screens"] = [{"id": "screen-home", "name": "Home", "route": "index", "root": root}]
+    payload["navigation"] = {"type": "tabs", "roots": roots}
+    return payload
+
+
+async def test_save_app_with_existing_screen_ids_in_roots_succeeds(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_generated_app(client, repository)
+    payload = with_screens(build_document_payload(app_id), ["screen-home"])
+
+    response = await client.put(f"/api/apps/{app_id}", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["document"]["navigation"]["roots"] == ["screen-home"]
+
+
+async def test_save_app_with_unknown_screen_id_in_roots_returns_422(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_generated_app(client, repository)
+    payload = with_screens(build_document_payload(app_id), ["screen-home", "ghost"])
+
+    response = await client.put(f"/api/apps/{app_id}", json=payload)
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert "«ghost»" in error
+    assert "«screen-home» (route «index»)" in error
+
+    get_response = await client.get(f"/api/apps/{app_id}")
+    assert get_response.json()["document"]["revision"] == 1
+
+
 async def test_save_app_not_found_returns_404(client: httpx.AsyncClient) -> None:
     unknown_id = str(uuid4())
 
