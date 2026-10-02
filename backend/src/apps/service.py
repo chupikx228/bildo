@@ -6,10 +6,11 @@ from src.apps.exceptions import (
     AppNotFound,
     InvalidModel,
     InvalidNavigationRootsError,
+    InvalidScreenRoutesError,
     StaleRevisionError,
 )
 from src.apps.models import App
-from src.apps.navigation import missing_roots
+from src.apps.navigation import leading_slash_routes, missing_roots
 from src.apps.repository import AppRepository
 from src.apps.schemas import AppDocument, AppNavigation, AppSummary, AppThemeTokens
 from src.config import settings
@@ -143,6 +144,9 @@ class AppService:
         missing = missing_roots(document)
         if missing:
             raise InvalidNavigationRootsError(missing, document)
+        slashed = leading_slash_routes(document)
+        if slashed:
+            raise InvalidScreenRoutesError(slashed)
         saved = document.model_copy(update={"revision": current.revision + 1})
         app = await self._repository.update_document(current, saved)
         return AppDocument.model_validate(app.document)

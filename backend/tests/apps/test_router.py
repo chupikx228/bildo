@@ -319,6 +319,25 @@ async def test_save_app_with_unknown_screen_id_in_roots_returns_422(
     assert get_response.json()["document"]["revision"] == 1
 
 
+async def test_save_app_with_leading_slash_route_returns_422(
+    client: httpx.AsyncClient,
+    repository: InMemoryAppRepository,
+) -> None:
+    app_id = await create_generated_app(client, repository)
+    payload = with_screens(build_document_payload(app_id), ["screen-home"])
+    screens = payload["screens"]
+    assert isinstance(screens, list)
+    screens.append({**screens[0], "id": "screen-progress", "route": "/progress"})
+
+    response = await client.put(f"/api/apps/{app_id}", json=payload)
+
+    assert response.status_code == 422
+    assert "«screen-progress» (route «/progress»)" in response.json()["error"]
+
+    get_response = await client.get(f"/api/apps/{app_id}")
+    assert get_response.json()["document"]["revision"] == 1
+
+
 async def test_save_app_not_found_returns_404(client: httpx.AsyncClient) -> None:
     unknown_id = str(uuid4())
 
