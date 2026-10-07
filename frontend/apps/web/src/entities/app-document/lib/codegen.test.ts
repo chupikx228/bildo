@@ -212,4 +212,45 @@ describe("codegenExpoProject — navigation roots", () => {
     expect(layout).toContain("title: 'Stats'");
     expect(layout).toContain("title: 'Home'");
   });
+
+  it("emits href: null for a screen left out of navigation.roots, and only for it", () => {
+    const now = "2026-01-01T00:00:00.000Z";
+    const doc: AppDocument = {
+      id: "app3",
+      name: "Partial",
+      theme: DEFAULT_APP_THEME,
+      navigation: { type: "tabs", roots: ["scr-a", "scr-b"] },
+      screens: [
+        {
+          id: "scr-a",
+          name: "Home",
+          route: "index",
+          root: { id: "ra", type: "View", layout: { x: 0, y: 0, width: 370, height: 640 } },
+        },
+        {
+          id: "scr-b",
+          name: "Stats",
+          route: "stats",
+          root: { id: "rb", type: "View", layout: { x: 0, y: 0, width: 370, height: 640 } },
+        },
+        {
+          id: "scr-c",
+          name: "Detail",
+          route: "detail",
+          root: { id: "rc", type: "View", layout: { x: 0, y: 0, width: 370, height: 640 } },
+        },
+      ],
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const layout = codegenExpoProject(doc)["app/_layout.tsx"]!;
+    expect(layout).toContain(`<Tabs.Screen name="detail" options={{ href: null, title: 'Detail' }} />`);
+    expect(layout).toContain(`<Tabs.Screen name="index" options={{ title: 'Home' }} />`);
+    expect(layout).toContain(`<Tabs.Screen name="stats" options={{ title: 'Stats' }} />`);
+    expect(layout.match(/href: null/g) ?? []).toHaveLength(1);
+    const detailAt = layout.indexOf('name="detail"');
+    const statsAt = layout.indexOf('name="stats"');
+    expect(detailAt).toBeGreaterThan(statsAt);
+  });
 });

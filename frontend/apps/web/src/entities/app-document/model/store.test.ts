@@ -219,6 +219,21 @@ describe("screens slice", () => {
     s().removeScreen(id);
     expect(s().document!.navigation.roots).not.toContain(id);
   });
+
+  it("toggles a screen out of and back into the tab bar", () => {
+    const id = s().addScreen("Second")!;
+    expect(s().document!.navigation.roots).toContain(id);
+    s().setScreenInTabs(id, false);
+    expect(s().document!.navigation.roots).not.toContain(id);
+    s().setScreenInTabs(id, true);
+    expect(s().document!.navigation.roots).toContain(id);
+  });
+
+  it("refuses to remove the last remaining tab", () => {
+    s().setScreenInTabs("s1", false);
+    expect(s().document!.navigation.roots).toContain("s1");
+    expect(s().lastErrors).toContain("Нужна хотя бы одна вкладка");
+  });
 });
 
 describe("history slice", () => {

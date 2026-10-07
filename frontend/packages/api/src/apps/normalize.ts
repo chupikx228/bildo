@@ -74,10 +74,20 @@ export function normalizeAppDocument(raw: AppDocument): AppDocument {
   }
 
   const screenIds = new Set(doc.screens.map((s) => s.id));
-  doc.navigation.roots = (doc.navigation.roots ?? []).filter((id) => screenIds.has(id));
-  for (const sc of doc.screens) {
-    if (!doc.navigation.roots.includes(sc.id)) doc.navigation.roots.push(sc.id);
+  const idByRoute = new Map(doc.screens.map((s) => [s.route, s.id]));
+  const seen = new Set<string>();
+  const roots: string[] = [];
+  for (const entry of doc.navigation.roots ?? []) {
+    const id = screenIds.has(entry) ? entry : idByRoute.get(entry);
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      roots.push(id);
+    }
   }
+  if (roots.length === 0) {
+    for (const sc of doc.screens) roots.push(sc.id);
+  }
+  doc.navigation.roots = roots;
 
   for (const sc of doc.screens) {
     const stack = { y: 16 };

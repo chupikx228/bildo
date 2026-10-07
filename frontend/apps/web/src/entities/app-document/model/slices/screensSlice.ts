@@ -7,6 +7,7 @@ export interface ScreensSlice {
   addScreen(name?: string): string | null;
   removeScreen(screenId: string): void;
   renameScreen(screenId: string, name: string): void;
+  setScreenInTabs(screenId: string, inTabs: boolean): void;
 }
 
 export const createScreensSlice: AppSlice<ScreensSlice> = (set, get) => ({
@@ -73,6 +74,26 @@ export const createScreensSlice: AppSlice<ScreensSlice> = (set, get) => ({
       if (!sc) return;
       pushPast(state, "Имя экрана", `rename-screen:${screenId}`);
       sc.name = name.trim() || sc.name;
+      touch(state.document);
+    }),
+
+  setScreenInTabs: (screenId, inTabs) =>
+    set((state) => {
+      if (!state.document) return;
+      const roots = state.document.navigation.roots;
+      const has = roots.includes(screenId);
+      if (inTabs === has) return;
+      if (inTabs) {
+        pushPast(state, "Экран во вкладках");
+        roots.push(screenId);
+      } else {
+        if (roots.length <= 1) {
+          state.lastErrors = ["Нужна хотя бы одна вкладка"];
+          return;
+        }
+        pushPast(state, "Экран не вкладка");
+        state.document.navigation.roots = roots.filter((id) => id !== screenId);
+      }
       touch(state.document);
     }),
 });

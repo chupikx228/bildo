@@ -99,6 +99,28 @@ describe("normalizeAppDocument", () => {
     expect(normalizeAppDocument(doc).navigation.roots).toEqual(["scr-b", "scr-a"]);
   });
 
+  it("keeps a genuinely partial roots list without forcing every screen in", () => {
+    const doc = baseDoc({
+      navigation: { type: "tabs", roots: ["scr-a"] },
+      screens: [
+        { id: "scr-a", name: "Home", route: "index", root: { id: "r1", type: "View" } },
+        { id: "scr-b", name: "Detail", route: "detail", root: { id: "r2", type: "View" } },
+      ],
+    });
+    expect(normalizeAppDocument(doc).navigation.roots).toEqual(["scr-a"]);
+  });
+
+  it("rewrites a root entry given as a route to that screen's id", () => {
+    const doc = baseDoc({
+      navigation: { type: "tabs", roots: ["stats", "index"] },
+      screens: [
+        { id: "scr-a", name: "Home", route: "index", root: { id: "r1", type: "View" } },
+        { id: "scr-b", name: "Stats", route: "stats", root: { id: "r2", type: "View" } },
+      ],
+    });
+    expect(normalizeAppDocument(doc).navigation.roots).toEqual(["scr-b", "scr-a"]);
+  });
+
   it("forces each screen root to fill the stage and take the theme background", () => {
     const out = normalizeAppDocument(baseDoc());
     const root = out.screens[0]!.root;
