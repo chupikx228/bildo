@@ -564,6 +564,8 @@ export function useAppState(): CtxValue {
   const roots = doc.navigation.roots
     .map((id) => doc.screens.find((s) => s.id === id))
     .filter((s): s is AppScreen => Boolean(s));
+  const rootIds = new Set(doc.navigation.roots);
+  const hidden = doc.screens.filter((s) => !rootIds.has(s.id));
 
   if (doc.navigation.type === "tabs") {
     files["app/_layout.tsx"] = `import { Tabs } from 'expo-router';
@@ -589,7 +591,7 @@ export default function Layout() {
                 sceneStyle: { backgroundColor: theme.colorBg },
               }}
             >
-${roots.map((sc) => `              <Tabs.Screen name="${sc.route === "index" ? "index" : sc.route}" options={{ title: '${esc(sc.name)}' }} />`).join("\n")}
+${roots.map((sc) => `              <Tabs.Screen name="${sc.route === "index" ? "index" : sc.route}" options={{ title: '${esc(sc.name)}' }} />`).join("\n")}${hidden.map((sc) => `\n              <Tabs.Screen name="${sc.route}" options={{ href: null, title: '${esc(sc.name)}' }} />`).join("")}
             </Tabs>
           </AppStateProvider>
         </PaperProvider>

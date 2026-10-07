@@ -1,4 +1,5 @@
 export * from "./Button";
+export * from "./Switch";
 export * from "./BildoLogo";
 export * from "./NumberField";
 export * from "./ColorPicker";

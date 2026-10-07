@@ -12,8 +12,13 @@ export function InspectorPanel({ screen, node }: { screen: AppScreen; node: AppN
   const setNodeActions = useAppDocumentStore((s) => s.setNodeActions);
   const renameScreen = useAppDocumentStore((s) => s.renameScreen);
   const updateTheme = useAppDocumentStore((s) => s.updateTheme);
+  const setScreenInTabs = useAppDocumentStore((s) => s.setScreenInTabs);
 
   if (!document) return null;
+
+  const tabsNav = document.navigation.type === "tabs";
+  const inTabs = document.navigation.roots.includes(screen.id);
+  const canLeaveTabs = document.navigation.roots.length > 1;
 
   return (
     <div className={PANEL}>
@@ -23,8 +28,12 @@ export function InspectorPanel({ screen, node }: { screen: AppScreen; node: AppN
         <ScreenInspector
           screen={screen}
           theme={document.theme}
+          tabsNav={tabsNav}
+          inTabs={inTabs}
+          canLeaveTabs={canLeaveTabs}
           onRename={(name) => renameScreen(screen.id, name)}
           onTheme={updateTheme}
+          onToggleTab={(next) => setScreenInTabs(screen.id, next)}
         />
       ) : (
         <NodeInspector
