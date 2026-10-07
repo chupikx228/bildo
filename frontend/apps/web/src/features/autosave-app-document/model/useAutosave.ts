@@ -52,6 +52,10 @@ export function useAutosave(appId: string) {
         void queryClient.invalidateQueries({ queryKey: appsKeys.detail(appId) });
         return false;
       }
+      if (err instanceof ApiError && err.status === 422) {
+        statusRef.current("error", err.message);
+        return false;
+      }
       statusRef.current("error", "Не удалось сохранить");
       return false;
     }
