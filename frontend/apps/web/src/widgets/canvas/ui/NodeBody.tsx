@@ -34,7 +34,7 @@ export function NodeBody({
       );
     }
     case "Button": {
-      const font = previewFont(theme, { fontWeight: weight, heading: false });
+      const font = previewFont(theme, { fontWeight: weight ?? "600", heading: false });
       return (
         <span
           style={{
