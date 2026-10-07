@@ -15,6 +15,21 @@ export const appComponentTypeSchema = z.enum([
 ]);
 export type AppComponentType = z.infer<typeof appComponentTypeSchema>;
 
+export const appFontFamilySchema = z.enum([
+  "System",
+  "Inter",
+  "Manrope",
+  "Montserrat",
+  "Rubik",
+  "Nunito",
+  "Comfortaa",
+  "Unbounded",
+  "Lora",
+  "PT Serif",
+  "JetBrains Mono",
+]);
+export type AppFontFamily = z.infer<typeof appFontFamilySchema>;
+
 export const appThemeTokensSchema = z.object({
   colorBg: z.string(),
   colorSurface: z.string(),
@@ -24,8 +39,8 @@ export const appThemeTokensSchema = z.object({
   colorPrimary: z.string(),
   colorPrimaryFg: z.string(),
   radiusBase: z.string(),
-  fontBody: z.string(),
-  fontHeading: z.string(),
+  fontBody: appFontFamilySchema,
+  fontHeading: appFontFamilySchema,
 });
 export type AppThemeTokens = z.infer<typeof appThemeTokensSchema>;
 

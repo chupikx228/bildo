@@ -254,3 +254,92 @@ describe("codegenExpoProject — navigation roots", () => {
     expect(detailAt).toBeGreaterThan(statsAt);
   });
 });
+
+describe("codegenExpoProject — Google Fonts", () => {
+  function fontDoc(): AppDocument {
+    const now = "2026-01-01T00:00:00.000Z";
+    return {
+      id: "fonts",
+      name: "Fonts",
+      theme: { ...DEFAULT_APP_THEME, fontBody: "PT Serif", fontHeading: "Unbounded" },
+      navigation: { type: "stack", roots: ["s1"] },
+      screens: [
+        {
+          id: "s1",
+          name: "Home",
+          route: "index",
+          root: {
+            id: "r",
+            type: "View",
+            layout: { x: 0, y: 0, width: 370, height: 640 },
+            children: [
+              {
+                id: "head",
+                type: "Text",
+                props: { text: "Заголовок" },
+                layout: { x: 8, y: 8, width: 300, height: 40 },
+                style: { fontSize: 24, fontWeight: "700" },
+              },
+              {
+                id: "body",
+                type: "Text",
+                props: { text: "Текст" },
+                layout: { x: 8, y: 60, width: 300, height: 24 },
+                style: { fontSize: 14 },
+              },
+              { id: "btn", type: "Button", props: { text: "Жми" }, layout: { x: 8, y: 100, width: 160, height: 46 } },
+              {
+                id: "inp",
+                type: "TextInput",
+                props: { placeholder: "Имя" },
+                layout: { x: 8, y: 160, width: 260, height: 46 },
+              },
+            ],
+          },
+        },
+      ],
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  const files = codegenExpoProject(fontDoc());
+  const index = files["app/index.tsx"]!;
+  const layout = files["app/_layout.tsx"]!;
+  const pkg = files["package.json"]!;
+
+  it("picks fontHeading for a Text with fontSize >= 20 and fontBody otherwise", () => {
+    expect(index).toContain("fontFamily: 'Unbounded_700Bold'");
+    expect(index).toContain("fontFamily: 'PTSerif_400Regular'");
+  });
+
+  it("drops the node fontWeight and writes fontWeight: 'normal' next to fontFamily", () => {
+    expect(index).not.toContain("fontWeight: '700'");
+    expect(index).toContain("fontWeight: 'normal'");
+  });
+
+  it("gives a Button label fontBody in its default-600 (bold) file", () => {
+    expect(index).toMatch(/labelStyle=\{[\s\S]*fontFamily: 'PTSerif_700Bold'/);
+  });
+
+  it("loads the theme families via useFonts in the layout", () => {
+    expect(layout).toContain("import { useFonts } from 'expo-font';");
+    expect(layout).toContain("import { PTSerif_400Regular } from '@expo-google-fonts/pt-serif/400Regular';");
+    expect(layout).toContain("import { Unbounded_700Bold } from '@expo-google-fonts/unbounded/700Bold';");
+    expect(layout).toContain("const [fontsLoaded, fontError] = useFonts({");
+    expect(layout).toContain("if (!fontsLoaded && !fontError) return null;");
+  });
+
+  it("adds the font packages to package.json", () => {
+    expect(pkg).toContain('"@expo-google-fonts/pt-serif": "~0.4.1"');
+    expect(pkg).toContain('"@expo-google-fonts/unbounded": "~0.4.1"');
+  });
+
+  it("emits no font code when both tokens are System", () => {
+    const sys = codegenExpoProject({ ...fontDoc(), theme: DEFAULT_APP_THEME });
+    expect(sys["app/_layout.tsx"]).not.toContain("useFonts");
+    expect(sys["app/index.tsx"]).not.toContain("fontFamily:");
+    expect(sys["package.json"]).not.toContain("@expo-google-fonts");
+  });
+});

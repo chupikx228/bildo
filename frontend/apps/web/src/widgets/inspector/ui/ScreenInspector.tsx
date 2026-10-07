@@ -1,6 +1,7 @@
 import type { AppScreen, AppThemeTokens } from "@bildo/api";
 import { ColorPicker, Switch } from "@/shared/ui";
 import { Field } from "./Field";
+import { FontSelect } from "./FontSelect";
 import { PanelHeader } from "./PanelHeader";
 import { Row } from "./Row";
 import { Section } from "./Section";
@@ -53,6 +54,12 @@ export function ScreenInspector({
           </Row>
           <Row label="Текст">
             <ColorPicker value={theme.colorText} onChange={(colorText) => onTheme({ colorText })} />
+          </Row>
+          <Row label="Шрифт текста">
+            <FontSelect value={theme.fontBody} onChange={(fontBody) => onTheme({ fontBody })} />
+          </Row>
+          <Row label="Шрифт заголовков">
+            <FontSelect value={theme.fontHeading} onChange={(fontHeading) => onTheme({ fontHeading })} />
           </Row>
         </Section>
       </div>

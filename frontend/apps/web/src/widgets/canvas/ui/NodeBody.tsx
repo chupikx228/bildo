@@ -1,5 +1,5 @@
 import type { AppDocument, AppNode, AppThemeTokens } from "@bildo/api";
-import { paperRoundness, resolveText } from "../lib/canvasNode";
+import { paperRoundness, previewFont, resolveText } from "../lib/canvasNode";
 
 export function NodeBody({
   node,
@@ -14,14 +14,16 @@ export function NodeBody({
   const align = node.style?.textAlign ?? "left";
 
   switch (node.type) {
-    case "Text":
+    case "Text": {
+      const font = previewFont(theme, { fontSize: node.style?.fontSize, fontWeight: weight, heading: true });
       return (
         <span
           style={{
             pointerEvents: "none",
             width: "100%",
             textAlign: align,
-            fontWeight: weight,
+            fontWeight: font.fontWeight ?? weight,
+            fontFamily: font.fontFamily,
             fontSize: "inherit",
             color: "inherit",
             whiteSpace: "pre-wrap",
@@ -30,7 +32,9 @@ export function NodeBody({
           {resolveText(node, docState) || "Текст"}
         </span>
       );
-    case "Button":
+    }
+    case "Button": {
+      const font = previewFont(theme, { fontWeight: weight ?? "600", heading: false });
       return (
         <span
           style={{
@@ -38,14 +42,17 @@ export function NodeBody({
             width: "100%",
             textAlign: node.style?.textAlign ?? "center",
             color: node.style?.color ?? theme.colorPrimaryFg,
-            fontWeight: weight ?? 600,
+            fontWeight: font.fontWeight ?? weight ?? 600,
+            fontFamily: font.fontFamily,
             fontSize: "inherit",
           }}
         >
           {resolveText(node, docState) || "Кнопка"}
         </span>
       );
-    case "TextInput":
+    }
+    case "TextInput": {
+      const font = previewFont(theme, { fontWeight: weight, heading: false });
       return (
         <div
           style={{
@@ -58,7 +65,8 @@ export function NodeBody({
             padding: node.style?.paddingHorizontal ?? node.style?.padding ?? 10,
             boxSizing: "border-box",
             fontSize: node.style?.fontSize ?? 14,
-            fontWeight: weight,
+            fontWeight: font.fontWeight ?? weight,
+            fontFamily: font.fontFamily,
             textAlign: align,
             display: "flex",
             alignItems: "center",
@@ -73,6 +81,7 @@ export function NodeBody({
           </span>
         </div>
       );
+    }
     case "Image":
       return node.props?.source ? (
         <img

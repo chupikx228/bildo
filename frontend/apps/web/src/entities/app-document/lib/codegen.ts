@@ -1,6 +1,23 @@
-import type { AppAction, AppDocument, AppNode, AppScreen } from "@bildo/api";
+import type { AppAction, AppDocument, AppNode, AppScreen, AppThemeTokens } from "@bildo/api";
 
 export type ExpoFileMap = Record<string, string>;
+
+const SYSTEM_FONT = "System";
+const GOOGLE_FONTS: Record<string, { package: string; version: string; prefix: string }> = {
+  Inter: { package: "@expo-google-fonts/inter", version: "~0.4.2", prefix: "Inter" },
+  Manrope: { package: "@expo-google-fonts/manrope", version: "~0.4.2", prefix: "Manrope" },
+  Montserrat: { package: "@expo-google-fonts/montserrat", version: "~0.4.2", prefix: "Montserrat" },
+  Rubik: { package: "@expo-google-fonts/rubik", version: "~0.4.2", prefix: "Rubik" },
+  Nunito: { package: "@expo-google-fonts/nunito", version: "~0.4.2", prefix: "Nunito" },
+  Comfortaa: { package: "@expo-google-fonts/comfortaa", version: "~0.4.2", prefix: "Comfortaa" },
+  Unbounded: { package: "@expo-google-fonts/unbounded", version: "~0.4.1", prefix: "Unbounded" },
+  Lora: { package: "@expo-google-fonts/lora", version: "~0.4.2", prefix: "Lora" },
+  "PT Serif": { package: "@expo-google-fonts/pt-serif", version: "~0.4.1", prefix: "PTSerif" },
+  "JetBrains Mono": { package: "@expo-google-fonts/jetbrains-mono", version: "~0.4.1", prefix: "JetBrainsMono" },
+};
+const FONT_WEIGHT_FILES = ["400Regular", "700Bold"] as const;
+const BOLD_FONT_WEIGHTS = new Set(["600", "700"]);
+const HEADING_MIN_FONT_SIZE = 20;
 
 function esc(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
@@ -76,7 +93,70 @@ function routePath(route: string): string {
   return route === "index" ? "/" : `/${route}`;
 }
 
-function styleToRN(node: AppNode, isRoot: boolean): string {
+function fontFamilyName(family: string, fontWeight: string | undefined): string | null {
+  if (family === SYSTEM_FONT) return null;
+  const weightFile =
+    fontWeight != null && BOLD_FONT_WEIGHTS.has(fontWeight) ? FONT_WEIGHT_FILES[1] : FONT_WEIGHT_FILES[0];
+  return `${GOOGLE_FONTS[family]!.prefix}_${weightFile}`;
+}
+
+function themeFontFamily(
+  theme: AppThemeTokens,
+  fontSize: number | undefined,
+  fontWeight: string | undefined,
+): string | null {
+  const isHeading = fontSize != null && fontSize >= HEADING_MIN_FONT_SIZE;
+  return fontFamilyName(isHeading ? theme.fontHeading : theme.fontBody, fontWeight);
+}
+
+function textFontFamily(node: AppNode, theme: AppThemeTokens): string | null {
+  return themeFontFamily(theme, node.style?.fontSize, node.style?.fontWeight);
+}
+
+function fontEntries(family: string): [string, string][] {
+  return [
+    ["fontFamily", lit(family)],
+    ["fontWeight", "'normal'"],
+  ];
+}
+
+function themeFontFamilies(theme: AppThemeTokens): string[] {
+  const families: string[] = [];
+  for (const family of [theme.fontBody, theme.fontHeading]) {
+    if (family !== SYSTEM_FONT && !families.includes(family)) families.push(family);
+  }
+  return families;
+}
+
+function fontExports(families: string[]): string[] {
+  const names: string[] = [];
+  for (const family of families) {
+    for (const weightFile of FONT_WEIGHT_FILES) names.push(`${GOOGLE_FONTS[family]!.prefix}_${weightFile}`);
+  }
+  return names;
+}
+
+function fontImports(families: string[]): string {
+  if (!families.length) return "";
+  const lines = ["import { useFonts } from 'expo-font';"];
+  for (const family of families) {
+    const font = GOOGLE_FONTS[family]!;
+    for (const weightFile of FONT_WEIGHT_FILES) {
+      lines.push(`import { ${font.prefix}_${weightFile} } from '${font.package}/${weightFile}';`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+function fontGate(families: string[]): string {
+  if (!families.length) return "";
+  const names = fontExports(families)
+    .map((name) => `    ${name},\n`)
+    .join("");
+  return `  const [fontsLoaded, fontError] = useFonts({\n${names}  });\n  if (!fontsLoaded && !fontError) return null;\n`;
+}
+
+function styleToRN(node: AppNode, isRoot: boolean, fontFamily?: string | null): string {
   const parts: string[] = [];
   if (isRoot) {
     parts.push("  flex: 1");
@@ -93,9 +173,14 @@ function styleToRN(node: AppNode, isRoot: boolean): string {
     for (const [k, v] of Object.entries(style)) {
       if (v === undefined) continue;
       if (!isRoot && node.layout && (k === "width" || k === "height")) continue;
+      if (fontFamily != null && k === "fontWeight") continue;
       if (typeof v === "string") parts.push(`  ${k}: '${esc(v)}'`);
       else parts.push(`  ${k}: ${JSON.stringify(v)}`);
     }
+  }
+  if (fontFamily != null) {
+    parts.push(`  fontFamily: ${lit(fontFamily)}`);
+    parts.push(`  fontWeight: 'normal'`);
   }
   if (!parts.length) return "{}";
   return `{\n${parts.join(",\n")}\n}`;
@@ -154,7 +239,7 @@ function collectImports(node: AppNode, set: Set<string>, paperSet: Set<string>):
   for (const c of node.children ?? []) collectImports(c, set, paperSet);
 }
 
-function renderButton(node: AppNode, pad: string, isRoot: boolean): string {
+function renderButton(node: AppNode, pad: string, isRoot: boolean, theme: AppThemeTokens): string {
   const props = node.props;
   const style = node.style;
   const handler = actionsToHandler(props?.onPress, props?.href);
@@ -186,7 +271,10 @@ function renderButton(node: AppNode, pad: string, isRoot: boolean): string {
     ["marginVertical", "0"],
   ];
   if (style?.fontSize != null) labelEntries.push(["fontSize", num(style.fontSize)]);
-  labelEntries.push(["fontWeight", lit(style?.fontWeight ?? "600")]);
+  const labelWeight = style?.fontWeight ?? "600";
+  const labelFont = fontFamilyName(theme.fontBody, labelWeight);
+  if (labelFont != null) labelEntries.push(...fontEntries(labelFont));
+  else labelEntries.push(["fontWeight", lit(labelWeight)]);
   if (style?.letterSpacing != null) labelEntries.push(["letterSpacing", num(style.letterSpacing)]);
   if (style?.lineHeight != null) labelEntries.push(["lineHeight", num(style.lineHeight)]);
   else if (style?.fontSize != null)
@@ -216,13 +304,16 @@ function renderButton(node: AppNode, pad: string, isRoot: boolean): string {
   return jsxElement(pad, "Button", attributes, label);
 }
 
-function renderTextInput(node: AppNode, pad: string, isRoot: boolean): string {
+function renderTextInput(node: AppNode, pad: string, isRoot: boolean, theme: AppThemeTokens): string {
   const props = node.props;
   const style = node.style;
   const bind = props?.valueBind;
   const placeholder = props?.placeholder ? `{${JSON.stringify(props.placeholder)}}` : '""';
 
-  const styleEntries = [...positionEntries(node, isRoot), ...passthroughEntries(node, isRoot, PAPER_TEXT_INPUT_KEYS)];
+  const inputFont = fontFamilyName(theme.fontBody, style?.fontWeight);
+  const textInputKeys =
+    inputFont != null ? new Set([...PAPER_TEXT_INPUT_KEYS].filter((k) => k !== "fontWeight")) : PAPER_TEXT_INPUT_KEYS;
+  const styleEntries = [...positionEntries(node, isRoot), ...passthroughEntries(node, isRoot, textInputKeys)];
   styleEntries.push(["fontSize", num(style?.fontSize ?? TEXT_INPUT_DEFAULT_FONT_SIZE)]);
   styleEntries.push([
     "backgroundColor",
@@ -232,6 +323,7 @@ function renderTextInput(node: AppNode, pad: string, isRoot: boolean): string {
   const padding = style?.paddingHorizontal ?? style?.padding ?? TEXT_INPUT_DEFAULT_PADDING;
   const contentEntries: [string, string][] = [["paddingHorizontal", num(padding)]];
   if (style?.letterSpacing != null) contentEntries.push(["letterSpacing", num(style.letterSpacing)]);
+  if (inputFont != null) contentEntries.push(...fontEntries(inputFont));
 
   const outlineEntries: [string, string][] = [
     ["borderRadius", style?.borderRadius != null ? num(style.borderRadius) : "paperTheme.roundness"],
@@ -252,10 +344,10 @@ function renderTextInput(node: AppNode, pad: string, isRoot: boolean): string {
   return jsxElement(pad, "TextInput", attributes, null);
 }
 
-function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean): string {
+function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean, theme: AppThemeTokens): string {
   const pad = " ".repeat(indent);
   if (node.hidden) return `${pad}{null}`;
-  const style = styleToRN(node, isRoot);
+  const style = styleToRN(node, isRoot, node.type === "Text" ? textFontFamily(node, theme) : undefined);
   switch (node.type) {
     case "Text": {
       const bind = node.props?.textBind;
@@ -265,7 +357,7 @@ function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean): string {
       return `${pad}<Text style={${style}}>{${JSON.stringify(node.props?.text ?? "")}}</Text>`;
     }
     case "Button":
-      return renderButton(node, pad, isRoot);
+      return renderButton(node, pad, isRoot, theme);
     case "Image": {
       const src = node.props?.source ? `{ uri: '${esc(node.props.source)}' }` : undefined;
       if (!src) {
@@ -274,7 +366,7 @@ function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean): string {
       return `${pad}<Image source={${src}} style={${style}} />`;
     }
     case "TextInput":
-      return renderTextInput(node, pad, isRoot);
+      return renderTextInput(node, pad, isRoot, theme);
     case "Spacer":
       return `${pad}<View style={${style}} />`;
     case "FlatList": {
@@ -284,7 +376,7 @@ function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean): string {
     case "ScrollView":
     case "View": {
       const Tag = node.type === "ScrollView" ? "ScrollView" : "View";
-      const kids = (node.children ?? []).map((c) => renderNodeTSX(c, indent + 2, false)).join("\n");
+      const kids = (node.children ?? []).map((c) => renderNodeTSX(c, indent + 2, false, theme)).join("\n");
       const scrollExtra = node.type === "ScrollView" ? " contentContainerStyle={{ flexGrow: 1 }}" : "";
       return `${pad}<${Tag} style={${style}}${scrollExtra}>\n${kids}\n${pad}</${Tag}>`;
     }
@@ -303,7 +395,7 @@ function routeToComponent(route: string): string {
   );
 }
 
-function screenFile(screen: AppScreen): string {
+function screenFile(screen: AppScreen, theme: AppThemeTokens): string {
   const needs: ScreenNeeds = { alert: false, linking: false, router: false, state: false };
   collectNeeds(screen.root, needs);
   const imports = new Set<string>(["View"]);
@@ -312,7 +404,7 @@ function screenFile(screen: AppScreen): string {
   if (needs.alert) imports.add("Alert");
   if (needs.linking) imports.add("Linking");
   const unique = [...imports].sort();
-  const body = renderNodeTSX(screen.root, 4, true);
+  const body = renderNodeTSX(screen.root, 4, true, theme);
 
   const hooks: string[] = [];
   if (needs.router) hooks.push("  const router = useRouter();");
@@ -439,6 +531,29 @@ export const paperTheme: MD3Theme = {
 export function codegenExpoProject(doc: AppDocument): ExpoFileMap {
   const files: ExpoFileMap = {};
   const bundleId = `com.bildo.${slugify(doc.name).replace(/-/g, "") || "app"}`;
+  const families = themeFontFamilies(doc.theme);
+
+  const dependencies: Record<string, string> = {
+    expo: "~52.0.46",
+    "expo-asset": "~11.0.5",
+    "expo-router": "~4.0.20",
+    "expo-status-bar": "~2.0.1",
+    "expo-linking": "~7.0.5",
+    "expo-constants": "~17.0.8",
+    react: "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-paper": "~5.15.3",
+    "react-native-web": "~0.19.13",
+    "@expo/vector-icons": "~14.0.4",
+    "expo-font": "~13.0.4",
+    "query-string": "^7.1.3",
+  };
+  for (const family of families) {
+    dependencies[GOOGLE_FONTS[family]!.package] = GOOGLE_FONTS[family]!.version;
+  }
 
   files["package.json"] = JSON.stringify(
     {
@@ -451,24 +566,7 @@ export function codegenExpoProject(doc: AppDocument): ExpoFileMap {
         ios: "expo start --ios",
         web: "expo start --web",
       },
-      dependencies: {
-        expo: "~52.0.46",
-        "expo-asset": "~11.0.5",
-        "expo-router": "~4.0.20",
-        "expo-status-bar": "~2.0.1",
-        "expo-linking": "~7.0.5",
-        "expo-constants": "~17.0.8",
-        react: "18.3.1",
-        "react-native": "0.76.9",
-        "react-native-safe-area-context": "4.12.0",
-        "react-native-screens": "~4.4.0",
-        "react-native-gesture-handler": "~2.20.2",
-        "react-native-paper": "~5.15.3",
-        "react-native-web": "~0.19.13",
-        "@expo/vector-icons": "~14.0.4",
-        "expo-font": "~13.0.4",
-        "query-string": "^7.1.3",
-      },
+      dependencies,
       devDependencies: {
         "@babel/core": "^7.25.0",
         "babel-preset-expo": "~12.0.0",
@@ -566,6 +664,8 @@ export function useAppState(): CtxValue {
     .filter((s): s is AppScreen => Boolean(s));
   const rootIds = new Set(doc.navigation.roots);
   const hidden = doc.screens.filter((s) => !rootIds.has(s.id));
+  const fontImportStr = fontImports(families);
+  const fontGateStr = fontGate(families);
 
   if (doc.navigation.type === "tabs") {
     files["app/_layout.tsx"] = `import { Tabs } from 'expo-router';
@@ -574,9 +674,9 @@ import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppStateProvider } from '../lib/state';
 import { paperTheme, theme } from '../theme';
-
+${fontImportStr}
 export default function Layout() {
-  return (
+${fontGateStr}  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <PaperProvider theme={paperTheme}>
@@ -607,9 +707,9 @@ import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppStateProvider } from '../lib/state';
 import { paperTheme, theme } from '../theme';
-
+${fontImportStr}
 export default function Layout() {
-  return (
+${fontGateStr}  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <PaperProvider theme={paperTheme}>
@@ -634,7 +734,7 @@ ${doc.screens.map((sc) => `              <Stack.Screen name="${sc.route === "ind
 
   for (const sc of doc.screens) {
     const fileName = sc.route === "index" ? "app/index.tsx" : `app/${sc.route}.tsx`;
-    files[fileName] = screenFile(sc);
+    files[fileName] = screenFile(sc, doc.theme);
   }
 
   files["README.md"] = `# ${doc.name}
