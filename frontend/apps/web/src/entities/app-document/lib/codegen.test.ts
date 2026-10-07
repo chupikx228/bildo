@@ -343,3 +343,67 @@ describe("codegenExpoProject — Google Fonts", () => {
     expect(sys["package.json"]).not.toContain("@expo-google-fonts");
   });
 });
+
+describe("codegenExpoProject — theme on lists, headers and tabs", () => {
+  function surfaceDoc(font: "System" | "Unbounded"): AppDocument {
+    const now = "2026-01-01T00:00:00.000Z";
+    return {
+      id: "surf",
+      name: "Surfaces",
+      theme: { ...DEFAULT_APP_THEME, fontBody: font === "System" ? "System" : "PT Serif", fontHeading: font },
+      navigation: { type: "tabs", roots: ["s1"] },
+      screens: [
+        {
+          id: "s1",
+          name: "Home",
+          route: "index",
+          root: {
+            id: "r",
+            type: "View",
+            layout: { x: 0, y: 0, width: 370, height: 640 },
+            children: [
+              {
+                id: "lst",
+                type: "FlatList",
+                props: { data: ["a", "b"] },
+                layout: { x: 8, y: 8, width: 300, height: 120 },
+              },
+            ],
+          },
+        },
+      ],
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  it("themes FlatList rows with surface/text colors and the theme radius", () => {
+    const index = codegenExpoProject(surfaceDoc("System"))["app/index.tsx"]!;
+    expect(index).toContain("backgroundColor: theme.colorSurface, borderRadius: paperTheme.roundness");
+    expect(index).toContain("<Text style={{ color: theme.colorText }}>{String(item)}</Text>");
+    expect(index).not.toContain("#18181B");
+  });
+
+  it("imports paperTheme on a screen that only has a FlatList", () => {
+    const index = codegenExpoProject(surfaceDoc("System"))["app/index.tsx"]!;
+    expect(index).toContain("import { paperTheme, theme } from '../theme';");
+  });
+
+  it("applies theme fonts to header title, tab label and FlatList rows", () => {
+    const files = codegenExpoProject(surfaceDoc("Unbounded"));
+    const layout = files["app/_layout.tsx"]!;
+    const index = files["app/index.tsx"]!;
+    expect(layout).toContain("headerTitleStyle: { fontFamily: 'Unbounded_700Bold', fontWeight: 'normal' }");
+    expect(layout).toContain("tabBarLabelStyle: { fontFamily: 'PTSerif_400Regular', fontWeight: 'normal' }");
+    expect(index).toContain(
+      "<Text style={{ color: theme.colorText, fontFamily: 'PTSerif_400Regular', fontWeight: 'normal' }}>",
+    );
+  });
+
+  it("emits no header/tab font options when fonts are System", () => {
+    const layout = codegenExpoProject(surfaceDoc("System"))["app/_layout.tsx"]!;
+    expect(layout).not.toContain("headerTitleStyle");
+    expect(layout).not.toContain("tabBarLabelStyle");
+  });
+});

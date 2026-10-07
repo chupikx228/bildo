@@ -18,6 +18,11 @@ const GOOGLE_FONTS: Record<string, { package: string; version: string; prefix: s
 const FONT_WEIGHT_FILES = ["400Regular", "700Bold"] as const;
 const BOLD_FONT_WEIGHTS = new Set(["600", "700"]);
 const HEADING_MIN_FONT_SIZE = 20;
+const FLATLIST_ROW_FONT_SIZE = 14;
+const HEADER_TITLE_FONT_SIZE = 20;
+const HEADER_TITLE_FONT_WEIGHT = "600";
+const TAB_LABEL_FONT_SIZE = 10;
+const TAB_LABEL_FONT_WEIGHT = "500";
 
 function esc(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
@@ -52,6 +57,7 @@ const PAPER_PASSTHROUGH_KEYS = new Set([
   "animation",
 ]);
 const PAPER_TEXT_INPUT_KEYS = new Set([...PAPER_PASSTHROUGH_KEYS, "fontWeight", "lineHeight", "textAlign"]);
+const FLATLIST_ROW_TEXT_KEYS = new Set(["color", "fontSize", "fontWeight"]);
 const BUTTON_DEFAULT_LABEL_MARGIN = 16;
 const TEXT_INPUT_DEFAULT_PADDING = 10;
 const TEXT_INPUT_DEFAULT_FONT_SIZE = 14;
@@ -156,7 +162,16 @@ function fontGate(families: string[]): string {
   return `  const [fontsLoaded, fontError] = useFonts({\n${names}  });\n  if (!fontsLoaded && !fontError) return null;\n`;
 }
 
-function styleToRN(node: AppNode, isRoot: boolean, fontFamily?: string | null): string {
+function inlineObjectLiteral(entries: [string, string][]): string {
+  return `{ ${entries.map(([key, value]) => `${key}: ${value}`).join(", ")} }`;
+}
+
+function navigatorFontOption(name: string, family: string | null): string {
+  if (family == null) return "";
+  return `                ${name}: ${inlineObjectLiteral(fontEntries(family))},\n`;
+}
+
+function styleToRN(node: AppNode, isRoot: boolean, fontFamily?: string | null, skipKeys?: Set<string>): string {
   const parts: string[] = [];
   if (isRoot) {
     parts.push("  flex: 1");
@@ -174,6 +189,7 @@ function styleToRN(node: AppNode, isRoot: boolean, fontFamily?: string | null): 
       if (v === undefined) continue;
       if (!isRoot && node.layout && (k === "width" || k === "height")) continue;
       if (fontFamily != null && k === "fontWeight") continue;
+      if (skipKeys?.has(k)) continue;
       if (typeof v === "string") parts.push(`  ${k}: '${esc(v)}'`);
       else parts.push(`  ${k}: ${JSON.stringify(v)}`);
     }
@@ -347,7 +363,12 @@ function renderTextInput(node: AppNode, pad: string, isRoot: boolean, theme: App
 function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean, theme: AppThemeTokens): string {
   const pad = " ".repeat(indent);
   if (node.hidden) return `${pad}{null}`;
-  const style = styleToRN(node, isRoot, node.type === "Text" ? textFontFamily(node, theme) : undefined);
+  const style = styleToRN(
+    node,
+    isRoot,
+    node.type === "Text" ? textFontFamily(node, theme) : undefined,
+    node.type === "FlatList" ? FLATLIST_ROW_TEXT_KEYS : undefined,
+  );
   switch (node.type) {
     case "Text": {
       const bind = node.props?.textBind;
@@ -371,7 +392,14 @@ function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean, theme: Ap
       return `${pad}<View style={${style}} />`;
     case "FlatList": {
       const data = JSON.stringify(node.props?.data ?? ["Item"]);
-      return `${pad}<FlatList\n${pad}  style={${style}}\n${pad}  data={${data}}\n${pad}  keyExtractor={(item, i) => String(i)}\n${pad}  renderItem={({ item }) => (\n${pad}    <View style={{ padding: 12, backgroundColor: '#18181B', borderRadius: 10, marginBottom: 8 }}>\n${pad}      <Text style={{ color: '#FAFAFA' }}>{String(item)}</Text>\n${pad}    </View>\n${pad}  )}\n${pad}/>`;
+      const ls = node.style;
+      const rowTextEntries: [string, string][] = [["color", ls?.color != null ? lit(ls.color) : "theme.colorText"]];
+      if (ls?.fontSize != null) rowTextEntries.push(["fontSize", num(ls.fontSize)]);
+      const rowFont = themeFontFamily(theme, ls?.fontSize ?? FLATLIST_ROW_FONT_SIZE, ls?.fontWeight);
+      if (rowFont != null) rowTextEntries.push(...fontEntries(rowFont));
+      else if (ls?.fontWeight != null) rowTextEntries.push(["fontWeight", lit(ls.fontWeight)]);
+      const rowTextStyle = inlineObjectLiteral(rowTextEntries);
+      return `${pad}<FlatList\n${pad}  style={${style}}\n${pad}  data={${data}}\n${pad}  keyExtractor={(item, i) => String(i)}\n${pad}  renderItem={({ item }) => (\n${pad}    <View style={{ padding: 12, backgroundColor: theme.colorSurface, borderRadius: paperTheme.roundness, marginBottom: 8 }}>\n${pad}      <Text style={${rowTextStyle}}>{String(item)}</Text>\n${pad}    </View>\n${pad}  )}\n${pad}/>`;
     }
     case "ScrollView":
     case "View": {
@@ -413,7 +441,7 @@ function screenFile(screen: AppScreen, theme: AppThemeTokens): string {
   const paperImport = paperImports.size
     ? `import { ${[...paperImports].sort().join(", ")} } from 'react-native-paper';\n`
     : "";
-  const themeNames = paperImports.size ? "paperTheme, theme" : "theme";
+  const themeNames = paperImports.size || imports.has("FlatList") ? "paperTheme, theme" : "theme";
 
   return `import { ${unique.join(", ")} } from 'react-native';
 ${paperImport}import { SafeAreaView } from 'react-native-safe-area-context';
@@ -666,6 +694,14 @@ export function useAppState(): CtxValue {
   const hidden = doc.screens.filter((s) => !rootIds.has(s.id));
   const fontImportStr = fontImports(families);
   const fontGateStr = fontGate(families);
+  const headerTitleOpt = navigatorFontOption(
+    "headerTitleStyle",
+    themeFontFamily(doc.theme, HEADER_TITLE_FONT_SIZE, HEADER_TITLE_FONT_WEIGHT),
+  );
+  const tabLabelOpt = navigatorFontOption(
+    "tabBarLabelStyle",
+    themeFontFamily(doc.theme, TAB_LABEL_FONT_SIZE, TAB_LABEL_FONT_WEIGHT),
+  );
 
   if (doc.navigation.type === "tabs") {
     files["app/_layout.tsx"] = `import { Tabs } from 'expo-router';
@@ -685,10 +721,10 @@ ${fontGateStr}  return (
               screenOptions={{
                 headerStyle: { backgroundColor: theme.colorSurface },
                 headerTintColor: theme.colorText,
-                tabBarStyle: { backgroundColor: theme.colorSurface, borderTopColor: theme.colorBorder },
+${headerTitleOpt}                tabBarStyle: { backgroundColor: theme.colorSurface, borderTopColor: theme.colorBorder },
                 tabBarActiveTintColor: theme.colorPrimary,
                 tabBarInactiveTintColor: theme.colorTextMuted,
-                sceneStyle: { backgroundColor: theme.colorBg },
+${tabLabelOpt}                sceneStyle: { backgroundColor: theme.colorBg },
               }}
             >
 ${roots.map((sc) => `              <Tabs.Screen name="${sc.route === "index" ? "index" : sc.route}" options={{ title: '${esc(sc.name)}' }} />`).join("\n")}${hidden.map((sc) => `\n              <Tabs.Screen name="${sc.route}" options={{ href: null, title: '${esc(sc.name)}' }} />`).join("")}
@@ -718,7 +754,7 @@ ${fontGateStr}  return (
               screenOptions={{
                 headerStyle: { backgroundColor: theme.colorSurface },
                 headerTintColor: theme.colorText,
-                contentStyle: { backgroundColor: theme.colorBg },
+${headerTitleOpt}                contentStyle: { backgroundColor: theme.colorBg },
               }}
             >
 ${doc.screens.map((sc) => `              <Stack.Screen name="${sc.route === "index" ? "index" : sc.route}" options={{ title: '${esc(sc.name)}' }} />`).join("\n")}
