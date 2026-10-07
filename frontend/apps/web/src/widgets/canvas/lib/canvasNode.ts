@@ -81,6 +81,20 @@ export function paperRoundness(theme: AppThemeTokens): number {
   return Number.isFinite(radius) && radius >= 0 ? radius : 12;
 }
 
+const PREVIEW_HEADING_MIN_FONT_SIZE = 20;
+
+export function previewFont(
+  theme: AppThemeTokens,
+  opts: { fontSize?: number; fontWeight?: string; heading: boolean },
+): { fontFamily?: string; fontWeight?: string } {
+  const family =
+    opts.heading && opts.fontSize != null && opts.fontSize >= PREVIEW_HEADING_MIN_FONT_SIZE
+      ? theme.fontHeading
+      : theme.fontBody;
+  if (family === "System") return {};
+  return { fontFamily: family, fontWeight: opts.fontWeight === "600" || opts.fontWeight === "700" ? "700" : "400" };
+}
+
 export function isOutlineButton(node: AppNode): boolean {
   return (
     node.type === "Button" &&

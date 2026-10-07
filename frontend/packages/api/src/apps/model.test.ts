@@ -120,6 +120,16 @@ describe("appDocumentSchema — malformed input", () => {
     expect(appDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
+  it("accepts a curated Google Fonts family for fontBody/fontHeading", () => {
+    const doc = { ...minimalDoc(), theme: { ...DEFAULT_APP_THEME, fontBody: "PT Serif", fontHeading: "Unbounded" } };
+    expect(appDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects a font family outside the curated enum", () => {
+    const doc = { ...minimalDoc(), theme: { ...DEFAULT_APP_THEME, fontBody: "Roboto" } };
+    expect(appDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
   it("rejects an unknown navigation type", () => {
     const doc = { ...minimalDoc(), navigation: { type: "carousel", roots: [] } };
     expect(appDocumentSchema.safeParse(doc).success).toBe(false);
