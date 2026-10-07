@@ -43,7 +43,7 @@ ResponseFormatMode = Literal["json_schema", "text"]
 
 MAX_OUTPUT_TOKENS = 64000
 
-UNCONSTRAINED_MODEL_PREFIXES = ("anthropic/",)
+UNCONSTRAINED_MODEL_PREFIXES = ("anthropic/", "x-ai/")
 
 REQUEST_TIMEOUT_SECONDS = 750.0
 IDLE_TIMEOUT_SECONDS = 60.0

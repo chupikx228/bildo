@@ -30,7 +30,9 @@ from src.generation.llm_client import (
     ChatMessage,
     JsonSchema,
     RouterAiLlmClient,
+    enforces_response_schema,
 )
+from src.generation.model_catalog import CURATED_MODELS
 from src.generation.prompt import ALL_KEYS_RULE
 from src.generation.service import generate_document
 from src.generation.structured_output import (
@@ -172,8 +174,32 @@ async def test_ignored_providers_are_not_sent_on_text_requests(build_client: Bui
     assert "provider" not in gateway.payloads[0]
 
 
-@pytest.mark.parametrize("model", ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5"])
-async def test_anthropic_models_get_no_response_format_from_the_first_call(
+STRICT_SCHEMA_BY_CURATED_MODEL = {
+    "deepseek/deepseek-v4-pro": True,
+    "openai/gpt-5.6-terra": True,
+    "anthropic/claude-opus-5": False,
+    "anthropic/claude-fable-5": False,
+    "openai/gpt-5.6-sol": True,
+    "x-ai/grok-4.6": False,
+    "anthropic/claude-sonnet-5": False,
+}
+
+
+def test_every_curated_model_has_a_deliberate_schema_path() -> None:
+    assert {model.id for model in CURATED_MODELS} == set(STRICT_SCHEMA_BY_CURATED_MODEL)
+
+
+@pytest.mark.parametrize(
+    ("model", "strict"), [*STRICT_SCHEMA_BY_CURATED_MODEL.items(), ("deepseek/deepseek-v4-flash", True)]
+)
+def test_strict_schema_path_is_chosen_by_model_family(model: str, strict: bool) -> None:
+    assert enforces_response_schema(model) is strict
+
+
+@pytest.mark.parametrize(
+    "model", ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5", "x-ai/grok-4.6"]
+)
+async def test_unconstrained_models_get_no_response_format_from_the_first_call(
     build_client: BuildClient, model: str
 ) -> None:
     gateway = StubGateway(rejected=set())
@@ -760,6 +786,7 @@ def app_document_answer() -> str:
         ("anthropic/claude-sonnet-5", False),
         ("anthropic/claude-opus-5", False),
         ("anthropic/claude-fable-5", False),
+        ("x-ai/grok-4.6", False),
         ("deepseek/deepseek-v4-flash", True),
         ("openai/gpt-5.6-terra", True),
     ],

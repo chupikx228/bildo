@@ -613,19 +613,23 @@ def test_check_edited_document_accepts_index_and_slashless_routes() -> None:
     check_edited_document(with_added_screen_route(build_template_document(PROMPT, None), "progress"))
 
 
-ANTHROPIC_MODELS = ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5"]
+NON_STRICT_MODELS = [
+    "anthropic/claude-sonnet-5",
+    "anthropic/claude-opus-5",
+    "anthropic/claude-fable-5",
+    "x-ai/grok-4.6",
+]
 STRICT_MODELS = [
     "deepseek/deepseek-v4-flash",
     "deepseek/deepseek-v4-pro",
     "openai/gpt-5.6-terra",
     "openai/gpt-5.6-sol",
-    "x-ai/grok-4.6",
 ]
 
 
-@pytest.mark.parametrize("model", ANTHROPIC_MODELS)
+@pytest.mark.parametrize("model", NON_STRICT_MODELS)
 @pytest.mark.parametrize("brief", [None, "бриф"])
-async def test_anthropic_models_get_the_plain_schema_in_the_prompt(model: str, brief: str | None) -> None:
+async def test_non_strict_models_get_the_plain_schema_in_the_prompt(model: str, brief: str | None) -> None:
     client = FakeLlmClient([valid_answer()])
 
     await generate_document(PROMPT, None, client=client, model=model, max_attempts=1, brief=brief)
@@ -656,7 +660,7 @@ async def test_document_with_optional_fields_omitted_validates_like_one_with_exp
     assert "zIndex" not in omitted["screens"][0]["root"]["layout"]
 
     client = FakeLlmClient([json.dumps(omitted)])
-    from_omitted = await generate_document(PROMPT, None, client=client, model=ANTHROPIC_MODELS[0], max_attempts=1)
+    from_omitted = await generate_document(PROMPT, None, client=client, model=NON_STRICT_MODELS[0], max_attempts=1)
     from_nulls = AppDocument.model_validate(with_nulls)
 
     assert from_omitted.screens[0].root.layout is not None

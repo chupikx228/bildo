@@ -671,13 +671,17 @@ async def test_chat_turn_asks_the_llm_for_the_default_model(
     assert llm_client.models == [settings.routerai_model]
 
 
-ANTHROPIC_CHAT_MODELS = ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5"]
+NON_STRICT_CHAT_MODELS = [
+    "anthropic/claude-sonnet-5",
+    "anthropic/claude-opus-5",
+    "anthropic/claude-fable-5",
+    "x-ai/grok-4.6",
+]
 STRICT_CHAT_MODELS = [
     "deepseek/deepseek-v4-flash",
     "deepseek/deepseek-v4-pro",
     "openai/gpt-5.6-terra",
     "openai/gpt-5.6-sol",
-    "x-ai/grok-4.6",
 ]
 
 
@@ -702,8 +706,8 @@ async def run_chat_turn_on(
     return llm_client, document, app_id
 
 
-@pytest.mark.parametrize("model", ANTHROPIC_CHAT_MODELS)
-async def test_chat_turn_gives_anthropic_models_the_plain_schema_and_the_omit_optional_rule(
+@pytest.mark.parametrize("model", NON_STRICT_CHAT_MODELS)
+async def test_chat_turn_gives_non_strict_models_the_plain_schema_and_the_omit_optional_rule(
     model: str,
     monkeypatch: pytest.MonkeyPatch,
     repository: InMemoryAppRepository,
@@ -745,7 +749,7 @@ async def test_chat_turn_on_an_anthropic_model_accepts_a_proposed_document_witho
     chat_repository: InMemoryChatRepository,
 ) -> None:
     llm_client, _, app_id = await run_chat_turn_on(
-        ANTHROPIC_CHAT_MODELS[0],
+        NON_STRICT_CHAT_MODELS[0],
         monkeypatch,
         repository,
         chat_repository,
@@ -765,7 +769,7 @@ async def test_chat_turn_on_an_anthropic_model_still_retries_a_claimed_edit_with
     claims_edit = chat_answer("Готово, текст кнопки изменён на «Записаться»", with_document=False)
 
     llm_client, _, _ = await run_chat_turn_on(
-        ANTHROPIC_CHAT_MODELS[0],
+        NON_STRICT_CHAT_MODELS[0],
         monkeypatch,
         repository,
         chat_repository,
@@ -785,7 +789,7 @@ async def test_chat_turn_on_an_anthropic_model_still_retries_edited_true_without
     edited_without_document = json.dumps({"reply": "Вот правка", "edited": True}, ensure_ascii=False)
 
     llm_client, _, _ = await run_chat_turn_on(
-        ANTHROPIC_CHAT_MODELS[0],
+        NON_STRICT_CHAT_MODELS[0],
         monkeypatch,
         repository,
         chat_repository,
