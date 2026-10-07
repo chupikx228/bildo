@@ -88,6 +88,17 @@ describe("normalizeAppDocument", () => {
     expect(normalizeAppDocument(doc).navigation.roots).toEqual(["s1", "s2"]);
   });
 
+  it("keeps navigation roots as screen ids in their given order", () => {
+    const doc = baseDoc({
+      navigation: { type: "tabs", roots: ["scr-b", "scr-a"] },
+      screens: [
+        { id: "scr-a", name: "Home", route: "index", root: { id: "r1", type: "View" } },
+        { id: "scr-b", name: "Stats", route: "stats", root: { id: "r2", type: "View" } },
+      ],
+    });
+    expect(normalizeAppDocument(doc).navigation.roots).toEqual(["scr-b", "scr-a"]);
+  });
+
   it("forces each screen root to fill the stage and take the theme background", () => {
     const out = normalizeAppDocument(baseDoc());
     const root = out.screens[0]!.root;

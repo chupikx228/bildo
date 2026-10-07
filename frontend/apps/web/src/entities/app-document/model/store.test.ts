@@ -212,6 +212,13 @@ describe("screens slice", () => {
     s().renameScreen("s1", "Renamed");
     expect(s().document!.screens[0]!.name).toBe("Renamed");
   });
+
+  it("keeps navigation roots in sync when adding and removing screens", () => {
+    const id = s().addScreen("Second")!;
+    expect(s().document!.navigation.roots).toContain(id);
+    s().removeScreen(id);
+    expect(s().document!.navigation.roots).not.toContain(id);
+  });
 });
 
 describe("history slice", () => {
