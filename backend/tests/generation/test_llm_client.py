@@ -176,10 +176,10 @@ async def test_ignored_providers_are_not_sent_on_text_requests(build_client: Bui
 
 STRICT_SCHEMA_BY_CURATED_MODEL = {
     "deepseek/deepseek-v4-pro": True,
-    "openai/gpt-5.6-terra": True,
+    "openai/gpt-5.6-terra": False,
     "anthropic/claude-opus-5": False,
     "anthropic/claude-fable-5": False,
-    "openai/gpt-5.6-sol": True,
+    "openai/gpt-5.6-sol": False,
     "x-ai/grok-4.6": False,
     "anthropic/claude-sonnet-5": False,
 }
@@ -197,7 +197,15 @@ def test_strict_schema_path_is_chosen_by_model_family(model: str, strict: bool) 
 
 
 @pytest.mark.parametrize(
-    "model", ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5", "x-ai/grok-4.6"]
+    "model",
+    [
+        "anthropic/claude-sonnet-5",
+        "anthropic/claude-opus-5",
+        "anthropic/claude-fable-5",
+        "openai/gpt-5.6-terra",
+        "openai/gpt-5.6-sol",
+        "x-ai/grok-4.6",
+    ],
 )
 async def test_unconstrained_models_get_no_response_format_from_the_first_call(
     build_client: BuildClient, model: str
@@ -786,9 +794,9 @@ def app_document_answer() -> str:
         ("anthropic/claude-sonnet-5", False),
         ("anthropic/claude-opus-5", False),
         ("anthropic/claude-fable-5", False),
+        ("openai/gpt-5.6-terra", False),
         ("x-ai/grok-4.6", False),
         ("deepseek/deepseek-v4-flash", True),
-        ("openai/gpt-5.6-terra", True),
     ],
 )
 async def test_generation_request_payload_carries_the_schema_matching_the_model_family(
