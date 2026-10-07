@@ -68,13 +68,23 @@ Layout-архетип: edge-to-edge hero (один крупный элемент
 
 Не тяготей к одной и той же комбинации осей просто потому что она "безопасная" — за много запросов подряд комбинации должны заметно различаться даже для похожих категорий приложений."""
 
+ALL_KEYS_RULE = (
+    "- в ответе обязаны присутствовать ВСЕ ключи из JSON Schema ниже — для поля, для которого нет данных, "
+    "ставь `null`, не опускай ключ;"
+)
+
+OMIT_OPTIONAL_RULE = (
+    "- в ответе обязательны только ключи из `required` в JSON Schema ниже; необязательное поле, для которого нет "
+    "данных, просто опусти, `null` для него не пиши;"
+)
+
 RULES = f"""Ты генератор мобильных приложений для конструктора Bildo.
 По описанию пользователя ты собираешь документ приложения `AppDocument` и возвращаешь его одним JSON-объектом.
 
 Формат ответа:
 - только JSON-объект документа, без markdown-ограждений, без пояснений до или после;
 - ключи в camelCase ровно так, как в JSON Schema ниже;
-- в ответе обязаны присутствовать ВСЕ ключи из JSON Schema ниже — для поля, для которого нет данных, ставь `null`, не опускай ключ;
+{ALL_KEYS_RULE}
 - поля `id`, `createdAt`, `updatedAt` обязательны в схеме, но сервер их перезапишет: положи любые валидные строки;
 - поле `revision` обязательно в схеме, но сервер его перезапишет: положи `1`.
 
@@ -96,23 +106,25 @@ RULES = f"""Ты генератор мобильных приложений дл
 Объём: от {MIN_SCREENS} до {MAX_SCREENS} экранов, каждый экран содержательный — заголовок, основной контент и переход на другие экраны."""
 
 
-def app_document_schema() -> JsonSchema:
-    return to_strict_json_schema(AppDocument.model_json_schema(by_alias=True))
+def app_document_schema(*, strict: bool = True) -> JsonSchema:
+    schema = AppDocument.model_json_schema(by_alias=True)
+    return to_strict_json_schema(schema) if strict else schema
 
 
-def build_system_prompt(*, has_brief: bool) -> str:
-    schema = json.dumps(app_document_schema(), ensure_ascii=False)
-    rules = f"{RULES}\n\nJSON Schema документа:\n{schema}"
+def build_system_prompt(*, has_brief: bool, strict_schema: bool = True) -> str:
+    schema = json.dumps(app_document_schema(strict=strict_schema), ensure_ascii=False)
+    format_rules = RULES if strict_schema else RULES.replace(ALL_KEYS_RULE, OMIT_OPTIONAL_RULE)
+    rules = f"{format_rules}\n\nJSON Schema документа:\n{schema}"
     if has_brief:
         return rules
     return f"{DESIGN_RULES}\n\n{DESIGN_SELF_CHECK}\n\n{DESIGN_VARIETY}\n\n{rules}"
 
 
-def build_messages(prompt: str, name: str | None, *, has_brief: bool) -> list[ChatMessage]:
+def build_messages(prompt: str, name: str | None, *, has_brief: bool, strict_schema: bool = True) -> list[ChatMessage]:
     request = f"Собери приложение по описанию:\n{prompt}"
     if name is not None:
         request = f"{request}\n\nНазвание приложения: {name}"
     return [
-        ChatMessage(role="system", content=build_system_prompt(has_brief=has_brief)),
+        ChatMessage(role="system", content=build_system_prompt(has_brief=has_brief, strict_schema=strict_schema)),
         ChatMessage(role="user", content=request),
     ]

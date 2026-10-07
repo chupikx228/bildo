@@ -195,10 +195,12 @@ class RouterAiLlmClient:
         return self._client
 
 
+def enforces_response_schema(model: str) -> bool:
+    return not model.startswith(UNCONSTRAINED_MODEL_PREFIXES)
+
+
 def _response_format_mode(model: str) -> ResponseFormatMode:
-    if model.startswith(UNCONSTRAINED_MODEL_PREFIXES):
-        return "text"
-    return "json_schema"
+    return "json_schema" if enforces_response_schema(model) else "text"
 
 
 def _rejection(model: str, mode: ResponseFormatMode, detail: str) -> GenerationError:
