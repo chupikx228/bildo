@@ -13,6 +13,7 @@ import pytest
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+from src.apps.schemas import AppDocument
 from src.generation import llm_client as llm_client_module
 from src.generation import structured_output as structured_output_module
 from src.generation.exceptions import (
@@ -21,6 +22,7 @@ from src.generation.exceptions import (
     StrictSchemaUnsupportedError,
     TransientProviderError,
 )
+from src.generation.json_schema import to_strict_json_schema
 from src.generation.llm_client import (
     IDLE_TIMEOUT_SECONDS,
     MAX_OUTPUT_TOKENS,
@@ -29,12 +31,15 @@ from src.generation.llm_client import (
     JsonSchema,
     RouterAiLlmClient,
 )
+from src.generation.prompt import ALL_KEYS_RULE
+from src.generation.service import generate_document
 from src.generation.structured_output import (
     MAX_RETRY_AFTER_SECONDS,
     TRANSIENT_RETRY_DELAY_SECONDS,
     generate_structured,
 )
 from src.worker.tasks import GENERATION_TIMEOUT_SECONDS
+from tests.generation.template_fixtures import build_template_document
 
 BASE_URL = "https://routerai.test/api/v1"
 MODEL = "deepseek/deepseek-v4-flash"
@@ -743,3 +748,40 @@ async def test_missing_api_key_is_reported_before_any_request(monkeypatch: pytes
 
     with pytest.raises(GenerationNotConfiguredError):
         await complete(client)
+
+
+def app_document_answer() -> str:
+    return json.dumps(build_template_document("трекер", "Трекер").model_dump(mode="json", by_alias=True))
+
+
+@pytest.mark.parametrize(
+    ("model", "strict"),
+    [
+        ("anthropic/claude-sonnet-5", False),
+        ("anthropic/claude-opus-5", False),
+        ("anthropic/claude-fable-5", False),
+        ("deepseek/deepseek-v4-flash", True),
+        ("openai/gpt-5.6-terra", True),
+    ],
+)
+async def test_generation_request_payload_carries_the_schema_matching_the_model_family(
+    build_client: BuildClient, model: str, strict: bool
+) -> None:
+    gateway = StubGateway(rejected=set(), body=completion_body(app_document_answer()))
+    client = build_client(gateway)
+
+    await generate_document("трекер", None, client=client, model=model, max_attempts=1)
+    await client.aclose()
+
+    payload = gateway.payloads[0]
+    plain = AppDocument.model_json_schema(by_alias=True)
+    system = payload["messages"][0]["content"]
+    embedded = json.loads(system.split("JSON Schema документа:\n", 1)[1])
+    if strict:
+        assert embedded == to_strict_json_schema(plain)
+        assert payload["response_format"]["json_schema"]["schema"] == to_strict_json_schema(plain)
+        assert ALL_KEYS_RULE in system
+    else:
+        assert embedded == plain
+        assert "response_format" not in payload
+        assert ALL_KEYS_RULE not in system

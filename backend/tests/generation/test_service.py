@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from src.apps.schemas import AppComponentType, AppDocument, AppNodeLayout
 from src.generation.exceptions import GenerationError
 from src.generation.json_schema import to_strict_json_schema
-from src.generation.prompt import build_system_prompt
+from src.generation.prompt import app_document_schema, build_system_prompt
 from src.generation.service import check_document, check_edited_document, generate_document
 from tests.generation.fake_llm_client import FakeLlmClient
 from tests.generation.template_fixtures import build_template_document
@@ -611,3 +611,61 @@ def test_check_edited_document_rejects_a_route_with_a_leading_slash() -> None:
 
 def test_check_edited_document_accepts_index_and_slashless_routes() -> None:
     check_edited_document(with_added_screen_route(build_template_document(PROMPT, None), "progress"))
+
+
+ANTHROPIC_MODELS = ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5"]
+STRICT_MODELS = [
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v4-pro",
+    "openai/gpt-5.6-terra",
+    "openai/gpt-5.6-sol",
+    "x-ai/grok-4.6",
+]
+
+
+@pytest.mark.parametrize("model", ANTHROPIC_MODELS)
+@pytest.mark.parametrize("brief", [None, "бриф"])
+async def test_anthropic_models_get_the_plain_schema_in_the_prompt(model: str, brief: str | None) -> None:
+    client = FakeLlmClient([valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, model=model, max_attempts=1, brief=brief)
+
+    assert client.calls[0][0]["content"] == build_system_prompt(has_brief=brief is not None, strict_schema=False)
+    assert client.schemas[0] == AppDocument.model_json_schema(by_alias=True)
+
+
+@pytest.mark.parametrize("model", STRICT_MODELS)
+@pytest.mark.parametrize("brief", [None, "бриф"])
+async def test_other_models_keep_the_strict_schema_in_the_prompt(model: str, brief: str | None) -> None:
+    client = FakeLlmClient([valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, model=model, max_attempts=1, brief=brief)
+
+    assert client.calls[0][0]["content"] == build_system_prompt(has_brief=brief is not None)
+    assert client.schemas[0] == app_document_schema()
+
+
+async def test_document_with_optional_fields_omitted_validates_like_one_with_explicit_nulls() -> None:
+    omitted = json.loads(valid_answer())
+    with_nulls = json.loads(valid_answer())
+    root = with_nulls["screens"][0]["root"]
+    root["layout"]["zIndex"] = None
+    root["props"] = {"text": None, "href": None}
+    root.pop("style", None)
+    root["style"] = {"backgroundColor": None, "shadow": None}
+    assert "zIndex" not in omitted["screens"][0]["root"]["layout"]
+
+    client = FakeLlmClient([json.dumps(omitted)])
+    from_omitted = await generate_document(PROMPT, None, client=client, model=ANTHROPIC_MODELS[0], max_attempts=1)
+    from_nulls = AppDocument.model_validate(with_nulls)
+
+    assert from_omitted.screens[0].root.layout is not None
+    assert from_omitted.screens[0].root.layout.z_index is None
+    assert from_nulls.screens[0].root.layout is not None
+    assert from_nulls.screens[0].root.layout.z_index is None
+    assert from_nulls.screens[0].root.props is not None
+    assert from_nulls.screens[0].root.props.text is None
+    assert (
+        from_omitted.model_dump(by_alias=True)["screens"][0]["root"]["layout"]
+        == (from_nulls.model_dump(by_alias=True)["screens"][0]["root"]["layout"])
+    )

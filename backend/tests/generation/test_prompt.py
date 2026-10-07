@@ -1,10 +1,19 @@
+import json
+
+import pytest
+
+from src.apps.schemas import AppDocument
+from src.generation.json_schema import to_strict_json_schema
 from src.generation.prompt import (
+    ALL_KEYS_RULE,
     DESIGN_RULES,
     DESIGN_SELF_CHECK,
     DESIGN_VARIETY,
     EXPORT_RULES,
+    OMIT_OPTIONAL_RULE,
     RULES,
     START_ROUTE,
+    app_document_schema,
     build_messages,
     build_system_prompt,
 )
@@ -60,3 +69,48 @@ def test_rules_define_roots_as_screen_ids_not_routes() -> None:
 def test_rules_no_longer_require_the_start_screen_id_to_be_index() -> None:
     assert f"`route` стартового экрана всегда `{START_ROUTE}`" in RULES
     assert "имеет `id` и `route`" not in RULES
+
+
+def schema_section(prompt: str) -> dict[str, object]:
+    decoded: dict[str, object] = json.loads(prompt.split("JSON Schema документа:\n", 1)[1])
+    return decoded
+
+
+def test_default_prompt_keeps_the_strict_schema_and_the_all_keys_rule() -> None:
+    prompt = build_system_prompt(has_brief=True)
+
+    assert ALL_KEYS_RULE in RULES
+    assert ALL_KEYS_RULE in prompt
+    assert OMIT_OPTIONAL_RULE not in prompt
+    assert schema_section(prompt) == to_strict_json_schema(AppDocument.model_json_schema(by_alias=True))
+    assert build_system_prompt(has_brief=True) == build_system_prompt(has_brief=True, strict_schema=True)
+
+
+@pytest.mark.parametrize("has_brief", [True, False])
+def test_non_strict_prompt_carries_the_plain_schema_and_lets_optional_fields_be_omitted(has_brief: bool) -> None:
+    prompt = build_system_prompt(has_brief=has_brief, strict_schema=False)
+    schema = schema_section(prompt)
+
+    assert schema == AppDocument.model_json_schema(by_alias=True)
+    assert OMIT_OPTIONAL_RULE in prompt
+    assert ALL_KEYS_RULE not in prompt
+    assert "ставь `null`" not in prompt
+    layout = schema["$defs"]["AppNodeLayout"]  # type: ignore[index]
+    assert "zIndex" in layout["properties"]
+    assert "zIndex" not in layout["required"]
+    assert "additionalProperties" not in layout
+
+
+def test_non_strict_prompt_differs_from_the_strict_one_only_in_the_format_rule_and_the_schema() -> None:
+    strict = build_system_prompt(has_brief=False)
+    plain = build_system_prompt(has_brief=False, strict_schema=False)
+
+    strict_head = strict.split("JSON Schema документа:\n", 1)[0]
+    plain_head = plain.split("JSON Schema документа:\n", 1)[0]
+    assert plain_head == strict_head.replace(ALL_KEYS_RULE, OMIT_OPTIONAL_RULE)
+
+
+def test_app_document_schema_strictness_is_selectable() -> None:
+    assert app_document_schema() == app_document_schema(strict=True)
+    assert app_document_schema(strict=False) == AppDocument.model_json_schema(by_alias=True)
+    assert app_document_schema(strict=False) != app_document_schema(strict=True)

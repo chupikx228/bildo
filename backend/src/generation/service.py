@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from src.apps.navigation import leading_slash_routes, missing_roots
 from src.apps.schemas import AppDocument, AppNode, NavigateAction
-from src.generation.llm_client import LlmClient
+from src.generation.llm_client import LlmClient, enforces_response_schema
 from src.generation.prompt import (
     MAX_SCREENS,
     MIN_SCREENS,
@@ -28,12 +28,13 @@ async def generate_document(
     max_attempts: int,
     brief: str | None = None,
 ) -> AppDocument:
+    strict_schema = enforces_response_schema(model)
     document = await generate_structured(
-        build_messages(brief or prompt, name, has_brief=bool(brief)),
+        build_messages(brief or prompt, name, has_brief=bool(brief), strict_schema=strict_schema),
         client=client,
         model=model,
         schema_name=SCHEMA_NAME,
-        schema=app_document_schema(),
+        schema=app_document_schema(strict=strict_schema),
         target_model=AppDocument,
         max_attempts=max_attempts,
         check=check_document,
