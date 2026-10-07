@@ -26,7 +26,6 @@ THEME = AppThemeTokens(
     font_heading="System",
 )
 
-# TODO(BIL-92): add an Icon node here once the TS codegen renders Icon, so parity covers it too.
 # TODO(BIL-94): switch fontBody/fontHeading to Google Fonts once the TS codegen loads them, so parity covers it too.
 TRICKY_TEXT = "Кавычки 'внутри', слеш \\ и перенос \n хвост"
 
@@ -150,6 +149,37 @@ def _index_screen() -> AppScreen:
                     type="TextInput",
                     layout=_layout(16, 384, 338, 44),
                     props=AppNodeProps(placeholder="Без привязки"),
+                ),
+                AppNode(
+                    id="icon-plain",
+                    type="Icon",
+                    layout=_layout(16, 420, 28, 28),
+                    props=AppNodeProps(icon="arrow-left"),
+                ),
+                AppNode(
+                    id="icon-colored",
+                    type="Icon",
+                    layout=_layout(52, 420, 32, 24),
+                    props=AppNodeProps(icon="share-2"),
+                    style=AppNodeStyle(color="#FF3B30", opacity=0.8),
+                ),
+                AppNode(
+                    id="icon-collision",
+                    type="Icon",
+                    layout=_layout(92, 420, 24, 24),
+                    props=AppNodeProps(icon="image"),
+                ),
+                AppNode(
+                    id="icon-empty",
+                    type="Icon",
+                    layout=_layout(124, 420, 24, 24),
+                ),
+                AppNode(
+                    id="icon-hidden",
+                    type="Icon",
+                    layout=_layout(156, 420, 24, 24),
+                    hidden=True,
+                    props=AppNodeProps(icon="circle-question-mark"),
                 ),
                 AppNode(
                     id="spacer",

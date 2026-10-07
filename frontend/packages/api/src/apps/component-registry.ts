@@ -1,10 +1,10 @@
-import type { AppComponentType, AppNodeStyle, AppThemeTokens } from "./model";
+import type { AppComponentType, AppIconName, AppNodeStyle, AppThemeTokens } from "./model";
 
 export interface AppComponentDef {
   type: AppComponentType;
   displayName: string;
   canHaveChildren: boolean;
-  defaultProps?: { text?: string; placeholder?: string; data?: string[]; source?: string };
+  defaultProps?: { text?: string; placeholder?: string; data?: string[]; source?: string; icon?: AppIconName };
   defaultStyle?: AppNodeStyle;
   themeStyle?: Partial<Record<"color" | "backgroundColor", keyof AppThemeTokens>>;
 }
@@ -75,6 +75,13 @@ export const APP_COMPONENT_REGISTRY: Record<AppComponentType, AppComponentDef> =
     canHaveChildren: false,
     defaultStyle: { height: 16 },
   },
+  Icon: {
+    type: "Icon",
+    displayName: "Иконка",
+    canHaveChildren: false,
+    defaultProps: { icon: "star" },
+    themeStyle: { color: "colorText" },
+  },
 };
 
 export const ADDABLE_COMPONENTS: AppComponentType[] = [
@@ -86,4 +93,5 @@ export const ADDABLE_COMPONENTS: AppComponentType[] = [
   "ScrollView",
   "FlatList",
   "Spacer",
+  "Icon",
 ];

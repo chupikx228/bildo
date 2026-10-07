@@ -58,6 +58,22 @@ const PAPER_PASSTHROUGH_KEYS = new Set([
 ]);
 const PAPER_TEXT_INPUT_KEYS = new Set([...PAPER_PASSTHROUGH_KEYS, "fontWeight", "lineHeight", "textAlign"]);
 const FLATLIST_ROW_TEXT_KEYS = new Set(["color", "fontSize", "fontWeight"]);
+const ICON_PASSTHROUGH_KEYS = new Set(["width", "height", "opacity"]);
+const ICON_DEFAULT_SIZE = 24;
+
+function iconComponent(icon: string): string {
+  return (
+    icon
+      .split("-")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join("") + "Icon"
+  );
+}
+
+function nodeUsesIcons(node: AppNode): boolean {
+  if (node.type === "Icon" && node.props?.icon != null) return true;
+  return (node.children ?? []).some(nodeUsesIcons);
+}
 const BUTTON_DEFAULT_LABEL_MARGIN = 16;
 const TEXT_INPUT_DEFAULT_PADDING = 10;
 const TEXT_INPUT_DEFAULT_FONT_SIZE = 14;
@@ -240,9 +256,12 @@ function collectNeeds(node: AppNode, needs: ScreenNeeds) {
   for (const c of node.children ?? []) collectNeeds(c, needs);
 }
 
-function collectImports(node: AppNode, set: Set<string>, paperSet: Set<string>): void {
+function collectImports(node: AppNode, set: Set<string>, paperSet: Set<string>, iconSet: Set<string>): void {
   if (node.type === "Button" || node.type === "TextInput") {
     paperSet.add(node.type);
+  } else if (node.type === "Icon") {
+    set.add("View");
+    if (node.props?.icon != null) iconSet.add(node.props.icon);
   } else if (node.type === "Spacer") {
     set.add("View");
   } else if (node.type === "Image") {
@@ -252,7 +271,7 @@ function collectImports(node: AppNode, set: Set<string>, paperSet: Set<string>):
   } else {
     set.add(node.type);
   }
-  for (const c of node.children ?? []) collectImports(c, set, paperSet);
+  for (const c of node.children ?? []) collectImports(c, set, paperSet, iconSet);
 }
 
 function renderButton(node: AppNode, pad: string, isRoot: boolean, theme: AppThemeTokens): string {
@@ -360,6 +379,22 @@ function renderTextInput(node: AppNode, pad: string, isRoot: boolean, theme: App
   return jsxElement(pad, "TextInput", attributes, null);
 }
 
+function renderIcon(node: AppNode, pad: string, isRoot: boolean): string {
+  const styleEntries: [string, string][] = [
+    ...positionEntries(node, isRoot),
+    ["alignItems", "'center'"],
+    ["justifyContent", "'center'"],
+    ...passthroughEntries(node, isRoot, ICON_PASSTHROUGH_KEYS),
+  ];
+  const icon = node.props?.icon ?? null;
+  if (icon == null) return `${pad}<View style={${objectLiteral(styleEntries)}} />`;
+  const size = !isRoot && node.layout ? Math.min(node.layout.width, node.layout.height) : ICON_DEFAULT_SIZE;
+  const color = node.style?.color ?? null;
+  const attributes = [`size={${num(size)}}`, `color={${color != null ? lit(color) : "theme.colorText"}}`];
+  const iconElement = jsxElement(`${pad}  `, iconComponent(icon), attributes, null);
+  return `${pad}<View style={${objectLiteral(styleEntries)}}>\n${iconElement}\n${pad}</View>`;
+}
+
 function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean, theme: AppThemeTokens): string {
   const pad = " ".repeat(indent);
   if (node.hidden) return `${pad}{null}`;
@@ -388,6 +423,8 @@ function renderNodeTSX(node: AppNode, indent: number, isRoot: boolean, theme: Ap
     }
     case "TextInput":
       return renderTextInput(node, pad, isRoot, theme);
+    case "Icon":
+      return renderIcon(node, pad, isRoot);
     case "Spacer":
       return `${pad}<View style={${style}} />`;
     case "FlatList": {
@@ -428,7 +465,8 @@ function screenFile(screen: AppScreen, theme: AppThemeTokens): string {
   collectNeeds(screen.root, needs);
   const imports = new Set<string>(["View"]);
   const paperImports = new Set<string>();
-  collectImports(screen.root, imports, paperImports);
+  const iconImports = new Set<string>();
+  collectImports(screen.root, imports, paperImports, iconImports);
   if (needs.alert) imports.add("Alert");
   if (needs.linking) imports.add("Linking");
   const unique = [...imports].sort();
@@ -441,10 +479,14 @@ function screenFile(screen: AppScreen, theme: AppThemeTokens): string {
   const paperImport = paperImports.size
     ? `import { ${[...paperImports].sort().join(", ")} } from 'react-native-paper';\n`
     : "";
+  const iconImport = [...iconImports]
+    .sort()
+    .map((icon) => `import ${iconComponent(icon)} from 'lucide-react-native/icons/${icon}';\n`)
+    .join("");
   const themeNames = paperImports.size || imports.has("FlatList") ? "paperTheme, theme" : "theme";
 
   return `import { ${unique.join(", ")} } from 'react-native';
-${paperImport}import { SafeAreaView } from 'react-native-safe-area-context';
+${paperImport}${iconImport}import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 ${needs.router ? `import { useRouter } from 'expo-router';\n` : ""}import { ${themeNames} } from '../theme';
 ${needs.state ? `import { useAppState } from '../lib/state';\n` : ""}
@@ -560,6 +602,7 @@ export function codegenExpoProject(doc: AppDocument): ExpoFileMap {
   const files: ExpoFileMap = {};
   const bundleId = `com.bildo.${slugify(doc.name).replace(/-/g, "") || "app"}`;
   const families = themeFontFamilies(doc.theme);
+  const usesIcons = doc.screens.some((s) => nodeUsesIcons(s.root));
 
   const dependencies: Record<string, string> = {
     expo: "~52.0.46",
@@ -579,6 +622,10 @@ export function codegenExpoProject(doc: AppDocument): ExpoFileMap {
     "expo-font": "~13.0.4",
     "query-string": "^7.1.3",
   };
+  if (usesIcons) {
+    dependencies["lucide-react-native"] = "~1.48.0";
+    dependencies["react-native-svg"] = "15.8.0";
+  }
   for (const family of families) {
     dependencies[GOOGLE_FONTS[family]!.package] = GOOGLE_FONTS[family]!.version;
   }
@@ -628,7 +675,10 @@ export function codegenExpoProject(doc: AppDocument): ExpoFileMap {
   );
 
   files["tsconfig.json"] = JSON.stringify(
-    { extends: "expo/tsconfig.base", compilerOptions: { strict: true } },
+    {
+      extends: "expo/tsconfig.base",
+      compilerOptions: usesIcons ? { strict: true, moduleResolution: "bundler" } : { strict: true },
+    },
     null,
     2,
   );
@@ -638,6 +688,22 @@ export function codegenExpoProject(doc: AppDocument): ExpoFileMap {
   return { presets: ['babel-preset-expo'] };
 };
 `;
+
+  if (usesIcons) {
+    files["metro.config.js"] = `const { getDefaultConfig } = require('expo/metro-config');
+
+const config = getDefaultConfig(__dirname);
+
+config.resolver.resolveRequest = (context, moduleName, platform) =>
+  context.resolveRequest(
+    moduleName.startsWith('lucide-react-native/') ? { ...context, unstable_enablePackageExports: true } : context,
+    moduleName,
+    platform
+  );
+
+module.exports = config;
+`;
+  }
 
   files[".gitignore"] = `node_modules/
 .expo/

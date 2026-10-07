@@ -407,3 +407,91 @@ describe("codegenExpoProject — theme on lists, headers and tabs", () => {
     expect(layout).not.toContain("tabBarLabelStyle");
   });
 });
+
+describe("codegenExpoProject — Icon", () => {
+  function iconDoc(): AppDocument {
+    const now = "2026-01-01T00:00:00.000Z";
+    return {
+      id: "ic",
+      name: "Icons",
+      theme: DEFAULT_APP_THEME,
+      navigation: { type: "stack", roots: ["s1"] },
+      screens: [
+        {
+          id: "s1",
+          name: "Home",
+          route: "index",
+          root: {
+            id: "r",
+            type: "View",
+            layout: { x: 0, y: 0, width: 370, height: 640 },
+            children: [
+              { id: "i1", type: "Icon", props: { icon: "arrow-left" }, layout: { x: 8, y: 8, width: 28, height: 28 } },
+              {
+                id: "i2",
+                type: "Icon",
+                props: { icon: "share-2" },
+                layout: { x: 40, y: 8, width: 32, height: 24 },
+                style: { color: "#FF0000" },
+              },
+              { id: "i3", type: "Icon", props: { icon: "image" }, layout: { x: 80, y: 8, width: 24, height: 24 } },
+              { id: "i4", type: "Icon", layout: { x: 120, y: 8, width: 24, height: 24 } },
+            ],
+          },
+        },
+      ],
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  const files = codegenExpoProject(iconDoc());
+  const index = files["app/index.tsx"]!;
+  const pkg = files["package.json"]!;
+
+  it("renders an Icon as a centered View wrapping the Lucide component", () => {
+    expect(index).toContain("<ArrowLeftIcon");
+    expect(index).toContain("size={28}");
+    expect(index).toContain("color={theme.colorText}");
+  });
+
+  it("uses min(width, height) for the size and the node color", () => {
+    expect(index).toContain("size={24}"); // share-2 is 32x24 -> 24
+    expect(index).toContain("color={'#FF0000'}");
+  });
+
+  it("suffixes the component name to avoid colliding with RN Image", () => {
+    expect(index).toContain("import ImageIcon from 'lucide-react-native/icons/image';");
+    expect(index).toContain("<ImageIcon");
+  });
+
+  it("imports each used icon from its per-icon subpath, sorted", () => {
+    expect(index).toContain("import ArrowLeftIcon from 'lucide-react-native/icons/arrow-left';");
+    expect(index).toContain("import Share2Icon from 'lucide-react-native/icons/share-2';");
+    const arrowAt = index.indexOf("icons/arrow-left");
+    const shareAt = index.indexOf("icons/share-2");
+    expect(arrowAt).toBeLessThan(shareAt);
+  });
+
+  it("renders an iconless Icon as an empty View, with no import", () => {
+    expect(index).not.toContain("undefinedIcon");
+  });
+
+  it("adds lucide-react-native and react-native-svg, metro.config.js and bundler resolution", () => {
+    expect(pkg).toContain('"lucide-react-native": "~1.48.0"');
+    expect(pkg).toContain('"react-native-svg": "15.8.0"');
+    expect(files["metro.config.js"]).toContain("unstable_enablePackageExports");
+    expect(files["tsconfig.json"]).toContain('"moduleResolution": "bundler"');
+  });
+
+  it("omits icon deps, metro.config.js and bundler resolution when no icon is used", () => {
+    const noIcons = codegenExpoProject({
+      ...iconDoc(),
+      screens: [{ id: "s1", name: "Home", route: "index", root: { id: "r", type: "View" } }],
+    });
+    expect(noIcons["package.json"]).not.toContain("lucide-react-native");
+    expect(noIcons["metro.config.js"]).toBeUndefined();
+    expect(noIcons["tsconfig.json"]).not.toContain("moduleResolution");
+  });
+});
