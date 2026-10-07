@@ -66,9 +66,10 @@ export function normalizeAppDocument(raw: AppDocument): AppDocument {
 
   const used = new Set<string>();
   for (const sc of doc.screens) {
-    let route = sc.route || `screen-${nanoid(4)}`;
+    const base = (sc.route ?? "").replace(/^\/+/, "");
+    let route = base || `screen-${nanoid(4)}`;
     let n = 1;
-    while (used.has(route)) route = `${sc.route || "screen"}-${n++}`;
+    while (used.has(route)) route = `${base || "screen"}-${n++}`;
     used.add(route);
     sc.route = route;
   }

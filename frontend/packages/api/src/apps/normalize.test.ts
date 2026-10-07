@@ -64,6 +64,17 @@ describe("normalizeAppDocument", () => {
     expect(normalizeAppDocument(baseDoc()).state).toEqual({});
   });
 
+  it("strips a leading slash from a screen route", () => {
+    const doc = baseDoc({
+      screens: [
+        { id: "s1", name: "Home", route: "index", root: { id: "r1", type: "View" } },
+        { id: "s2", name: "Progress", route: "/progress", root: { id: "r2", type: "View" } },
+      ],
+    });
+    const routes = normalizeAppDocument(doc).screens.map((s) => s.route);
+    expect(routes).toEqual(["index", "progress"]);
+  });
+
   it("deduplicates colliding screen routes", () => {
     const doc = baseDoc({
       screens: [
