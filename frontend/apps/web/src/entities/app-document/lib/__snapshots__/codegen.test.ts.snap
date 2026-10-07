@@ -234,8 +234,8 @@ export default function IndexScreen() {
         data={["a","b"]}
         keyExtractor={(item, i) => String(i)}
         renderItem={({ item }) => (
-          <View style={{ padding: 12, backgroundColor: '#18181B', borderRadius: 10, marginBottom: 8 }}>
-            <Text style={{ color: '#FAFAFA' }}>{String(item)}</Text>
+          <View style={{ padding: 12, backgroundColor: theme.colorSurface, borderRadius: paperTheme.roundness, marginBottom: 8 }}>
+            <Text style={{ color: theme.colorText }}>{String(item)}</Text>
           </View>
         )}
       />
