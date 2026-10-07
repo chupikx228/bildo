@@ -23,9 +23,9 @@ from src.transaction.base import Transaction
 CONTEXT_HISTORY_LIMIT = 20
 
 
-def check_chat_turn(response: ChatTurnResponse) -> None:
+def check_chat_turn(response: ChatTurnResponse, baseline: AppDocument | None = None) -> None:
     if response.document is not None:
-        check_edited_document(response.document)
+        check_edited_document(response.document, baseline)
     elif response.edited:
         raise ValueError(EDITED_WITHOUT_DOCUMENT_PROBLEM)
     elif asks_for_the_document(response.reply):

@@ -1,3 +1,4 @@
+import json
 from uuid import UUID, uuid4
 
 import pytest
@@ -517,3 +518,42 @@ def test_replayed_history_carries_only_role_and_content() -> None:
 
     assert [(m["role"], m["content"]) for m in messages[1:]] == [("user", "привет"), ("assistant", "Здравствуйте")]
     assert all(set(m) == {"role", "content"} for m in messages)
+
+
+def with_token_color(document: AppDocument, node_id: str) -> AppDocument:
+    dumped = json.loads(document.model_dump_json(by_alias=True))
+    for screen in dumped["screens"]:
+        stack = [screen["root"]]
+        while stack:
+            node = stack.pop()
+            if node["id"] == node_id:
+                node["style"] = {**node.get("style", {}), "color": "colorText"}
+            stack.extend(node.get("children", []))
+    return AppDocument.model_validate(dumped)
+
+
+def test_check_chat_turn_rejects_a_proposed_document_with_token_names_as_colors() -> None:
+    document = with_token_color(build_template_document("трекер привычек", None), "habits-title")
+
+    with pytest.raises(ValueError) as error:
+        check_chat_turn(ChatTurnResponse(reply="Готово", document=document))
+
+    assert "узел `habits-title`, `style.color` = `colorText`" in str(error.value)
+
+
+def test_check_chat_turn_accepts_old_invalid_colors_the_edit_did_not_touch() -> None:
+    stored = with_token_color(build_template_document("трекер привычек", None), "habits-title")
+
+    check_chat_turn(ChatTurnResponse(reply="Готово", document=stored), baseline=stored)
+
+
+def test_check_chat_turn_rejects_a_new_invalid_color_next_to_old_ones() -> None:
+    stored = with_token_color(build_template_document("трекер привычек", None), "habits-title")
+    edited = with_token_color(stored, "habits-streak")
+
+    with pytest.raises(ValueError) as error:
+        check_chat_turn(ChatTurnResponse(reply="Готово", document=edited), baseline=stored)
+
+    message = str(error.value)
+    assert "узел `habits-streak`" in message
+    assert "habits-title" not in message
