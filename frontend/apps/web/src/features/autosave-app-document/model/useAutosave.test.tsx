@@ -3,7 +3,14 @@ import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type * as BildoApi from "@bildo/api";
-import { APP_STAGE_HEIGHT, APP_STAGE_WIDTH, DEFAULT_APP_THEME, findAppNode, type AppDocument } from "@bildo/api";
+import {
+  APP_STAGE_HEIGHT,
+  APP_STAGE_WIDTH,
+  ApiError,
+  DEFAULT_APP_THEME,
+  findAppNode,
+  type AppDocument,
+} from "@bildo/api";
 import { useAppDocumentStore } from "@/entities/app-document";
 import { useAutosave } from "./useAutosave";
 
@@ -207,5 +214,21 @@ describe("useAutosave", () => {
 
     expect(store().saveStatus).toBe("error");
     expect(store().saveError).toBe("Не удалось сохранить");
+  });
+
+  it("на 422 показывает сообщение бэкенда, а не общую ошибку", async () => {
+    renderHook(() => useAutosave("app1"), { wrapper });
+
+    act(() => {
+      store().setNodeText("s1", "n1", "Правка");
+    });
+    await tick();
+
+    const message = "Навигация ссылается на несуществующий экран";
+    pending[0]!.reject(new ApiError(message, 422));
+    await settle();
+
+    expect(store().saveStatus).toBe("error");
+    expect(store().saveError).toBe(message);
   });
 });
