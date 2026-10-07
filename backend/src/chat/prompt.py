@@ -11,6 +11,7 @@ from src.generation.prompt import (
     DESIGN_RULES,
     EXPORT_RULES,
     NODE_TYPE_RULES,
+    OMIT_OPTIONAL_RULE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     START_ROUTE,
@@ -66,6 +67,15 @@ DOCUMENT_REQUEST_PROBLEM = (
     "если просьба неясна — уточни, что именно изменить, не прося документ"
 )
 
+ALL_KEYS_RULE = (
+    "- в ответе обязаны присутствовать ВСЕ ключи из JSON Schema ниже, в том числе внутри `document`, когда он не "
+    "`null`, —\n  для поля, для которого нет данных, ставь `null`, не опускай ключ."
+)
+
+OMIT_OPTIONAL_KEYS_RULE = (
+    f"{OMIT_OPTIONAL_RULE.removesuffix(';')}; `document` и `edited` указывай в каждом ответе, как описано выше."
+)
+
 RULES = f"""Ты ассистент редактора мобильных приложений Bildo. Пользователь ведёт с тобой диалог о своём
 приложении: обсуждает идеи, просит внести изменения или просто задаёт вопросы.
 
@@ -77,8 +87,7 @@ RULES = f"""Ты ассистент редактора мобильных при
   когда правка не нужна (пользователь спрашивает, уточняет, просто общается) — верни `document: null`;
 - `edited` — `true`, если в этом ответе ты изменил документ и вернул его в `document`, иначе `false`. `edited: true`
   всегда идёт вместе с непустым `document`, `edited: false` — с `document: null`.
-- в ответе обязаны присутствовать ВСЕ ключи из JSON Schema ниже, в том числе внутри `document`, когда он не `null`, —
-  для поля, для которого нет данных, ставь `null`, не опускай ключ.
+{ALL_KEYS_RULE}
 
 Правила для `reply`:
 - `reply` рассказывает пользователю о том, о чём он просил: какую правку из его просьбы ты внёс в `document`, или
@@ -113,22 +122,29 @@ RULES = f"""Ты ассистент редактора мобильных при
 Формат ответа: только JSON-объект, без markdown-ограждений, без пояснений до или после."""
 
 
-RESPONSE_SCHEMA: JsonSchema = to_strict_json_schema(ChatTurnResponse.model_json_schema(by_alias=True))
-RESPONSE_SCHEMA_JSON = json.dumps(RESPONSE_SCHEMA, ensure_ascii=False)
+def response_schema(*, strict: bool = True) -> JsonSchema:
+    schema = ChatTurnResponse.model_json_schema(by_alias=True)
+    return to_strict_json_schema(schema) if strict else schema
 
 
-def build_system_prompt(document: AppDocument) -> str:
+def build_system_prompt(document: AppDocument, *, strict_schema: bool = True) -> str:
     document_json = json.dumps(document.model_dump(mode="json", by_alias=True, exclude_none=True), ensure_ascii=False)
+    schema_json = json.dumps(response_schema(strict=strict_schema), ensure_ascii=False)
+    rules = RULES if strict_schema else RULES.replace(ALL_KEYS_RULE, OMIT_OPTIONAL_KEYS_RULE)
     return (
         f"{DESIGN_RULES}\n\n"
         f"{EXPORT_RULES}\n\n"
-        f"{RULES}\n\n"
+        f"{rules}\n\n"
         f"Текущий документ приложения:\n{document_json}\n\n"
-        f"JSON Schema ответа `ChatTurnResponse` (схема `AppDocument` — внутри неё):\n{RESPONSE_SCHEMA_JSON}"
+        f"JSON Schema ответа `ChatTurnResponse` (схема `AppDocument` — внутри неё):\n{schema_json}"
     )
 
 
-def build_messages(document: AppDocument, history: Sequence[ChatMessageRecord]) -> list[ChatMessage]:
-    messages: list[ChatMessage] = [ChatMessage(role="system", content=build_system_prompt(document))]
+def build_messages(
+    document: AppDocument, history: Sequence[ChatMessageRecord], *, strict_schema: bool = True
+) -> list[ChatMessage]:
+    messages: list[ChatMessage] = [
+        ChatMessage(role="system", content=build_system_prompt(document, strict_schema=strict_schema))
+    ]
     messages.extend(ChatMessage(role=record.role, content=record.content) for record in history)
     return messages
