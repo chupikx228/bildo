@@ -60,7 +60,7 @@ npx expo start
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppStateProvider } from './state';
+import { AppStateProvider } from '../lib/state';
 import { paperTheme, theme } from '../theme';
 
 export default function Layout() {
@@ -95,7 +95,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { paperTheme, theme } from '../theme';
-import { useAppState } from './state';
+import { useAppState } from '../lib/state';
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -268,7 +268,12 @@ export default function ProfileScreen() {
   );
 }
 ",
-  "app/state.tsx": "import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+  "babel.config.js": "module.exports = function (api) {
+  api.cache(true);
+  return { presets: ['babel-preset-expo'] };
+};
+",
+  "lib/state.ts": "import { createContext, createElement, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 type Vars = Record<string, string | number | boolean>;
 
@@ -287,7 +292,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, [k]: v }));
   }, []);
   const value = useMemo(() => ({ state, setVar }), [state, setVar]);
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return createElement(Ctx.Provider, { value }, children);
 }
 
 export function useAppState(): CtxValue {
@@ -295,11 +300,6 @@ export function useAppState(): CtxValue {
   if (!ctx) throw new Error('useAppState must be used within AppStateProvider');
   return ctx;
 }
-",
-  "babel.config.js": "module.exports = function (api) {
-  api.cache(true);
-  return { presets: ['babel-preset-expo'] };
-};
 ",
   "package.json": "{
   "name": "cover-app",
