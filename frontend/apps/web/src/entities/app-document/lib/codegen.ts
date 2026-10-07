@@ -327,7 +327,7 @@ function screenFile(screen: AppScreen): string {
 ${paperImport}import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 ${needs.router ? `import { useRouter } from 'expo-router';\n` : ""}import { ${themeNames} } from '../theme';
-${needs.state ? `import { useAppState } from './state';\n` : ""}
+${needs.state ? `import { useAppState } from '../lib/state';\n` : ""}
 export default function ${routeToComponent(screen.route)}() {
 ${hooks.length ? `${hooks.join("\n")}\n` : ""}  return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colorBg }} edges={['top', 'left', 'right']}>
@@ -531,8 +531,8 @@ web-build/
 export const theme = ${JSON.stringify(doc.theme, null, 2)} as const;
 ${PAPER_THEME}`;
 
-  files["app/state.tsx"] =
-    `import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+  files["lib/state.ts"] =
+    `import { createContext, createElement, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 type Vars = Record<string, string | number | boolean>;
 
@@ -551,7 +551,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, [k]: v }));
   }, []);
   const value = useMemo(() => ({ state, setVar }), [state, setVar]);
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return createElement(Ctx.Provider, { value }, children);
 }
 
 export function useAppState(): CtxValue {
@@ -570,7 +570,7 @@ export function useAppState(): CtxValue {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppStateProvider } from './state';
+import { AppStateProvider } from '../lib/state';
 import { paperTheme, theme } from '../theme';
 
 export default function Layout() {
@@ -603,7 +603,7 @@ ${roots.map((sc) => `              <Tabs.Screen name="${sc.route === "index" ? "
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppStateProvider } from './state';
+import { AppStateProvider } from '../lib/state';
 import { paperTheme, theme } from '../theme';
 
 export default function Layout() {

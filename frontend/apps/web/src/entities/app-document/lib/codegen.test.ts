@@ -113,7 +113,7 @@ describe("codegenExpoProject — project shape", () => {
       "babel.config.js",
       ".gitignore",
       "theme.ts",
-      "app/state.tsx",
+      "lib/state.ts",
       "app/_layout.tsx",
       "README.md",
     ]) {
