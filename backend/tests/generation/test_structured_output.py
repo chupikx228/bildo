@@ -6,8 +6,8 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from src.apps.schemas import AppDocument
-from src.chat.prompt import RESPONSE_SCHEMA as CHAT_RESPONSE_SCHEMA
 from src.chat.prompt import SCHEMA_NAME as CHAT_SCHEMA_NAME
+from src.chat.prompt import response_schema as chat_response_schema
 from src.chat.schemas import ChatTurnResponse
 from src.generation import structured_output as structured_output_module
 from src.generation.exceptions import GenerationError, StrictSchemaUnsupportedError, TransientProviderError
@@ -62,7 +62,7 @@ DOCUMENT_CASE = Case(
 CHAT_CASE = Case(
     target_model=ChatTurnResponse,
     schema_name=CHAT_SCHEMA_NAME,
-    schema=CHAT_RESPONSE_SCHEMA,
+    schema=chat_response_schema(),
     subject="ответ ассистента",
     valid_answer=chat_answer(),
     invalid_answer='{"document": null}',

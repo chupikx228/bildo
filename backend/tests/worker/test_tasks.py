@@ -13,7 +13,14 @@ from sqlalchemy.exc import IntegrityError
 from src.apps.schemas import AppDocument, AppNodeLayout
 from src.apps.service import AppService
 from src.chat.models import REPLY_FOREIGN_KEY_CONSTRAINT, REPLY_UNIQUE_CONSTRAINT
-from src.chat.prompt import DOCUMENT_REQUEST_PROBLEM, EDIT_CLAIM_PROBLEM
+from src.chat.prompt import (
+    DOCUMENT_REQUEST_PROBLEM,
+    EDIT_CLAIM_PROBLEM,
+    EDITED_WITHOUT_DOCUMENT_PROBLEM,
+    OMIT_OPTIONAL_KEYS_RULE,
+    response_schema,
+)
+from src.chat.prompt import build_system_prompt as build_chat_system_prompt
 from src.chat.schemas import ChatTurnResponse
 from src.chat.service import CONTEXT_HISTORY_LIMIT, ChatService
 from src.config import settings
@@ -662,6 +669,131 @@ async def test_chat_turn_asks_the_llm_for_the_default_model(
 
     llm_client: FakeLlmClient = ctx["llm_client"]
     assert llm_client.models == [settings.routerai_model]
+
+
+ANTHROPIC_CHAT_MODELS = ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-fable-5"]
+STRICT_CHAT_MODELS = [
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v4-pro",
+    "openai/gpt-5.6-terra",
+    "openai/gpt-5.6-sol",
+    "x-ai/grok-4.6",
+]
+
+
+async def run_chat_turn_on(
+    model: str,
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+    answers: list[str | Exception],
+) -> tuple[FakeLlmClient, AppDocument, UUID]:
+    monkeypatch.setattr(settings, "routerai_model", model)
+    app_id = await create_ready_app(repository)
+    app = await repository.get(app_id)
+    assert app is not None
+    document = AppDocument.model_validate(app.document)
+    user_message = await chat_repository.create_message(app_id, "user", "поменяй текст кнопки на «Записаться»")
+    ctx = context(answers)
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    return llm_client, document, app_id
+
+
+@pytest.mark.parametrize("model", ANTHROPIC_CHAT_MODELS)
+async def test_chat_turn_gives_anthropic_models_the_plain_schema_and_the_omit_optional_rule(
+    model: str,
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    llm_client, document, _ = await run_chat_turn_on(
+        model, monkeypatch, repository, chat_repository, [chat_answer("ок", with_document=False)]
+    )
+
+    assert llm_client.models == [model]
+    system = llm_client.calls[0][0]["content"]
+    assert system == build_chat_system_prompt(document, strict_schema=False)
+    assert OMIT_OPTIONAL_KEYS_RULE in system
+    assert llm_client.schemas[0] == ChatTurnResponse.model_json_schema(by_alias=True)
+    assert llm_client.schemas[0] == response_schema(strict=False)
+
+
+@pytest.mark.parametrize("model", STRICT_CHAT_MODELS)
+async def test_chat_turn_keeps_the_strict_schema_and_the_all_keys_rule_for_other_models(
+    model: str,
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    llm_client, document, _ = await run_chat_turn_on(
+        model, monkeypatch, repository, chat_repository, [chat_answer("ок", with_document=False)]
+    )
+
+    system = llm_client.calls[0][0]["content"]
+    assert system == build_chat_system_prompt(document)
+    assert OMIT_OPTIONAL_KEYS_RULE not in system
+    assert llm_client.schemas[0] == response_schema()
+    assert llm_client.schemas[0] == to_strict_json_schema(ChatTurnResponse.model_json_schema(by_alias=True))
+
+
+async def test_chat_turn_on_an_anthropic_model_accepts_a_proposed_document_without_the_edited_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    llm_client, _, app_id = await run_chat_turn_on(
+        ANTHROPIC_CHAT_MODELS[0],
+        monkeypatch,
+        repository,
+        chat_repository,
+        [chat_answer("Готово, кнопка теперь «Записаться»", with_document=True)],
+    )
+
+    assert len(llm_client.calls) == 1
+    messages = await chat_repository.list_messages(app_id)
+    assert messages[1].proposed_document is not None
+
+
+async def test_chat_turn_on_an_anthropic_model_still_retries_a_claimed_edit_without_a_document(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    claims_edit = chat_answer("Готово, текст кнопки изменён на «Записаться»", with_document=False)
+
+    llm_client, _, _ = await run_chat_turn_on(
+        ANTHROPIC_CHAT_MODELS[0],
+        monkeypatch,
+        repository,
+        chat_repository,
+        [claims_edit, chat_answer("Готово, кнопка теперь «Записаться»", with_document=True)],
+    )
+
+    assert len(llm_client.calls) == 2
+    assert EDIT_CLAIM_PROBLEM in llm_client.calls[1][-1]["content"]
+    assert all(call[0]["content"] == llm_client.calls[0][0]["content"] for call in llm_client.calls)
+
+
+async def test_chat_turn_on_an_anthropic_model_still_retries_edited_true_without_a_document(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    edited_without_document = json.dumps({"reply": "Вот правка", "edited": True}, ensure_ascii=False)
+
+    llm_client, _, _ = await run_chat_turn_on(
+        ANTHROPIC_CHAT_MODELS[0],
+        monkeypatch,
+        repository,
+        chat_repository,
+        [edited_without_document, chat_answer("Кнопка теперь «Записаться»", with_document=True)],
+    )
+
+    assert len(llm_client.calls) == 2
+    assert EDITED_WITHOUT_DOCUMENT_PROBLEM in llm_client.calls[1][-1]["content"]
 
 
 async def test_chat_turn_leaves_the_proposed_document_null_when_the_model_only_replies(

@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.apps.repository import SqlAlchemyAppRepository
 from src.apps.schemas import AppDocument
 from src.apps.service import AppService
-from src.chat.prompt import RESPONSE_SCHEMA as CHAT_RESPONSE_SCHEMA
 from src.chat.prompt import SCHEMA_NAME as CHAT_SCHEMA_NAME
 from src.chat.prompt import build_messages as build_chat_messages
+from src.chat.prompt import response_schema as chat_response_schema
 from src.chat.repository import SqlAlchemyChatRepository, is_duplicate_reply_violation
 from src.chat.schemas import ChatTurnResponse
 from src.chat.service import ChatService, check_chat_turn
@@ -22,7 +22,7 @@ from src.database import async_session_factory
 from src.exceptions import DomainError
 from src.generation.dependencies import get_model_catalog
 from src.generation.exceptions import GenerationTimeoutError
-from src.generation.llm_client import LlmClient
+from src.generation.llm_client import LlmClient, enforces_response_schema
 from src.generation.prompt_enricher import enrich_prompt
 from src.generation.service import generate_document
 from src.generation.structured_output import generate_structured
@@ -99,15 +99,17 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
         if await chat_service.has_reply(answered_message_id):
             return
         document, history = await chat_service.build_context(UUID(app_id), answered_message_id)
+        model = settings.routerai_model
+        strict_schema = enforces_response_schema(model)
         deadline = asyncio.timeout(CHAT_TURN_TIMEOUT_SECONDS)
         try:
             async with deadline:
                 response = await generate_structured(
-                    build_chat_messages(document, history),
+                    build_chat_messages(document, history, strict_schema=strict_schema),
                     client=llm_client,
                     schema_name=CHAT_SCHEMA_NAME,
-                    schema=CHAT_RESPONSE_SCHEMA,
-                    model=settings.routerai_model,
+                    schema=chat_response_schema(strict=strict_schema),
+                    model=model,
                     target_model=ChatTurnResponse,
                     max_attempts=settings.routerai_max_retries,
                     subject=CHAT_TURN_TIMEOUT_SUBJECT,
