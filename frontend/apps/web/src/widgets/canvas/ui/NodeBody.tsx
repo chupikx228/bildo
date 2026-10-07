@@ -1,5 +1,15 @@
+import { icons, type LucideIcon } from "lucide-react";
 import type { AppDocument, AppNode, AppThemeTokens } from "@bildo/api";
+
+const ICON_MAP = icons as Record<string, LucideIcon>;
 import { paperRoundness, previewFont, resolveText } from "../lib/canvasNode";
+
+function iconPascalName(icon: string): string {
+  return icon
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+}
 
 export function NodeBody({
   node,
@@ -105,6 +115,26 @@ export function NodeBody({
           ))}
         </div>
       );
+    case "Icon": {
+      const iconName = node.props?.icon;
+      const Icon = iconName ? ICON_MAP[iconPascalName(iconName)] : undefined;
+      const size = node.layout ? Math.min(node.layout.width, node.layout.height) : 24;
+      const color = node.style?.color ?? theme.colorText;
+      return (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          {Icon ? <Icon size={size} color={color} /> : null}
+        </div>
+      );
+    }
     default:
       return null;
   }

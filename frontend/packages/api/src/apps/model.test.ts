@@ -130,6 +130,30 @@ describe("appDocumentSchema — malformed input", () => {
     expect(appDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
+  it("accepts an Icon node with a curated icon name", () => {
+    const doc = minimalDoc();
+    doc.screens[0]!.root = {
+      id: "root1",
+      type: "View",
+      children: [
+        { id: "ic", type: "Icon", props: { icon: "arrow-left" }, layout: { x: 0, y: 0, width: 24, height: 24 } },
+      ],
+    };
+    expect(appDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects an Icon name that was a dropped Lucide alias", () => {
+    const doc = minimalDoc();
+    doc.screens[0]!.root = {
+      id: "root1",
+      type: "View",
+      children: [
+        { id: "ic", type: "Icon", props: { icon: "home" as never }, layout: { x: 0, y: 0, width: 24, height: 24 } },
+      ],
+    };
+    expect(appDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
   it("rejects an unknown navigation type", () => {
     const doc = { ...minimalDoc(), navigation: { type: "carousel", roots: [] } };
     expect(appDocumentSchema.safeParse(doc).success).toBe(false);

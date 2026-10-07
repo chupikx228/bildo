@@ -1,5 +1,6 @@
 import type { AppNode } from "@bildo/api";
 import { Field } from "../Field";
+import { IconPicker } from "../IconPicker";
 import { Section } from "../Section";
 import { INPUT, TEXTAREA } from "../classes";
 
@@ -57,6 +58,11 @@ export function ContentSection({
             onChange={(e) => onPatch({ props: { source: e.target.value } })}
             className={INPUT}
           />
+        </Field>
+      )}
+      {node.type === "Icon" && (
+        <Field label="Иконка">
+          <IconPicker value={node.props?.icon} onChange={(icon) => onPatch({ props: { icon } })} />
         </Field>
       )}
       {node.type === "FlatList" && (

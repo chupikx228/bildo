@@ -22,6 +22,7 @@ const HINTS: Record<AppComponentType, string> = {
   ScrollView: "Прокручиваемая область",
   FlatList: "Повторяющиеся строки",
   Spacer: "Пустой промежуток",
+  Icon: "Иконка Lucide",
 };
 
 export function InsertDock({ screen }: { screen: AppScreen }) {
