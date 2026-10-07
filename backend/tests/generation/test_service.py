@@ -617,13 +617,13 @@ NON_STRICT_MODELS = [
     "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-5",
     "anthropic/claude-fable-5",
+    "openai/gpt-5.6-terra",
+    "openai/gpt-5.6-sol",
     "x-ai/grok-4.6",
 ]
 STRICT_MODELS = [
     "deepseek/deepseek-v4-flash",
     "deepseek/deepseek-v4-pro",
-    "openai/gpt-5.6-terra",
-    "openai/gpt-5.6-sol",
 ]
 
 
