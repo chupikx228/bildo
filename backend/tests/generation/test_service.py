@@ -673,3 +673,116 @@ async def test_document_with_optional_fields_omitted_validates_like_one_with_exp
         from_omitted.model_dump(by_alias=True)["screens"][0]["root"]["layout"]
         == (from_nulls.model_dump(by_alias=True)["screens"][0]["root"]["layout"])
     )
+
+
+def with_bad_colors(document: AppDocument, count: int) -> AppDocument:
+    dumped = json.loads(document.model_dump_json(by_alias=True))
+    for index in range(count):
+        node = {"id": f"bad-{index}", "type": "Text", "style": {"color": "colorText"}, "children": []}
+        dumped["screens"][0]["root"]["children"].append(node)
+    return AppDocument.model_validate(dumped)
+
+
+def test_check_document_rejects_token_names_used_as_colors_and_names_the_place() -> None:
+    document = with_bad_colors(build_template_document(PROMPT, None), 1)
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    message = str(error.value)
+    assert "экран `index`, узел `bad-0`, `style.color` = `colorText`" in message
+    assert "HEX" in message
+
+
+def test_check_document_caps_the_reported_colors_and_counts_the_rest() -> None:
+    document = with_bad_colors(build_template_document(PROMPT, None), 129)
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    message = str(error.value)
+    assert "(129)" in message
+    assert message.count("`style.color` = `colorText`") == 10
+    assert "и ещё 119" in message
+    assert len(message) < 2500
+
+
+def test_check_document_does_not_mention_the_rest_at_the_cap_boundary() -> None:
+    document = with_bad_colors(build_template_document(PROMPT, None), 10)
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    assert "и ещё" not in str(error.value)
+
+
+def test_check_document_rejects_an_invalid_theme_color() -> None:
+    base = build_template_document(PROMPT, None)
+    document = base.model_copy(update={"theme": base.theme.model_copy(update={"color_text": "colorText"})})
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    assert "theme.colorText = `colorText`" in str(error.value)
+
+
+def test_check_document_reports_colors_together_with_the_other_problems() -> None:
+    document = with_bad_colors(build_template_document(PROMPT, None), 1).model_copy(update={"screens": []})
+
+    with pytest.raises(ValueError) as error:
+        check_document(document)
+
+    assert "экранов в документе 0" in str(error.value)
+
+
+async def test_generate_document_retries_colors_written_as_token_names_and_feeds_the_place_back() -> None:
+    bad = with_bad_colors(build_template_document(PROMPT, None), 2)
+    client = FakeLlmClient([dump(bad), valid_answer()])
+
+    document = await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=3)
+
+    assert len(client.calls) == 2
+    feedback = client.calls[1][-1]["content"]
+    assert "узел `bad-0`, `style.color` = `colorText`" in feedback
+    assert "узел `bad-1`" in feedback
+    assert document.screens
+
+
+async def test_generate_document_fails_when_the_model_keeps_writing_token_names() -> None:
+    bad = dump(with_bad_colors(build_template_document(PROMPT, None), 1))
+    client = FakeLlmClient([bad, bad.replace("bad-0", "bad-x"), bad.replace("bad-0", "bad-y")])
+
+    with pytest.raises(GenerationError):
+        await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=3)
+
+
+def test_check_edited_document_rejects_token_names_used_as_colors() -> None:
+    document = with_bad_colors(build_template_document(PROMPT, None), 1)
+
+    with pytest.raises(ValueError) as error:
+        check_edited_document(document)
+
+    assert "узел `bad-0`, `style.color` = `colorText`" in str(error.value)
+
+
+def test_check_edited_document_ignores_invalid_colors_that_the_baseline_already_had() -> None:
+    baseline = with_bad_colors(build_template_document(PROMPT, None), 3)
+
+    check_edited_document(baseline, baseline)
+
+
+def test_check_edited_document_reports_only_colors_the_edit_introduced() -> None:
+    baseline = with_bad_colors(build_template_document(PROMPT, None), 1)
+    dumped = json.loads(baseline.model_dump_json(by_alias=True))
+    dumped["screens"][0]["root"]["children"].append(
+        {"id": "new", "type": "Text", "style": {"color": "colorMuted"}, "children": []}
+    )
+    edited = AppDocument.model_validate(dumped)
+
+    with pytest.raises(ValueError) as error:
+        check_edited_document(edited, baseline)
+
+    message = str(error.value)
+    assert "узел `new`, `style.color` = `colorMuted`" in message
+    assert "bad-0" not in message
+    assert "(1)" in message

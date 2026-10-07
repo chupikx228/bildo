@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from functools import partial
 from typing import Any
 from uuid import UUID
 
@@ -113,7 +114,7 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
                     target_model=ChatTurnResponse,
                     max_attempts=settings.routerai_max_retries,
                     subject=CHAT_TURN_TIMEOUT_SUBJECT,
-                    check=check_chat_turn,
+                    check=partial(check_chat_turn, baseline=document),
                 )
         except TimeoutError as error:
             if not deadline.expired():

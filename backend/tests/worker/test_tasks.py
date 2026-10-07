@@ -1376,3 +1376,59 @@ def test_chat_turn_job_timeout_outlives_the_chat_turn_deadline() -> None:
 
     assert job.timeout_s is not None
     assert job.timeout_s > worker_tasks.CHAT_TURN_TIMEOUT_SECONDS
+
+
+def with_token_color(document: AppDocument, node_id: str) -> AppDocument:
+    dumped = json.loads(document.model_dump_json(by_alias=True))
+    stack = [screen["root"] for screen in dumped["screens"]]
+    while stack:
+        node = stack.pop()
+        if node["id"] == node_id:
+            node["style"] = {**node.get("style", {}), "color": "colorText"}
+        stack.extend(node.get("children", []))
+    return AppDocument.model_validate(dumped)
+
+
+async def create_ready_app_with(repository: InMemoryAppRepository, document: AppDocument) -> UUID:
+    app_id = await create_ready_app(repository)
+    app = await repository.get(app_id)
+    assert app is not None
+    await repository.update_document(app, document)
+    return app_id
+
+
+async def test_chat_turn_accepts_an_edit_that_leaves_old_invalid_colors_untouched(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    stored = with_token_color(build_template_document(PROMPT, None), "habits-title")
+    app_id = await create_ready_app_with(repository, stored)
+    user_message = await chat_repository.create_message(app_id, "user", "поменяй заголовок")
+    edited = stored.model_copy(update={"name": "Привычки"})
+    ctx = context([chat_answer_with("готово", edited)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 1
+    messages = await chat_repository.list_messages(app_id)
+    assert messages[1].proposed_document is not None
+
+
+async def test_chat_turn_retries_a_new_invalid_color_even_next_to_old_ones(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    stored = with_token_color(build_template_document(PROMPT, None), "habits-title")
+    app_id = await create_ready_app_with(repository, stored)
+    user_message = await chat_repository.create_message(app_id, "user", "перекрась подзаголовок")
+    broken = with_token_color(stored, "habits-streak")
+    ctx = context([chat_answer_with("готово", broken), chat_answer_with("готово, исправил", stored)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 2
+    feedback = llm_client.calls[1][-1]["content"]
+    assert "узел `habits-streak`, `style.color` = `colorText`" in feedback
+    assert "habits-title" not in feedback

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from src.apps.colors import invalid_colors
 from src.apps.navigation import leading_slash_routes, missing_roots
 from src.apps.schemas import AppDocument, AppNode, NavigateAction
 from src.generation.llm_client import LlmClient, enforces_response_schema
@@ -17,6 +18,7 @@ from src.generation.prompt import (
 from src.generation.structured_output import generate_structured
 
 ROOT_NODE_TYPE = "View"
+MAX_REPORTED_COLORS = 10
 
 
 async def generate_document(
@@ -52,11 +54,12 @@ def check_document(document: AppDocument) -> None:
             *_missing_roots_problems(document),
             *_leading_slash_route_problems(document),
             *_root_problems(document),
+            *_invalid_color_problems(document),
         ],
     )
 
 
-def check_edited_document(document: AppDocument) -> None:
+def check_edited_document(document: AppDocument, baseline: AppDocument | None = None) -> None:
     _raise_on_problems(
         document,
         [
@@ -66,6 +69,7 @@ def check_edited_document(document: AppDocument) -> None:
             *_missing_roots_problems(document),
             *_leading_slash_route_problems(document),
             *_root_problems(document),
+            *_invalid_color_problems(document, baseline),
         ],
     )
 
@@ -141,6 +145,20 @@ def _dangling_navigate_problems(document: AppDocument) -> list[str]:
                         "на него"
                     )
     return problems
+
+
+def _invalid_color_problems(document: AppDocument, baseline: AppDocument | None = None) -> list[str]:
+    invalid = invalid_colors(document, baseline)
+    if not invalid:
+        return []
+    shown = "; ".join(f"{color.place} = `{color.value}`" for color in invalid[:MAX_REPORTED_COLORS])
+    rest = len(invalid) - MAX_REPORTED_COLORS
+    more = f" и ещё {rest}" if rest > 0 else ""
+    return [
+        f"цвета не в допустимом формате ({len(invalid)}): {shown}{more}. Цвет — всегда HEX (`#RRGGBB`), "
+        "узел и тема не ссылаются на токены по имени: вместо `colorText`, `colorPrimary` и т. п. подставь HEX "
+        "из `theme`; цвета самой `theme` — `#RGB` или `#RRGGBB`"
+    ]
 
 
 def _walk(node: AppNode) -> list[AppNode]:
