@@ -173,3 +173,43 @@ describe("codegenExpoProject — node rendering details", () => {
     expect(imageBoxes.length).toBe(1);
   });
 });
+
+describe("codegenExpoProject — navigation roots", () => {
+  function navDoc(): AppDocument {
+    const now = "2026-01-01T00:00:00.000Z";
+    return {
+      id: "app2",
+      name: "Nav",
+      theme: DEFAULT_APP_THEME,
+      navigation: { type: "tabs", roots: ["scr-b", "scr-a"] },
+      screens: [
+        {
+          id: "scr-a",
+          name: "Home",
+          route: "index",
+          root: { id: "ra", type: "View", layout: { x: 0, y: 0, width: 370, height: 640 } },
+        },
+        {
+          id: "scr-b",
+          name: "Stats",
+          route: "stats",
+          root: { id: "rb", type: "View", layout: { x: 0, y: 0, width: 370, height: 640 } },
+        },
+      ],
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  it("orders tabs by navigation.roots (screen ids), with route as name and screen name as title", () => {
+    const layout = codegenExpoProject(navDoc())["app/_layout.tsx"]!;
+    const statsAt = layout.indexOf('<Tabs.Screen name="stats"');
+    const indexAt = layout.indexOf('<Tabs.Screen name="index"');
+    expect(statsAt).toBeGreaterThan(-1);
+    expect(indexAt).toBeGreaterThan(-1);
+    expect(statsAt).toBeLessThan(indexAt);
+    expect(layout).toContain("title: 'Stats'");
+    expect(layout).toContain("title: 'Home'");
+  });
+});
