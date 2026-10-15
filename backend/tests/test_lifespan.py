@@ -142,3 +142,12 @@ async def test_lifespan_disposes_the_engine_when_creating_the_arq_pool_fails(
     assert events == ["engine"]
     assert len(disposed) == 1
     assert disposed[0] is engine
+
+
+async def test_lifespan_configures_logging_from_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    levels: list[str] = []
+    monkeypatch.setattr(main, "configure_logging", levels.append)
+    monkeypatch.setattr(main.settings, "log_level", "DEBUG")
+
+    async with main.lifespan(FastAPI()):
+        assert levels == ["DEBUG"]

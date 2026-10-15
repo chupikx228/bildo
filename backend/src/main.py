@@ -15,6 +15,7 @@ from src.database import engine
 from src.exceptions import DomainError
 from src.generation.dependencies import get_model_catalog
 from src.generation.router import router as models_router
+from src.logging_config import configure_logging
 from src.queue.arq_queue import create_arq_pool
 from src.tasks.router import router as tasks_router
 
@@ -55,6 +56,7 @@ CORS_HEADERS = ["Content-Type"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    configure_logging(settings.log_level)
     try:
         app.state.arq_redis = await create_arq_pool()
         try:

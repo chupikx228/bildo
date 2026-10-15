@@ -1836,6 +1836,16 @@ LLM call: model=deepseek/deepseek-v4-flash attempt=3/3 outcome=ok duration_s=118
 
 **Бюджет времени не менялся.** У каждой попытки на стороне воркера свой свежий `REQUEST_TIMEOUT_SECONDS` = 750 с, общую длительность по-прежнему ограничивает дедлайн воркера `asyncio.timeout(900)` (генерация и ход чата) и 120 с у обогащения.
 
+**Строка доходила до вывода только после отдельной настройки логирования.** Сначала она не доходила ни в воркере, ни в API, ни в одном процессе: в `src` не было ни `basicConfig`, ни `dictConfig`, а арковый CLI (`arq/cli.py`, `default_log_config`) настраивает только логгер `arq`, uvicorn — только свои `uvicorn*`. Корневой логгер оставался на `WARNING` без обработчиков, поэтому `INFO` из `src.*` отбрасывался (а `WARNING` печатались встроенным `lastResort` голым сообщением). Проверено в чистом интерпретаторе: с конфигом arq и с конфигом uvicorn `getEffectiveLevel()` у `src.generation.llm_client` — `WARNING`, строки нет, настоящий клиент против локального шлюза. Исправление — `configure_logging(level)` в `src/logging_config.py`: уровень задаётся логгеру `src` (корневой и библиотеки `httpx`/`httpcore`/`openai` остаются на `WARNING`), к нему один раз цепляется `StreamHandler(stderr)` с форматом `%(message)s`, то есть тем же видом, что у `lastResort`, поэтому существующие строки не меняются. Уровень — настройка `LOG_LEVEL` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`, по умолчанию `INFO`, `settings.log_level`). Вызывается в `startup` воркера и в `lifespan` API. Клиент LLM создаётся только в воркере (`startup`, включая обогащение), так что API-процесс строк `LLM call` не пишет, настройка там нужна ради остальных `INFO` из `src`. Побочный эффект: теперь видны и остальные `INFO` из `src` («RouterAI client ready», «RouterAI model catalog cached», запись обогащения). Тест `tests/test_logging_config.py` поднимает воркер как arq (`default_log_config` и `startup`) и проверяет, что строка попадает в `stderr`, а текста промпта там нет.
+
+**Как посмотреть строки в `docker compose`:**
+
+```bash
+docker compose logs -f worker | grep "LLM call"
+```
+
+Чтобы временно отключить: `LOG_LEVEL=WARNING` в `backend/.env` и пересоздать контейнеры (`docker compose up -d`).
+
 **Чего это не доказывает.** Правка проверена на масштабированном локальном шлюзе (случай e воспроизводится стабильно), живых вызовов не было. Блокировка цикла в 60 с и больше — сама по себе баг; правка лишь не даёт ему превратиться в лишний повтор.
 
 ### Исключение провайдера OpenInference из маршрутизации (BIL-112)
