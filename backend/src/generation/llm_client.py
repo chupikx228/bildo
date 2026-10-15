@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import math
+import re
 import time
 from collections.abc import Mapping, Sequence
 from contextvars import ContextVar
@@ -47,6 +48,8 @@ ResponseFormatMode = Literal["json_schema", "text"]
 MAX_OUTPUT_TOKENS = 64000
 
 UNCONSTRAINED_MODEL_PREFIXES = ("anthropic/", "openai/", "x-ai/")
+
+SNAPSHOT_DATE_SUFFIX = re.compile(r"-(?:20\d{2})?(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])$")
 
 REQUEST_TIMEOUT_SECONDS = 750.0
 IDLE_TIMEOUT_SECONDS = 60.0
@@ -115,9 +118,7 @@ class RouterAiLlmClient:
     ) -> None:
         self._api_key = api_key
         self._ignored_providers = tuple(ignored_providers)
-        self._max_price_by_model = {
-            model: dict(max_price) for model, max_price in (max_price_by_model or {}).items() if max_price
-        }
+        self._max_price_by_model = {model: dict(max_price) for model, max_price in (max_price_by_model or {}).items()}
         self._base_url = base_url
         self._request_timeout_seconds = request_timeout_seconds
         self._idle_timeout_seconds = idle_timeout_seconds
@@ -201,7 +202,7 @@ class RouterAiLlmClient:
         record: _CallRecord,
     ) -> str:
         client = self._ensure_client()
-        extra_body = _provider_preferences(ignored_providers, self._max_price_by_model.get(model))
+        extra_body = _provider_preferences(ignored_providers, resolve_max_price(self._max_price_by_model, model))
         deadline = asyncio.timeout(self._request_timeout_seconds)
         try:
             async with deadline:
@@ -309,12 +310,22 @@ def _provider_preferences(
     return {"provider": provider} if provider else None
 
 
-def enforces_response_schema(model: str) -> bool:
+def without_snapshot_date(model: str) -> str:
+    return SNAPSHOT_DATE_SUFFIX.sub("", model)
+
+
+def resolve_max_price(max_price_by_model: Mapping[str, Mapping[str, float]], model: str) -> Mapping[str, float] | None:
+    if model in max_price_by_model:
+        return max_price_by_model[model]
+    return max_price_by_model.get(without_snapshot_date(model))
+
+
+def sends_strict_schema(model: str) -> bool:
     return not model.startswith(UNCONSTRAINED_MODEL_PREFIXES)
 
 
 def _response_format_mode(model: str) -> ResponseFormatMode:
-    return "json_schema" if enforces_response_schema(model) else "text"
+    return "json_schema" if sends_strict_schema(model) else "text"
 
 
 def _rejection(model: str, mode: ResponseFormatMode, detail: str) -> GenerationError:

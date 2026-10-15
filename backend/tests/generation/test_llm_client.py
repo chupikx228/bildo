@@ -31,7 +31,9 @@ from src.generation.llm_client import (
     ChatMessage,
     JsonSchema,
     RouterAiLlmClient,
-    enforces_response_schema,
+    resolve_max_price,
+    sends_strict_schema,
+    without_snapshot_date,
 )
 from src.generation.model_catalog import CURATED_MODELS
 from src.generation.prompt import ALL_KEYS_RULE
@@ -220,6 +222,128 @@ async def test_an_empty_max_price_sends_no_provider_block(build_client: BuildCli
     assert "provider" not in gateway.payloads[0]
 
 
+DATED_MODEL = "deepseek/deepseek-v4-flash-0731"
+UNCAPPED_SIBLINGS = [
+    "deepseek/deepseek-v4-pro",
+    "deepseek/deepseek-v4-pro-0813",
+    "deepseek/deepseek-v4.1-flash",
+    "deepseek/deepseek-v4-flash-vision-exp",
+    "deepseek/deepseek-v4-flash-lite",
+    "deepseek/deepseek-v4-flash-latest",
+    "~deepseek/deepseek-v4-flash-latest",
+    "deepseek/deepseek-v4-flash-0731-lite",
+    "deepseek/deepseek-v4-flash-1332",
+    "deepseek/deepseek-v4-flash-2026",
+    "deepseek/deepseek-v4-flash0731",
+    "anthropic/claude-sonnet-5",
+]
+
+
+async def test_dated_model_id_gets_the_same_cap_object_as_the_plain_id(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, ignored_providers=["OpenInference"], max_price_by_model=FLASH_PRICE_CAP)
+
+    await complete(client)
+    await complete(client, model=DATED_MODEL)
+    await complete(client, model="deepseek/deepseek-v4-flash-20260423")
+    await client.aclose()
+
+    assert gateway.payloads[1]["provider"] == gateway.payloads[0]["provider"]
+    assert gateway.payloads[1]["provider"]["max_price"] == {"completion": 1.0}
+    assert gateway.payloads[2]["provider"] == gateway.payloads[0]["provider"]
+
+
+async def test_dated_model_id_is_capped_on_text_requests(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, max_price_by_model=FLASH_PRICE_CAP)
+
+    await client.complete_text(MESSAGES, model=DATED_MODEL, max_tokens=100)
+    await client.aclose()
+
+    assert gateway.payloads[0]["provider"] == {"max_price": {"completion": 1.0}}
+
+
+@pytest.mark.parametrize("model", UNCAPPED_SIBLINGS)
+async def test_siblings_and_unrelated_ids_get_no_cap(build_client: BuildClient, model: str) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, max_price_by_model=FLASH_PRICE_CAP)
+
+    await complete(client, model=model)
+    await client.aclose()
+
+    assert "provider" not in gateway.payloads[0]
+
+
+async def test_an_exact_entry_for_the_dated_id_wins_over_the_plain_id(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    cap = {MODEL: {"completion": 1.0}, DATED_MODEL: {"completion": 0.5}}
+    client = build_client(gateway, max_price_by_model=cap)
+
+    await complete(client)
+    await complete(client, model=DATED_MODEL)
+    await client.aclose()
+
+    assert gateway.payloads[0]["provider"] == {"max_price": {"completion": 1.0}}
+    assert gateway.payloads[1]["provider"] == {"max_price": {"completion": 0.5}}
+
+
+async def test_an_empty_exact_entry_switches_the_cap_off_for_that_dated_id(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, max_price_by_model={MODEL: {"completion": 1.0}, DATED_MODEL: {}})
+
+    await complete(client)
+    await complete(client, model=DATED_MODEL)
+    await client.aclose()
+
+    assert gateway.payloads[0]["provider"] == {"max_price": {"completion": 1.0}}
+    assert "provider" not in gateway.payloads[1]
+
+
+async def test_an_empty_setting_caps_no_model_including_dated_ids(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, max_price_by_model={})
+
+    await complete(client)
+    await complete(client, model=DATED_MODEL)
+    await client.aclose()
+
+    assert "provider" not in gateway.payloads[0]
+    assert "provider" not in gateway.payloads[1]
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("deepseek/deepseek-v4-flash-0731", "deepseek/deepseek-v4-flash"),
+        ("deepseek/deepseek-v4-flash-20260423", "deepseek/deepseek-v4-flash"),
+        ("deepseek/deepseek-v4-pro-0813", "deepseek/deepseek-v4-pro"),
+        ("deepseek/deepseek-r1-0528", "deepseek/deepseek-r1"),
+        ("deepseek/deepseek-v4-flash-0101", "deepseek/deepseek-v4-flash"),
+        ("deepseek/deepseek-v4-flash-1231", "deepseek/deepseek-v4-flash"),
+        ("deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-flash"),
+        ("deepseek/deepseek-v4-flash-0001", "deepseek/deepseek-v4-flash-0001"),
+        ("deepseek/deepseek-v4-flash-0132", "deepseek/deepseek-v4-flash-0132"),
+        ("deepseek/deepseek-v4-flash-1301", "deepseek/deepseek-v4-flash-1301"),
+        ("deepseek/deepseek-v4-flash-20261301", "deepseek/deepseek-v4-flash-20261301"),
+        ("deepseek/deepseek-v4-flash-202604231", "deepseek/deepseek-v4-flash-202604231"),
+        ("deepseek/deepseek-v4-flash-073", "deepseek/deepseek-v4-flash-073"),
+        ("deepseek/deepseek-v4-flash-0731-lite", "deepseek/deepseek-v4-flash-0731-lite"),
+        ("deepseek/deepseek-v4-flash0731", "deepseek/deepseek-v4-flash0731"),
+        ("0731", "0731"),
+    ],
+)
+def test_snapshot_date_is_stripped_only_as_a_trailing_mmdd_or_yyyymmdd(model: str, expected: str) -> None:
+    assert without_snapshot_date(model) == expected
+
+
+def test_exact_id_is_looked_up_before_the_stripped_one() -> None:
+    caps = {"a/b": {"completion": 1.0}, "a/b-0731": {"completion": 2.0}}
+
+    assert resolve_max_price(caps, "a/b-0731") == {"completion": 2.0}
+    assert resolve_max_price(caps, "a/b-0801") == {"completion": 1.0}
+    assert resolve_max_price(caps, "a/c-0801") is None
+
+
 NO_ENDPOINT_WITHIN_PRICE_CAP = {
     "error": {
         "message": "No endpoints found that satisfy the max price for this request",
@@ -285,7 +409,7 @@ def test_every_curated_model_has_a_deliberate_schema_path() -> None:
     ("model", "strict"), [*STRICT_SCHEMA_BY_CURATED_MODEL.items(), ("deepseek/deepseek-v4-flash", True)]
 )
 def test_strict_schema_path_is_chosen_by_model_family(model: str, strict: bool) -> None:
-    assert enforces_response_schema(model) is strict
+    assert sends_strict_schema(model) is strict
 
 
 @pytest.mark.parametrize(
