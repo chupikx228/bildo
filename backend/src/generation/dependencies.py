@@ -12,6 +12,7 @@ def build_llm_client() -> LlmClient:
         api_key=settings.routerai_api_key,
         base_url=settings.routerai_base_url,
         ignored_providers=settings.routerai_ignored_providers,
+        max_price_by_model=settings.routerai_max_price_by_model,
     )
 
 

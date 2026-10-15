@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     routerai_model: str = "deepseek/deepseek-v4-flash"
     routerai_enricher_model: str = "deepseek/deepseek-v4-flash"
     routerai_max_retries: int = 3
-    routerai_ignored_providers: list[str] = ["OpenInference"]
+    routerai_ignored_providers: list[str] = ["OpenInference", "yandex"]
+    routerai_max_price_by_model: dict[str, dict[str, float]] = {"deepseek/deepseek-v4-flash": {"completion": 1.0}}
 
 
 settings = Settings()

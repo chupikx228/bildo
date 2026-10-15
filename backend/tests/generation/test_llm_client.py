@@ -174,6 +174,97 @@ async def test_ignored_providers_are_not_sent_on_text_requests(build_client: Bui
     assert "provider" not in gateway.payloads[0]
 
 
+FLASH_PRICE_CAP = {MODEL: {"completion": 1.0}}
+
+
+async def test_max_price_is_sent_only_for_the_model_it_is_configured_for(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, max_price_by_model=FLASH_PRICE_CAP)
+
+    await complete(client)
+    await complete(client, model=ANTHROPIC_MODEL)
+    await client.aclose()
+
+    assert gateway.payloads[0]["provider"] == {"max_price": {"completion": 1.0}}
+    assert "provider" not in gateway.payloads[1]
+
+
+async def test_max_price_is_merged_with_ignored_providers(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, ignored_providers=["OpenInference"], max_price_by_model=FLASH_PRICE_CAP)
+
+    await complete(client)
+    await client.aclose()
+
+    assert gateway.payloads[0]["provider"] == {"ignore": ["OpenInference"], "max_price": {"completion": 1.0}}
+
+
+async def test_max_price_is_sent_on_text_requests_without_the_ignore_list(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, ignored_providers=["OpenInference"], max_price_by_model=FLASH_PRICE_CAP)
+
+    await client.complete_text(MESSAGES, model=MODEL, max_tokens=100)
+    await client.aclose()
+
+    assert gateway.payloads[0]["provider"] == {"max_price": {"completion": 1.0}}
+
+
+async def test_an_empty_max_price_sends_no_provider_block(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set())
+    client = build_client(gateway, max_price_by_model={MODEL: {}})
+
+    await complete(client)
+    await client.aclose()
+
+    assert "provider" not in gateway.payloads[0]
+
+
+NO_ENDPOINT_WITHIN_PRICE_CAP = {
+    "error": {
+        "message": "No endpoints found that satisfy the max price for this request",
+        "code": 503,
+        "metadata": {"provider_error_code": "404", "raw": "{}"},
+    }
+}
+
+
+async def test_no_provider_within_the_price_cap_fails_fast_and_is_not_retried(build_client: BuildClient) -> None:
+    gateway = StubGateway(rejected=set(), body=NO_ENDPOINT_WITHIN_PRICE_CAP)
+    client = build_client(gateway, max_price_by_model=FLASH_PRICE_CAP)
+
+    with pytest.raises(GenerationError) as error:
+        await generate_structured(
+            MESSAGES,
+            client=client,
+            model=MODEL,
+            schema_name=SCHEMA_NAME,
+            schema=SCHEMA,
+            target_model=Named,
+            max_attempts=3,
+        )
+    await client.aclose()
+
+    assert not isinstance(error.value, TransientProviderError)
+    assert not isinstance(error.value, StrictSchemaUnsupportedError)
+    assert "max price" in error.value.message
+    assert len(gateway.payloads) == 1
+
+
+async def test_upstream_rate_limit_behind_a_503_stays_transient(build_client: BuildClient) -> None:
+    body = {
+        "error": {
+            "message": "deepseek/deepseek-v4-flash is temporarily rate-limited upstream.",
+            "code": 503,
+            "metadata": {"provider_name": "Wafer", "provider_error_code": "429"},
+        }
+    }
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    with pytest.raises(TransientProviderError):
+        await complete(client)
+    await client.aclose()
+
+
 STRICT_SCHEMA_BY_CURATED_MODEL = {
     "deepseek/deepseek-v4-pro": True,
     "openai/gpt-5.6-terra": False,
