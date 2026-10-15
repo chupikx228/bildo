@@ -1,5 +1,6 @@
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,7 +18,15 @@ class Settings(BaseSettings):
     routerai_enricher_model: str = "deepseek/deepseek-v4-flash"
     routerai_max_retries: int = 3
     routerai_ignored_providers: list[str] = ["OpenInference", "yandex"]
-    routerai_max_price_by_model: dict[str, dict[str, float]] = {"deepseek/deepseek-v4-flash": {"completion": 1.0}}
+    routerai_max_price_by_model: dict[str, dict[str, float]] = Field(
+        default={"deepseek/deepseek-v4-flash": {"completion": 1.0}},
+        description=(
+            "Price ceiling in USD per 1M tokens at the upstream provider, keyed by model id. "
+            "An exact id wins (an empty object there turns the cap off for that id); otherwise a trailing "
+            "snapshot date (-MMDD or -YYYYMMDD) is stripped and the lookup repeated, so deepseek/deepseek-v4-flash-0731 "
+            "inherits the cap of deepseek/deepseek-v4-flash. Other suffixes (-pro, -lite, -vision-exp) never match."
+        ),
+    )
 
 
 settings = Settings()

@@ -23,7 +23,7 @@ from src.database import async_session_factory
 from src.exceptions import DomainError
 from src.generation.dependencies import get_model_catalog
 from src.generation.exceptions import GenerationTimeoutError
-from src.generation.llm_client import LlmClient, enforces_response_schema
+from src.generation.llm_client import LlmClient, sends_strict_schema
 from src.generation.prompt_enricher import enrich_prompt
 from src.generation.service import generate_document, prepare_document_json
 from src.generation.structured_output import generate_structured
@@ -101,7 +101,7 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
             return
         document, history = await chat_service.build_context(UUID(app_id), answered_message_id)
         model = settings.routerai_model
-        strict_schema = enforces_response_schema(model)
+        strict_schema = sends_strict_schema(model)
         deadline = asyncio.timeout(CHAT_TURN_TIMEOUT_SECONDS)
         try:
             async with deadline:

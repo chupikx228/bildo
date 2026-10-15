@@ -6,7 +6,7 @@ from src.apps.colors import invalid_colors
 from src.apps.icons import InvalidIcon, closest_icon_names, normalize_icons
 from src.apps.navigation import leading_slash_routes, missing_roots
 from src.apps.schemas import AppDocument, AppNode, NavigateAction
-from src.generation.llm_client import LlmClient, enforces_response_schema
+from src.generation.llm_client import LlmClient, sends_strict_schema
 from src.generation.prompt import (
     MAX_SCREENS,
     MIN_SCREENS,
@@ -33,7 +33,7 @@ async def generate_document(
     max_attempts: int,
     brief: str | None = None,
 ) -> AppDocument:
-    strict_schema = enforces_response_schema(model)
+    strict_schema = sends_strict_schema(model)
     document = await generate_structured(
         build_messages(brief or prompt, name, has_brief=bool(brief), strict_schema=strict_schema),
         client=client,
