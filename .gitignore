@@ -29,3 +29,7 @@ backend/htmlcov/
 
 docker-compose.override.yml
 .claude-scratch/
+
+# Raw LLM experiment data: lives outside the repo (BILDO_EXPERIMENTS_DIR), ignored here as a safety net
+bildo-experiments/
+.experiments/
