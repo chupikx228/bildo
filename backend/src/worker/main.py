@@ -4,10 +4,12 @@ from arq import func
 from arq.connections import RedisSettings
 from arq.worker import Function
 
+from src.config import settings
 from src.database import engine
 from src.generation.dependencies import build_llm_client
 from src.generation.llm_client import LlmClient
 from src.generation.prompt_enricher import ENRICHER_TIMEOUT_SECONDS
+from src.logging_config import configure_logging
 from src.queue.arq_queue import get_redis_settings
 from src.queue.jobs import BUILD_EXPORT_ZIP_JOB, CHAT_TURN_JOB, GENERATE_APP_DOCUMENT_JOB
 from src.worker.tasks import (
@@ -28,6 +30,7 @@ CHAT_TURN_JOB_TIMEOUT_SECONDS = CHAT_TURN_TIMEOUT_SECONDS + CHAT_TURN_JOB_TIMEOU
 
 
 async def startup(ctx: dict[Any, Any]) -> None:
+    configure_logging(settings.log_level)
     ctx["llm_client"] = build_llm_client()
 
 

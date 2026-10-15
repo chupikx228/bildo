@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://bildo:bildo@localhost:5432/bildo"
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
     routerai_api_key: str | None = None
     routerai_base_url: str = "https://routerai.ru/api/v1"
