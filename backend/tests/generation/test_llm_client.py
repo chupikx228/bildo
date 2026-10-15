@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import json
+import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -803,6 +804,45 @@ async def test_expired_request_timeout_is_not_retried() -> None:
     assert time.monotonic() - started < 1.0
 
 
+def block_the_event_loop(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+async def block_the_event_loop_during_the_request(delay: float, seconds: float) -> None:
+    await asyncio.sleep(delay)
+    block_the_event_loop(seconds)
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_idle_timeout_that_fires_after_the_deadline_expired_is_a_deadline_error_and_not_retried() -> None:
+    connections: list[int] = []
+    async with local_gateway(stay_silent, connections) as base_url:
+        client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=0.4, idle_timeout_seconds=0.2)
+        blocker = asyncio.create_task(block_the_event_loop_during_the_request(0.05, 0.7))
+
+        with pytest.raises(GenerationError) as error:
+            await generate_named(client)
+        await blocker
+        await client.aclose()
+
+    assert not isinstance(error.value, TransientProviderError)
+    assert "за 0.4 секунд" in error.value.message
+    assert len(connections) == 1
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_idle_timeout_before_the_deadline_is_still_transient_and_retried() -> None:
+    connections: list[int] = []
+    async with local_gateway(stay_silent, connections) as base_url:
+        client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=30, idle_timeout_seconds=0.1)
+
+        with pytest.raises(TransientProviderError):
+            await generate_named(client, max_attempts=2)
+        await client.aclose()
+
+    assert len(connections) == 2
+
+
 async def test_outer_deadline_cuts_a_request_kept_alive_before_its_own_timeout() -> None:
     async with local_gateway(keep_alive_with_whitespace) as base_url:
         client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=30, idle_timeout_seconds=0.2)
@@ -979,3 +1019,201 @@ async def test_generation_request_payload_carries_the_schema_matching_the_model_
         assert embedded == plain
         assert "response_format" not in payload
         assert ALL_KEYS_RULE not in system
+
+
+def llm_call_lines(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == llm_client_module.__name__ and record.getMessage().startswith("LLM call: ")
+    ]
+
+
+def field(line: str, name: str) -> str:
+    return next(part.split("=", 1)[1] for part in line.split() if part.startswith(f"{name}="))
+
+
+def completion_with_usage(**extra: Any) -> dict[str, Any]:
+    body = completion_body(ANSWER)
+    body["usage"] = {"prompt_tokens": 1200, "completion_tokens": 340, "total_tokens": 1540, "cost": 0.27, **extra}
+    return body
+
+
+async def test_successful_call_logs_one_line_with_provider_usage_and_cost(
+    build_client: BuildClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    client = build_client(StubGateway(rejected=set(), body=completion_with_usage()))
+
+    assert await generate_named(client) == Named(name="Трекер привычек")
+    await client.aclose()
+
+    (line,) = llm_call_lines(caplog)
+    assert field(line, "model") == MODEL
+    assert field(line, "attempt") == "1/3"
+    assert field(line, "outcome") == "ok"
+    assert float(field(line, "duration_s")) >= 0
+    assert field(line, "provider") == "DeepSeek"
+    assert field(line, "finish_reason") == "stop"
+    assert field(line, "prompt_tokens") == "1200"
+    assert field(line, "completion_tokens") == "340"
+    assert field(line, "cost") == "0.27"
+    assert "error=" not in line
+
+
+async def test_call_without_usage_and_provider_still_logs(
+    build_client: BuildClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    body = completion_body(ANSWER)
+    del body["provider"]
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    await complete(client)
+    await client.aclose()
+
+    (line,) = llm_call_lines(caplog)
+    assert field(line, "outcome") == "ok"
+    assert field(line, "attempt") == "-"
+    assert field(line, "provider") == "-"
+    assert field(line, "prompt_tokens") == "-"
+    assert field(line, "cost") == "-"
+
+
+async def test_usage_without_cost_logs_a_dash_for_the_cost(
+    build_client: BuildClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    body = completion_body(ANSWER)
+    body["usage"] = {"prompt_tokens": 5, "completion_tokens": 6, "total_tokens": 11}
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    await complete(client)
+    await client.aclose()
+
+    (line,) = llm_call_lines(caplog)
+    assert field(line, "prompt_tokens") == "5"
+    assert field(line, "cost") == "-"
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_every_attempt_of_a_retried_generation_logs_its_own_line(
+    build_client: BuildClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    client = build_client(FlakyGateway([transient_body(), transient_body()]))
+
+    await generate_named(client)
+    await client.aclose()
+
+    lines = llm_call_lines(caplog)
+    assert [(field(line, "attempt"), field(line, "outcome")) for line in lines] == [
+        ("1/3", "transient"),
+        ("2/3", "transient"),
+        ("3/3", "ok"),
+    ]
+    assert field(lines[0], "error") == "TransientProviderError"
+    assert "Provider connection error" in lines[0]
+
+
+async def test_attempt_number_does_not_leak_past_generate_structured(
+    build_client: BuildClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    client = build_client(StubGateway(rejected=set()))
+
+    await generate_named(client)
+    await complete(client)
+    await client.aclose()
+
+    first, second = llm_call_lines(caplog)
+    assert field(first, "attempt") == "1/3"
+    assert field(second, "attempt") == "-"
+
+
+async def test_expired_deadline_is_logged_with_the_deadline_outcome(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    async with local_gateway(keep_alive_with_whitespace) as base_url:
+        client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=0.3, idle_timeout_seconds=0.2)
+
+        with pytest.raises(GenerationError):
+            await complete(client)
+        await client.aclose()
+
+    (line,) = llm_call_lines(caplog)
+    assert field(line, "outcome") == "deadline"
+    assert field(line, "error") == "GenerationError"
+    assert 0.25 < float(field(line, "duration_s")) < 1.0
+
+
+async def test_generic_failure_is_logged_with_the_error_outcome(
+    build_client: BuildClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    body = completion_with_usage()
+    body["choices"][0]["finish_reason"] = "length"
+    client = build_client(StubGateway(rejected=set(), body=body))
+
+    with pytest.raises(GenerationError):
+        await complete(client)
+    await client.aclose()
+
+    (line,) = llm_call_lines(caplog)
+    assert field(line, "outcome") == "error"
+    assert field(line, "error") == "GenerationError"
+    assert field(line, "finish_reason") == "length"
+    assert field(line, "provider") == "DeepSeek"
+
+
+async def test_cancelled_call_is_logged_as_cancelled(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    async with local_gateway(stay_silent) as base_url:
+        client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=30, idle_timeout_seconds=30)
+        task = asyncio.create_task(complete(client))
+        await asyncio.sleep(0.1)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await client.aclose()
+
+    (line,) = llm_call_lines(caplog)
+    assert field(line, "outcome") == "cancelled"
+
+
+async def test_log_line_never_contains_the_prompt_or_the_answer(
+    build_client: BuildClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    leaked_answer = '{"name": "LEAK-ANSWER"}'
+    ok_client = build_client(StubGateway(rejected=set(), body=completion_body(leaked_answer)))
+    await ok_client.complete([{"role": "user", "content": "LEAK-PROMPT"}], SCHEMA_NAME, SCHEMA, model=MODEL)
+    await ok_client.aclose()
+
+    failing = build_client(StubGateway(rejected={"json_schema"}, status=400))
+    with pytest.raises(GenerationError):
+        await failing.complete([{"role": "user", "content": "LEAK-PROMPT"}], SCHEMA_NAME, SCHEMA, model=MODEL)
+    await failing.aclose()
+
+    lines = llm_call_lines(caplog)
+    assert len(lines) == 2
+    assert all("LEAK" not in line for line in lines)
+
+
+async def test_long_and_multiline_error_messages_are_collapsed_and_truncated(
+    build_client: BuildClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger=llm_client_module.__name__)
+    detail = "line one\nline two " + "x" * 1000
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"message": detail}})
+
+    client = build_client(handler)
+    with pytest.raises(GenerationError):
+        await complete(client)
+    await client.aclose()
+
+    (line,) = llm_call_lines(caplog)
+    assert "\n" not in line
+    assert len(line) < 700

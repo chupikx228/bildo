@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from src.generation.exceptions import GenerationError, TransientProviderError
-from src.generation.llm_client import ChatMessage, JsonSchema, LlmClient
+from src.generation.llm_client import ChatMessage, JsonSchema, LlmClient, current_llm_attempt
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ async def generate_structured[ModelT: BaseModel](
     previous_raw: str | None = None
 
     for attempt in range(1, max_attempts + 1):
+        attempt_token = current_llm_attempt.set((attempt, max_attempts))
         try:
             raw = await client.complete(history, schema_name, schema, model=model)
         except TransientProviderError as error:
@@ -55,6 +56,8 @@ async def generate_structured[ModelT: BaseModel](
                 raise
             await asyncio.sleep(transient_retry_delay(error))
             continue
+        finally:
+            current_llm_attempt.reset(attempt_token)
         if raw == previous_raw:
             raise GenerationError(
                 f"Модель RouterAI повторила тот же некорректный {subject} после исправления: {last_error}"

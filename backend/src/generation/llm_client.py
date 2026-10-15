@@ -2,7 +2,10 @@ import asyncio
 import json
 import logging
 import math
+import time
 from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any, Literal, Protocol, TypedDict
@@ -55,6 +58,22 @@ TRANSIENT_ERROR_MARKERS = ("connection error", "please retry")
 TRANSIENT_STATUS_CODES = frozenset({408, 429})
 RATE_LIMIT_STATUS_CODE = 429
 NO_MATCHING_ENDPOINT_CODE = 404
+
+LOG_ERROR_MESSAGE_CHARS = 200
+
+LlmAttempt = tuple[int, int]
+
+current_llm_attempt: ContextVar[LlmAttempt | None] = ContextVar("current_llm_attempt", default=None)
+
+
+@dataclass
+class _CallRecord:
+    deadline_expired: bool = False
+    provider: str | None = None
+    finish_reason: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cost: float | None = None
 
 
 class ChatMessage(TypedDict):
@@ -141,6 +160,46 @@ class RouterAiLlmClient:
         max_tokens: int,
         ignored_providers: Sequence[str] = (),
     ) -> str:
+        record = _CallRecord()
+        started = time.monotonic()
+        outcome = "error"
+        failure: BaseException | None = None
+        try:
+            content = await self._send(
+                messages,
+                model=model,
+                mode=mode,
+                response_format=response_format,
+                max_tokens=max_tokens,
+                ignored_providers=ignored_providers,
+                record=record,
+            )
+        except BaseException as error:
+            failure = error
+            if isinstance(error, asyncio.CancelledError):
+                outcome = "cancelled"
+            elif isinstance(error, TransientProviderError):
+                outcome = "transient"
+            elif record.deadline_expired:
+                outcome = "deadline"
+            raise
+        else:
+            outcome = "ok"
+            return content
+        finally:
+            _log_call(model, outcome, time.monotonic() - started, record, failure)
+
+    async def _send(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        model: str,
+        mode: ResponseFormatMode,
+        response_format: ResponseFormat | Omit,
+        max_tokens: int,
+        ignored_providers: Sequence[str],
+        record: _CallRecord,
+    ) -> str:
         client = self._ensure_client()
         extra_body = _provider_preferences(ignored_providers, self._max_price_by_model.get(model))
         deadline = asyncio.timeout(self._request_timeout_seconds)
@@ -156,12 +215,12 @@ class RouterAiLlmClient:
         except TimeoutError as error:
             if not deadline.expired():
                 raise
-            raise GenerationError(
-                f"RouterAI не ответил на запрос генерации за {self._request_timeout_seconds:g} секунд"
-            ) from error
+            raise self._deadline_error(record) from error
         except (BadRequestError, UnprocessableEntityError) as error:
             raise _rejection(model, mode, str(error)) from error
         except APIConnectionError as error:
+            if deadline.expired():
+                raise self._deadline_error(record) from error
             raise TransientProviderError(f"RouterAI не ответил на запрос генерации: {error}") from error
         except APIStatusError as error:
             if _is_transient_status(error.status_code):
@@ -173,11 +232,16 @@ class RouterAiLlmClient:
         except APIError as error:
             raise GenerationError(f"RouterAI не ответил на запрос генерации: {error}") from error
 
+        _read_completion(completion, record)
         provider_error = _extract_provider_error(completion)
         if provider_error is not None:
             raise _provider_failure(model, mode, provider_error)
 
         return _extract_content(completion, max_tokens)
+
+    def _deadline_error(self, record: _CallRecord) -> GenerationError:
+        record.deadline_expired = True
+        return GenerationError(f"RouterAI не ответил на запрос генерации за {self._request_timeout_seconds:g} секунд")
 
     async def aclose(self) -> None:
         if self._client is not None:
@@ -196,6 +260,42 @@ class RouterAiLlmClient:
             )
             logger.info("RouterAI client ready: base_url=%s", self._base_url)
         return self._client
+
+
+def _read_completion(completion: ChatCompletion, record: _CallRecord) -> None:
+    provider = (completion.model_extra or {}).get("provider")
+    record.provider = provider if isinstance(provider, str) else None
+    if completion.choices:
+        record.finish_reason = completion.choices[0].finish_reason
+    usage = completion.usage
+    if usage is not None:
+        record.prompt_tokens = usage.prompt_tokens
+        record.completion_tokens = usage.completion_tokens
+        cost = (usage.model_extra or {}).get("cost")
+        record.cost = float(cost) if isinstance(cost, int | float) and not isinstance(cost, bool) else None
+
+
+def _log_call(model: str, outcome: str, seconds: float, record: _CallRecord, failure: BaseException | None) -> None:
+    attempt = current_llm_attempt.get()
+    fields = [
+        f"model={model}",
+        f"attempt={'-' if attempt is None else f'{attempt[0]}/{attempt[1]}'}",
+        f"outcome={outcome}",
+        f"duration_s={seconds:.2f}",
+        f"provider={record.provider or '-'}",
+        f"finish_reason={record.finish_reason or '-'}",
+        f"prompt_tokens={_or_dash(record.prompt_tokens)}",
+        f"completion_tokens={_or_dash(record.completion_tokens)}",
+        f"cost={_or_dash(record.cost)}",
+    ]
+    if failure is not None:
+        message = " ".join(str(failure).split())[:LOG_ERROR_MESSAGE_CHARS]
+        fields += [f"error={type(failure).__name__}", f"error_message={message!r}"]
+    logger.info("LLM call: %s", " ".join(fields))
+
+
+def _or_dash(value: float | None) -> str:
+    return "-" if value is None else str(value)
 
 
 def _provider_preferences(
