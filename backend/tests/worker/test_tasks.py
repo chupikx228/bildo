@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from src.apps.schemas import AppDocument, AppNodeLayout
 from src.apps.service import AppService
-from src.chat.models import REPLY_FOREIGN_KEY_CONSTRAINT, REPLY_UNIQUE_CONSTRAINT
+from src.chat.models import REPLY_FOREIGN_KEY_CONSTRAINT, REPLY_UNIQUE_CONSTRAINT, ChatMessage
 from src.chat.prompt import (
     DOCUMENT_REQUEST_PROBLEM,
     EDIT_CLAIM_PROBLEM,
@@ -34,6 +34,7 @@ from src.queue.jobs import CHAT_TURN_JOB, GENERATE_APP_DOCUMENT_JOB
 from src.tasks.service import TASK_FAILURE_MESSAGE, TaskService
 from src.worker import tasks as worker_tasks
 from src.worker.main import WorkerSettings
+from tests.apps.icon_fixtures import document_json, with_icons
 from tests.apps.in_memory_repository import InMemoryAppRepository
 from tests.chat.in_memory_repository import InMemoryChatRepository, integrity_error
 from tests.generation.fake_llm_client import FakeLlmClient
@@ -1432,3 +1433,87 @@ async def test_chat_turn_retries_a_new_invalid_color_even_next_to_old_ones(
     feedback = llm_client.calls[1][-1]["content"]
     assert "узел `habits-streak`, `style.color` = `colorText`" in feedback
     assert "habits-title" not in feedback
+
+
+def chat_answer_json(reply: str, document: dict[str, Any]) -> str:
+    return json.dumps({"reply": reply, "document": document}, ensure_ascii=False)
+
+
+def stored_icons(message: ChatMessage) -> dict[str, object]:
+    assert message.proposed_document is not None
+    proposed = AppDocument.model_validate(message.proposed_document)
+    stack = [screen.root for screen in proposed.screens]
+    icons: dict[str, object] = {}
+    while stack:
+        node = stack.pop()
+        if node.props is not None and node.props.icon is not None:
+            icons[node.id] = node.props.icon
+        stack.extend(node.children)
+    return icons
+
+
+async def test_chat_turn_replaces_legacy_icon_names_in_a_proposed_document(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "добавь иконки")
+    document = with_icons(document_json(), ("done", "check-circle"), ("back", "home"))
+    ctx = context([chat_answer_json("добавил иконки", document)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 1
+    messages = await chat_repository.list_messages(app_id)
+    assert stored_icons(messages[1]) == {"done": "circle-check", "back": "house"}
+
+
+async def test_chat_turn_keeps_the_icons_of_the_stored_document_where_the_model_repeats_them_by_old_names(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    stored = AppDocument.model_validate(
+        with_icons(document_json(), ("done", "circle-check"), ("back", "house"), ("second", "trash"), screen=0)
+    )
+    app_id = await create_ready_app_with(repository, stored)
+    user_message = await chat_repository.create_message(app_id, "user", "поменяй название")
+    answer = with_icons(document_json(stored), ("extra", "alert-circle"))
+    for node in answer["screens"][0]["root"]["children"]:
+        if node["id"] == "done":
+            node["props"]["icon"] = "check-circle"
+        if node["id"] == "back":
+            node["props"]["icon"] = "home"
+    ctx = context([chat_answer_json("готово", answer)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    messages = await chat_repository.list_messages(app_id)
+    assert stored_icons(messages[1]) == {
+        "done": "circle-check",
+        "back": "house",
+        "second": "trash",
+        "extra": "circle-alert",
+    }
+
+
+async def test_chat_turn_retries_an_unknown_icon_in_a_proposed_document(
+    repository: InMemoryAppRepository,
+    chat_repository: InMemoryChatRepository,
+) -> None:
+    app_id = await create_ready_app(repository)
+    user_message = await chat_repository.create_message(app_id, "user", "добавь иконку")
+    broken = with_icons(document_json(), ("mark", "circle"))
+    fixed = with_icons(document_json(), ("mark", "circle-check"))
+    ctx = context([chat_answer_json("готово", broken), chat_answer_json("исправил", fixed)])
+
+    await worker_tasks.chat_turn(ctx, str(app_id), str(user_message.id))
+
+    llm_client: FakeLlmClient = ctx["llm_client"]
+    assert len(llm_client.calls) == 2
+    retry = llm_client.calls[1][-1]["content"]
+    assert "узел `mark`, `props.icon` = `circle`" in retry
+    assert "`circle-check`" in retry
+    messages = await chat_repository.list_messages(app_id)
+    assert messages[1].content == "исправил"
+    assert stored_icons(messages[1]) == {"mark": "circle-check"}

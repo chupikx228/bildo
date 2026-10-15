@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable, Sequence
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
@@ -19,6 +20,8 @@ MAX_RETRY_AFTER_SECONDS = 60.0
 
 VALIDATION_FEEDBACK_HEADER = "Этот ответ не прошёл валидацию:"
 
+Prepare = Callable[[Any], tuple[Any, list[str]]]
+
 
 async def generate_structured[ModelT: BaseModel](
     messages: Sequence[ChatMessage],
@@ -31,6 +34,7 @@ async def generate_structured[ModelT: BaseModel](
     max_attempts: int,
     subject: str = "документ",
     check: Callable[[ModelT], None] | None = None,
+    prepare: Prepare | None = None,
 ) -> ModelT:
     history = list(messages)
     last_error = ""
@@ -57,10 +61,7 @@ async def generate_structured[ModelT: BaseModel](
             )
         previous_raw = raw
         try:
-            result = _parse(raw, target_model, subject)
-            if check is not None:
-                check(result)
-            return result
+            return _parse(raw, target_model, subject, check, prepare)
         except (ValueError, ValidationError) as error:
             last_error = _describe(error)
             logger.warning(
@@ -81,11 +82,30 @@ def transient_retry_delay(error: TransientProviderError) -> float:
     return min(error.retry_after_seconds, MAX_RETRY_AFTER_SECONDS)
 
 
-def _parse[ModelT: BaseModel](raw: str, target_model: type[ModelT], subject: str) -> ModelT:
+def _parse[ModelT: BaseModel](
+    raw: str,
+    target_model: type[ModelT],
+    subject: str,
+    check: Callable[[ModelT], None] | None,
+    prepare: Prepare | None,
+) -> ModelT:
     data = json.loads(_extract_json(raw))
     if data == {}:
         raise GenerationError(f"Модель RouterAI вернула пустой JSON-объект, {subject} не сгенерирован")
-    return target_model.model_validate(data)
+    problems: list[str] = []
+    if prepare is not None:
+        data, problems = prepare(data)
+    try:
+        result = target_model.model_validate(data)
+        if check is not None:
+            check(result)
+    except ValueError as error:
+        if not problems:
+            raise
+        problems.append(str(error))
+    if problems:
+        raise ValueError("; ".join(problems))
+    return result
 
 
 def _extract_json(raw: str) -> str:

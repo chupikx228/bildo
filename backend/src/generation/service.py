@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from src.apps.colors import invalid_colors
+from src.apps.icons import InvalidIcon, closest_icon_names, normalize_icons
 from src.apps.navigation import leading_slash_routes, missing_roots
 from src.apps.schemas import AppDocument, AppNode, NavigateAction
 from src.generation.llm_client import LlmClient, enforces_response_schema
@@ -19,6 +21,7 @@ from src.generation.structured_output import generate_structured
 
 ROOT_NODE_TYPE = "View"
 MAX_REPORTED_COLORS = 10
+MAX_REPORTED_ICONS = 10
 
 
 async def generate_document(
@@ -40,8 +43,14 @@ async def generate_document(
         target_model=AppDocument,
         max_attempts=max_attempts,
         check=check_document,
+        prepare=prepare_document_json,
     )
     return _finalize(document, prompt, name)
+
+
+def prepare_document_json(data: Any) -> tuple[Any, list[str]]:
+    normalized, invalid = normalize_icons(data)
+    return normalized, _invalid_icon_problems(invalid)
 
 
 def check_document(document: AppDocument) -> None:
@@ -159,6 +168,27 @@ def _invalid_color_problems(document: AppDocument, baseline: AppDocument | None 
         "узел и тема не ссылаются на токены по имени: вместо `colorText`, `colorPrimary` и т. п. подставь HEX "
         "из `theme`; цвета самой `theme` — `#RGB` или `#RRGGBB`"
     ]
+
+
+def _invalid_icon_problems(invalid: list[InvalidIcon]) -> list[str]:
+    if not invalid:
+        return []
+    shown = "; ".join(_describe_invalid_icon(icon) for icon in invalid[:MAX_REPORTED_ICONS])
+    rest = len(invalid) - MAX_REPORTED_ICONS
+    more = f" и ещё {rest}" if rest > 0 else ""
+    return [
+        f"имена иконок не из списка ({len(invalid)}): {shown}{more}. `props.icon` — ровно одно из имён списка "
+        "в схеме, текущие имена Lucide в kebab-case; старые имена вроде `check-circle` или `home` и "
+        "любые другие, которых в списке нет, недопустимы: выбери подходящую по смыслу иконку из списка"
+    ]
+
+
+def _describe_invalid_icon(icon: InvalidIcon) -> str:
+    place = f"экран `{icon.screen_id}`, узел `{icon.node_id}`, `props.icon` = `{icon.value}`"
+    closest = closest_icon_names(icon.value)
+    if not closest:
+        return place
+    return f"{place} (ближайшие в списке: {', '.join(f'`{name}`' for name in closest)})"
 
 
 def _walk(node: AppNode) -> list[AppNode]:

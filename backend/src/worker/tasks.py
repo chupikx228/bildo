@@ -25,7 +25,7 @@ from src.generation.dependencies import get_model_catalog
 from src.generation.exceptions import GenerationTimeoutError
 from src.generation.llm_client import LlmClient, enforces_response_schema
 from src.generation.prompt_enricher import enrich_prompt
-from src.generation.service import generate_document
+from src.generation.service import generate_document, prepare_document_json
 from src.generation.structured_output import generate_structured
 from src.queue.arq_queue import ArqTaskQueue
 from src.transaction.session_transaction import SessionTransaction
@@ -115,6 +115,7 @@ async def chat_turn(ctx: dict[Any, Any], app_id: str, message_id: str) -> None:
                     max_attempts=settings.routerai_max_retries,
                     subject=CHAT_TURN_TIMEOUT_SUBJECT,
                     check=partial(check_chat_turn, baseline=document),
+                    prepare=prepare_document_json,
                 )
         except TimeoutError as error:
             if not deadline.expired():
