@@ -3,11 +3,12 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from src.apps.schemas import AppComponentType, AppDocument, AppNodeLayout
+from src.apps.schemas import AppComponentType, AppDocument, AppNode, AppNodeLayout
 from src.generation.exceptions import GenerationError
 from src.generation.json_schema import to_strict_json_schema
 from src.generation.prompt import app_document_schema, build_system_prompt
-from src.generation.service import check_document, check_edited_document, generate_document
+from src.generation.service import MAX_REPORTED_ICONS, check_document, check_edited_document, generate_document
+from tests.apps.icon_fixtures import document_json, with_icons
 from tests.generation.fake_llm_client import FakeLlmClient
 from tests.generation.template_fixtures import build_template_document
 
@@ -20,6 +21,16 @@ INCOMPLETE_ANSWER = '{"name": "Приложение"}'
 def valid_answer(name: str = "Трекер привычек") -> str:
     document = build_template_document(PROMPT, name)
     return json.dumps(document.model_dump(mode="json", by_alias=True), ensure_ascii=False)
+
+
+def all_nodes(document: AppDocument) -> list[AppNode]:
+    nodes: list[AppNode] = []
+    stack = [screen.root for screen in document.screens]
+    while stack:
+        node = stack.pop(0)
+        nodes.append(node)
+        stack.extend(node.children)
+    return nodes
 
 
 def validation_error_of(answer: str) -> str:
@@ -786,3 +797,66 @@ def test_check_edited_document_reports_only_colors_the_edit_introduced() -> None
     assert "узел `new`, `style.color` = `colorMuted`" in message
     assert "bad-0" not in message
     assert "(1)" in message
+
+
+def icon_answer(*icons: tuple[str, object]) -> str:
+    document = with_icons(document_json(), *icons)
+    return json.dumps(document, ensure_ascii=False)
+
+
+async def test_generate_document_replaces_legacy_icon_names_without_a_retry() -> None:
+    client = FakeLlmClient([icon_answer(("done", "check-circle"), ("back", "home"))])
+
+    document = await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=3)
+
+    icons = {node.id: node.props.icon for node in all_nodes(document) if node.props is not None and node.props.icon}
+    assert icons == {"done": "circle-check", "back": "house"}
+    assert len(client.calls) == 1
+
+
+async def test_generate_document_retries_an_unknown_icon_with_a_precise_message() -> None:
+    client = FakeLlmClient([icon_answer(("done", "circle")), icon_answer(("done", "circle-check"))])
+
+    document = await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=3)
+
+    retry = client.calls[1][-1]["content"]
+    assert "экран `index`, узел `done`, `props.icon` = `circle`" in retry
+    assert "(ближайшие в списке: `circle-alert`, `circle-check`, `circle-x`)" in retry
+    assert "Input should be" not in retry
+    icons = [node.props.icon for node in all_nodes(document) if node.props is not None and node.props.icon]
+    assert icons == ["circle-check"]
+
+
+async def test_the_icon_retry_message_is_capped() -> None:
+    names = [(f"icon-{index}", f"rocket-{index}") for index in range(MAX_REPORTED_ICONS + 3)]
+    client = FakeLlmClient([icon_answer(*names), icon_answer()])
+
+    await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=3)
+
+    retry = client.calls[1][-1]["content"]
+    assert f"({MAX_REPORTED_ICONS + 3})" in retry
+    assert f"`icon-{MAX_REPORTED_ICONS - 1}`" in retry
+    assert f"`icon-{MAX_REPORTED_ICONS}`" not in retry
+    assert "и ещё 3" in retry
+
+
+async def test_an_unknown_icon_is_reported_together_with_the_other_problems_of_the_answer() -> None:
+    document = document_json()
+    document["screens"][0]["route"] = "today"
+    answer = json.dumps(with_icons(document, ("done", "rocket")), ensure_ascii=False)
+    client = FakeLlmClient([answer, valid_answer()])
+
+    await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=3)
+
+    retry = client.calls[1][-1]["content"]
+    assert "`props.icon` = `rocket`" in retry
+    assert "нет экрана, чей `route` равен `index`" in retry
+
+
+async def test_an_unknown_icon_never_passes_silently_as_a_document_without_an_icon() -> None:
+    client = FakeLlmClient([icon_answer(("done", "rocket"))] * 2)
+
+    with pytest.raises(GenerationError) as error:
+        await generate_document(PROMPT, None, client=client, model=MODEL, max_attempts=2)
+
+    assert "`props.icon` = `rocket`" in error.value.message

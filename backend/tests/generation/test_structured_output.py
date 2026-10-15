@@ -408,3 +408,66 @@ async def test_strict_schema_rejection_is_not_retried(case: Case) -> None:
         await run(case, client)
 
     assert len(client.calls) == 1
+
+
+async def test_prepare_hook_changes_the_data_before_validation() -> None:
+    def rename(data: dict[str, object]) -> tuple[dict[str, object], list[str]]:
+        return {**data, "name": "Подготовлено"}, []
+
+    client = FakeLlmClient([document_answer()])
+
+    document = await generate_structured(
+        MESSAGES,
+        client=client,
+        model=MODEL,
+        schema_name=DOCUMENT_SCHEMA_NAME,
+        schema=app_document_schema(),
+        target_model=AppDocument,
+        max_attempts=1,
+        prepare=rename,
+    )
+
+    assert document.name == "Подготовлено"
+
+
+async def test_prepare_problems_are_sent_back_to_the_model_together_with_the_validation_error() -> None:
+    def report(data: dict[str, object]) -> tuple[dict[str, object], list[str]]:
+        return {key: value for key, value in data.items() if key != "theme"}, ["иконка не из списка"]
+
+    client = FakeLlmClient([document_answer(), document_answer()])
+
+    with pytest.raises(GenerationError) as error:
+        await generate_structured(
+            MESSAGES,
+            client=client,
+            model=MODEL,
+            schema_name=DOCUMENT_SCHEMA_NAME,
+            schema=app_document_schema(),
+            target_model=AppDocument,
+            max_attempts=2,
+            prepare=report,
+        )
+
+    assert len(client.calls) == 2
+    retry = client.calls[1][-1]["content"]
+    assert "иконка не из списка" in retry
+    assert "theme" in retry
+    assert "иконка не из списка" in error.value.message
+
+
+async def test_prepare_problems_fail_a_document_that_is_otherwise_valid() -> None:
+    client = FakeLlmClient([document_answer(), document_answer()])
+
+    with pytest.raises(GenerationError) as error:
+        await generate_structured(
+            MESSAGES,
+            client=client,
+            model=MODEL,
+            schema_name=DOCUMENT_SCHEMA_NAME,
+            schema=app_document_schema(),
+            target_model=AppDocument,
+            max_attempts=2,
+            prepare=lambda data: (data, ["проблема"]),
+        )
+
+    assert "проблема" in error.value.message
