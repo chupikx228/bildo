@@ -739,6 +739,24 @@ async def keep_alive_with_whitespace(reader: asyncio.StreamReader, writer: async
         await asyncio.sleep(0.05)
 
 
+async def keep_alive_with_chunked_whitespace(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n")
+    while True:
+        writer.write(b"b\r\n\n         \n\r\n")
+        await writer.drain()
+        await asyncio.sleep(0.05)
+
+
+async def answer_service_unavailable(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    body = json.dumps({"error": {"message": "upstream unavailable"}}).encode()
+    writer.write(
+        b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\n"
+        + f"Content-Length: {len(body)}\r\n\r\n".encode()
+        + body
+    )
+    await writer.drain()
+
+
 async def test_silent_connection_fails_on_the_idle_timeout_without_sdk_retries() -> None:
     connections: list[int] = []
     async with local_gateway(stay_silent, connections) as base_url:
@@ -754,8 +772,9 @@ async def test_silent_connection_fails_on_the_idle_timeout_without_sdk_retries()
     assert time.monotonic() - started < LOCAL_GATEWAY_LIFETIME_SECONDS
 
 
-async def test_request_kept_alive_with_whitespace_fails_on_the_request_timeout() -> None:
-    async with local_gateway(keep_alive_with_whitespace) as base_url:
+@pytest.mark.parametrize("respond", [keep_alive_with_whitespace, keep_alive_with_chunked_whitespace])
+async def test_request_kept_alive_with_whitespace_fails_on_the_request_timeout(respond: Respond) -> None:
+    async with local_gateway(respond) as base_url:
         client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=0.5, idle_timeout_seconds=0.2)
         started = time.monotonic()
 
@@ -766,6 +785,55 @@ async def test_request_kept_alive_with_whitespace_fails_on_the_request_timeout()
     assert not isinstance(error.value, TransientProviderError)
     assert "за 0.5 секунд" in error.value.message
     assert time.monotonic() - started < LOCAL_GATEWAY_LIFETIME_SECONDS
+
+
+@pytest.mark.usefixtures("no_transient_delay")
+async def test_expired_request_timeout_is_not_retried() -> None:
+    connections: list[int] = []
+    async with local_gateway(keep_alive_with_whitespace, connections) as base_url:
+        client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=0.3, idle_timeout_seconds=0.2)
+        started = time.monotonic()
+
+        with pytest.raises(GenerationError) as error:
+            await generate_named(client)
+        await client.aclose()
+
+    assert not isinstance(error.value, TransientProviderError)
+    assert len(connections) == 1
+    assert time.monotonic() - started < 1.0
+
+
+async def test_outer_deadline_cuts_a_request_kept_alive_before_its_own_timeout() -> None:
+    async with local_gateway(keep_alive_with_whitespace) as base_url:
+        client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=30, idle_timeout_seconds=0.2)
+        started = time.monotonic()
+        deadline = asyncio.timeout(0.3)
+
+        with pytest.raises(TimeoutError):
+            async with deadline:
+                await generate_named(client)
+        await client.aclose()
+
+    assert deadline.expired()
+    assert time.monotonic() - started < 1.0
+
+
+async def test_outer_deadline_bounds_transient_retries_and_their_delays(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(structured_output_module, "TRANSIENT_RETRY_DELAY_SECONDS", 0.2)
+    connections: list[int] = []
+    async with local_gateway(answer_service_unavailable, connections) as base_url:
+        client = RouterAiLlmClient("test-key", base_url, request_timeout_seconds=30, idle_timeout_seconds=0.2)
+        started = time.monotonic()
+        deadline = asyncio.timeout(0.5)
+
+        with pytest.raises(TimeoutError):
+            async with deadline:
+                await generate_named(client, max_attempts=100)
+        await client.aclose()
+
+    assert deadline.expired()
+    assert 1 < len(connections) < 100
+    assert time.monotonic() - started < 1.0
 
 
 def test_default_timeouts_bound_a_request_below_the_generation_deadline() -> None:
