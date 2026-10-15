@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any, Literal, Protocol, TypedDict
@@ -54,6 +54,7 @@ SCHEMA_REJECTION_MARKERS = ("schema", "grammar")
 TRANSIENT_ERROR_MARKERS = ("connection error", "please retry")
 TRANSIENT_STATUS_CODES = frozenset({408, 429})
 RATE_LIMIT_STATUS_CODE = 429
+NO_MATCHING_ENDPOINT_CODE = 404
 
 
 class ChatMessage(TypedDict):
@@ -91,9 +92,13 @@ class RouterAiLlmClient:
         request_timeout_seconds: float = REQUEST_TIMEOUT_SECONDS,
         idle_timeout_seconds: float = IDLE_TIMEOUT_SECONDS,
         ignored_providers: Sequence[str] = (),
+        max_price_by_model: Mapping[str, Mapping[str, float]] | None = None,
     ) -> None:
         self._api_key = api_key
         self._ignored_providers = tuple(ignored_providers)
+        self._max_price_by_model = {
+            model: dict(max_price) for model, max_price in (max_price_by_model or {}).items() if max_price
+        }
         self._base_url = base_url
         self._request_timeout_seconds = request_timeout_seconds
         self._idle_timeout_seconds = idle_timeout_seconds
@@ -137,9 +142,7 @@ class RouterAiLlmClient:
         ignored_providers: Sequence[str] = (),
     ) -> str:
         client = self._ensure_client()
-        extra_body: dict[str, Any] | None = (
-            {"provider": {"ignore": list(ignored_providers)}} if ignored_providers else None
-        )
+        extra_body = _provider_preferences(ignored_providers, self._max_price_by_model.get(model))
         deadline = asyncio.timeout(self._request_timeout_seconds)
         try:
             async with deadline:
@@ -195,6 +198,17 @@ class RouterAiLlmClient:
         return self._client
 
 
+def _provider_preferences(
+    ignored_providers: Sequence[str], max_price: Mapping[str, float] | None
+) -> dict[str, Any] | None:
+    provider: dict[str, Any] = {}
+    if ignored_providers:
+        provider["ignore"] = list(ignored_providers)
+    if max_price:
+        provider["max_price"] = dict(max_price)
+    return {"provider": provider} if provider else None
+
+
 def enforces_response_schema(model: str) -> bool:
     return not model.startswith(UNCONSTRAINED_MODEL_PREFIXES)
 
@@ -219,6 +233,8 @@ def _provider_failure(model: str, mode: ResponseFormatMode, error: object) -> Ge
 
 
 def _is_transient_provider_error(error: object, detail: str) -> bool:
+    if _upstream_error_code(error) == NO_MATCHING_ENDPOINT_CODE:
+        return False
     code = _provider_error_code(error)
     if code is not None and _is_transient_status(code):
         return True
@@ -226,7 +242,7 @@ def _is_transient_provider_error(error: object, detail: str) -> bool:
     return any(marker in lowered for marker in TRANSIENT_ERROR_MARKERS)
 
 
-def _provider_error_code(error: object) -> int | None:
+def _provider_error_payload(error: object) -> dict[str, Any] | None:
     payload = error
     if isinstance(payload, str):
         try:
@@ -235,8 +251,23 @@ def _provider_error_code(error: object) -> int | None:
             return None
     if isinstance(payload, dict) and isinstance(payload.get("error"), dict):
         payload = payload["error"]
-    code = payload.get("code") if isinstance(payload, dict) else None
+    return payload if isinstance(payload, dict) else None
+
+
+def _provider_error_code(error: object) -> int | None:
+    payload = _provider_error_payload(error)
+    code = payload.get("code") if payload is not None else None
     return code if isinstance(code, int) else None
+
+
+def _upstream_error_code(error: object) -> int | None:
+    payload = _provider_error_payload(error)
+    metadata = payload.get("metadata") if payload is not None else None
+    code = metadata.get("provider_error_code") if isinstance(metadata, dict) else None
+    try:
+        return int(code) if isinstance(code, int | str) else None
+    except ValueError:
+        return None
 
 
 def _is_transient_status(status_code: int) -> bool:
